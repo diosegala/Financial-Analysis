@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { usePlanning } from "@/lib/planning";
@@ -155,7 +155,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 // Keeps the context in sync with the effective defaults shown in the selectors.
 function PlanningSetter({ unitId, scenarioId }: { unitId: string | null; scenarioId: string | null }) {
   const planning = usePlanning();
-  if (unitId && planning.unitId !== unitId) planning.setUnitId(unitId);
-  if (scenarioId && planning.scenarioId !== scenarioId) planning.setScenarioId(scenarioId);
+  useEffect(() => {
+    if (unitId && planning.unitId !== unitId) planning.setUnitId(unitId);
+    if (scenarioId && planning.scenarioId !== scenarioId) planning.setScenarioId(scenarioId);
+  }, [unitId, scenarioId, planning]);
   return null;
 }
