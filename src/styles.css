@@ -147,5 +147,20 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
   }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+}
+
+/* Títulos de marca: Boldonse em caixa-alta. */
+@utility titulo-marca {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  line-height: 1.45;
+  letter-spacing: 0;
 }

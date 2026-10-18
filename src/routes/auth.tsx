@@ -44,8 +44,9 @@ function AuthPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold tracking-tight">CUPOLA</CardTitle>
-          <CardDescription>Planejamento financeiro 2027 — entre com seu e-mail e senha.</CardDescription>
+          <img src="/brand/cupola.png" alt="CUPOLA" className="mb-2 h-9 w-auto self-start" />
+          <CardTitle className="titulo-marca text-xl">Planejamento financeiro</CardTitle>
+          <CardDescription>Ano 2027 — entre com seu e-mail e senha.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
