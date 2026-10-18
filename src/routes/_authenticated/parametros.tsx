@@ -67,7 +67,7 @@ function ParametrosPage() {
       valid_from: validFrom,
       created_by: user!.id,
     });
-    if (error) return toast.error("Erro ao salvar: " + error.message);
+    if (error) { toast.error("Erro ao salvar: " + error.message);
     setValue("");
     toast.success("Parâmetro salvo.");
     queryClient.invalidateQueries({ queryKey: ["parameters"] });

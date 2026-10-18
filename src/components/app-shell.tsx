@@ -112,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="flex items-center gap-4 border-b border-border bg-card px-6 py-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Unidade</span>
-            <Select value={unitId ?? undefined} onValueChange={planning.setUnitId}>
+            <Select value={unitId ?? ""} onValueChange={planning.setUnitId}>
               <SelectTrigger className="w-44">
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Cenário</span>
-            <Select value={scenarioId ?? undefined} onValueChange={planning.setScenarioId}>
+            <Select value={scenarioId ?? ""} onValueChange={planning.setScenarioId}>
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>

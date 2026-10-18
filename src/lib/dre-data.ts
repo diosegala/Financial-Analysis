@@ -38,7 +38,7 @@ export function useDreData(unitId: string | null, year: number) {
       }));
 
       for (const r of revRes.data ?? []) {
-        const m = months[r.month - 1];
+        const m = months[r.month - 1]!;
         if (r.revenue_type === "parceiros") m.receitaParceiro += Number(r.amount);
         else m.receitaComercial += Number(r.amount);
       }
@@ -46,7 +46,7 @@ export function useDreData(unitId: string | null, year: number) {
       for (const p of payRes.data ?? []) {
         const belongs = p.unit_id === unitId || (p.person_id != null && personIds.has(p.person_id));
         if (!belongs) continue;
-        const m = months[p.month - 1];
+        const m = months[p.month - 1]!;
         if (p.kind === "beneficios") m.beneficios += Number(p.amount);
         else if (p.kind === "rescisao") m.rescisoes += Number(p.amount);
         else m.folhaBase += Number(p.amount);
@@ -55,7 +55,7 @@ export function useDreData(unitId: string | null, year: number) {
       for (const e of expRes.data ?? []) {
         const line = catLines.get(e.category_id);
         if (!line) continue;
-        const m = months[e.month - 1];
+        const m = months[e.month - 1]!;
         if (line === "despesas_produtos") m.despesasProdutos += Number(e.amount);
         else m.despesas += Number(e.amount);
       }

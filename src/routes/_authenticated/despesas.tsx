@@ -87,7 +87,7 @@ function DespesasPage() {
     const existing = entryFor(catId, month);
     if (existing) {
       const { error } = await supabase.from("expense_entries").update({ amount: value }).eq("id", existing.id);
-      if (error) return toast.error("Erro ao salvar: " + error.message);
+      if (error) { toast.error("Erro ao salvar: " + error.message);
     } else if (value !== 0) {
       const { error } = await supabase.from("expense_entries").insert({
         category_id: catId,
@@ -96,7 +96,7 @@ function DespesasPage() {
         amount: value,
         created_by: user!.id,
       });
-      if (error) return toast.error("Erro ao salvar: " + error.message);
+      if (error) { toast.error("Erro ao salvar: " + error.message);
     }
     queryClient.invalidateQueries({ queryKey: ["expenses", unitId, year] });
     queryClient.invalidateQueries({ queryKey: ["dre-data", unitId, year] });
@@ -109,7 +109,7 @@ function DespesasPage() {
       name: name.trim(),
       dre_line: dreLine,
     });
-    if (error) return toast.error("Erro ao criar categoria: " + error.message);
+    if (error) { toast.error("Erro ao criar categoria: " + error.message);
     setName("");
     queryClient.invalidateQueries({ queryKey: ["expense-categories", unitId] });
   }
