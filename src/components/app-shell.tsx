@@ -73,8 +73,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
         <div className="border-b border-sidebar-border px-5 py-4">
-          <div className="text-lg font-bold tracking-tight text-foreground">CUPOLA</div>
-          <div className="text-xs text-muted-foreground">Planejamento financeiro {planning.year}</div>
+          <img src="/brand/cupola-branca.png" alt="CUPOLA" className="h-7 w-auto" />
+          <div className="mt-1 text-xs text-sidebar-foreground/60">Planejamento financeiro {planning.year}</div>
         </div>
         <nav className="flex-1 space-y-0.5 p-2">
           {NAV.filter((item) => {
