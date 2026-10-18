@@ -19,7 +19,7 @@ export const Route = createFileRoute("/")({
 function Index() {
   const navigate = useNavigate();
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data }: { data: { user: unknown } }) => {
       navigate({ to: data.user ? "/inicio" : "/auth", replace: true });
     });
   }, [navigate]);
