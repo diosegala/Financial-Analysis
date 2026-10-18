@@ -67,7 +67,7 @@ function UsuariosPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 6) return toast.error("A senha precisa de pelo menos 6 caracteres.");
+    if (password.length < 6) { toast.error("A senha precisa de pelo menos 6 caracteres."); return; }
     setSaving(true);
     try {
       await inviteUser({

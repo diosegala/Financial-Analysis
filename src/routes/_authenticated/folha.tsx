@@ -96,7 +96,7 @@ function FolhaPage() {
     const existing = entryFor(personId, kind, month);
     if (existing) {
       const { error } = await supabase.from("payroll_entries").update({ amount: value }).eq("id", existing.id);
-      if (error) { toast.error("Erro ao salvar: " + error.message);
+      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     } else if (value !== 0) {
       const { error } = await supabase.from("payroll_entries").insert({
         person_id: personId,
@@ -106,20 +106,20 @@ function FolhaPage() {
         amount: value,
         kind,
       });
-      if (error) { toast.error("Erro ao salvar: " + error.message);
+      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     }
     queryClient.invalidateQueries({ queryKey: ["payroll", unitId, year] });
     queryClient.invalidateQueries({ queryKey: ["dre-data", unitId, year] });
   }
 
   async function addPerson() {
-    if (!name.trim()) return toast.error("Informe o nome.");
+    if (!name.trim()) { toast.error("Informe o nome."); return; }
     const { error } = await supabase.from("people").insert({
       unit_id: unitId!,
       name: name.trim(),
       contract_type: contract,
     });
-    if (error) { toast.error("Erro ao adicionar: " + error.message);
+    if (error) { toast.error("Erro ao adicionar: " + error.message); return; }
     setName("");
     queryClient.invalidateQueries({ queryKey: ["people", unitId] });
   }

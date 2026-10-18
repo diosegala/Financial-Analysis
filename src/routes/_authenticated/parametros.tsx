@@ -59,7 +59,7 @@ function ParametrosPage() {
 
   async function addParam() {
     const n = parseNum(value);
-    if (n <= 0) return toast.error("Informe um valor percentual maior que zero.");
+    if (n <= 0) { toast.error("Informe um valor percentual maior que zero."); return; }
     const validFrom = `${YEAR}-${month.padStart(2, "0")}-01`;
     const { error } = await supabase.from("parameters").insert({
       key,
@@ -67,7 +67,7 @@ function ParametrosPage() {
       valid_from: validFrom,
       created_by: user!.id,
     });
-    if (error) { toast.error("Erro ao salvar: " + error.message);
+    if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     setValue("");
     toast.success("Parâmetro salvo.");
     queryClient.invalidateQueries({ queryKey: ["parameters"] });

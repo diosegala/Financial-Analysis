@@ -92,7 +92,7 @@ function ReceitasPage() {
     const existing = row.entries.get(month);
     if (existing) {
       const { error } = await supabase.from("revenue_entries").update({ amount: value }).eq("id", existing.id);
-      if (error) { toast.error("Erro ao salvar: " + error.message);
+      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     } else if (value !== 0) {
       const { error } = await supabase.from("revenue_entries").insert({
         unit_id: unitId!,
@@ -104,14 +104,14 @@ function ReceitasPage() {
         amount: value,
         created_by: user!.id,
       });
-      if (error) { toast.error("Erro ao salvar: " + error.message);
+      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     }
     queryClient.invalidateQueries({ queryKey: ["revenue", unitId, year] });
     queryClient.invalidateQueries({ queryKey: ["dre-data", unitId, year] });
   }
 
   async function addRow() {
-    if (!client.trim() || !product.trim()) return toast.error("Preencha cliente e produto.");
+    if (!client.trim() || !product.trim()) { toast.error("Preencha cliente e produto."); return; }
     const { error } = await supabase.from("revenue_entries").insert({
       unit_id: unitId!,
       year,
@@ -122,7 +122,7 @@ function ReceitasPage() {
       amount: 0,
       created_by: user!.id,
     });
-    if (error) { toast.error("Erro ao criar linha: " + error.message);
+    if (error) { toast.error("Erro ao criar linha: " + error.message); return; }
     setClient("");
     setProduct("");
     queryClient.invalidateQueries({ queryKey: ["revenue", unitId, year] });

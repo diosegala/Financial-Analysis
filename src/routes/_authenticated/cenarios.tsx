@@ -34,14 +34,14 @@ function CenariosPage() {
   async function saveVariation(id: string, field: "revenue_variation" | "expense_variation", text: string) {
     const value = parseNum(text) / 100;
     const { error } = await supabase.from("scenarios").update({ [field]: value }).eq("id", id);
-    if (error) { toast.error("Erro ao salvar: " + error.message);
+    if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     queryClient.invalidateQueries({ queryKey: ["dre-data"] });
     queryClient.invalidateQueries({ queryKey: ["scenarios"] });
   }
 
   async function setOfficial(id: string) {
     const { error } = await supabase.from("scenarios").update({ is_official: true }).eq("id", id);
-    if (error) { toast.error("Erro: " + error.message);
+    if (error) { toast.error("Erro: " + error.message); return; }
     await supabase.from("scenarios").update({ is_official: false }).neq("id", id);
     queryClient.invalidateQueries({ queryKey: ["dre-data"] });
     queryClient.invalidateQueries({ queryKey: ["scenarios"] });
