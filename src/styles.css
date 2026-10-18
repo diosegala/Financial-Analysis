@@ -19,6 +19,10 @@
  */
 
 @theme inline {
+  --font-sans: "Funnel Display", "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Boldonse", "Arial Black", Impact, sans-serif;
+  --color-primary-hover: var(--primary-hover);
+  --color-success: var(--success);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -62,39 +66,42 @@
 }
 
 :root {
-  --radius: 0.5rem;
-  --background: oklch(0.975 0.006 95);
-  --foreground: oklch(0.26 0.02 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.26 0.02 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.26 0.02 260);
-  --primary: oklch(0.45 0.09 205);
-  --primary-foreground: oklch(0.98 0.005 95);
-  --secondary: oklch(0.945 0.008 95);
-  --secondary-foreground: oklch(0.32 0.02 260);
-  --muted: oklch(0.945 0.008 95);
-  --muted-foreground: oklch(0.5 0.02 260);
-  --accent: oklch(0.93 0.02 205);
-  --accent-foreground: oklch(0.35 0.06 205);
-  --destructive: oklch(0.55 0.2 27);
-  --destructive-foreground: oklch(0.98 0.005 95);
-  --border: oklch(0.9 0.008 90);
-  --input: oklch(0.9 0.008 90);
-  --ring: oklch(0.45 0.09 205);
-  --chart-1: oklch(0.45 0.09 205);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.96 0.007 95);
-  --sidebar-foreground: oklch(0.26 0.02 260);
-  --sidebar-primary: oklch(0.45 0.09 205);
-  --sidebar-primary-foreground: oklch(0.98 0.005 95);
-  --sidebar-accent: oklch(0.93 0.02 205);
-  --sidebar-accent-foreground: oklch(0.35 0.06 205);
-  --sidebar-border: oklch(0.9 0.008 90);
-  --sidebar-ring: oklch(0.45 0.09 205);
+  /* Identidade CUPOLA (cupola.com.br): grafite, lima, areia e papel. */
+  --radius: 1rem;
+  --primary: #b0f90a;
+  --primary-hover: #9fe000;
+  --primary-foreground: #0f1114;
+  --background: #faf7f1;
+  --foreground: #0f1114;
+  --card: #ffffff;
+  --card-foreground: #0f1114;
+  --popover: #ffffff;
+  --popover-foreground: #0f1114;
+  --secondary: #f5f2eb;
+  --secondary-foreground: #0f1114;
+  --muted: #f5f2eb;
+  --muted-foreground: #3a3f47;
+  --accent: #f2fbd9;
+  --accent-foreground: #0f1114;
+  --destructive: #d92d20;
+  --destructive-foreground: #ffffff;
+  --success: #2f9e44;
+  --border: #e4dfd4;
+  --input: #d8d2c5;
+  --ring: #3d36ff;
+  --chart-1: #b0f90a;
+  --chart-2: #3a3f47;
+  --chart-3: #0f1114;
+  --chart-4: #3d36ff;
+  --chart-5: #6b7078;
+  --sidebar: #0f1114;
+  --sidebar-foreground: #f5f2eb;
+  --sidebar-primary: #b0f90a;
+  --sidebar-primary-foreground: #0f1114;
+  --sidebar-accent: #2a2e35;
+  --sidebar-accent-foreground: #f5f2eb;
+  --sidebar-border: #2a2e35;
+  --sidebar-ring: #b0f90a;
 }
 
 .dark {
