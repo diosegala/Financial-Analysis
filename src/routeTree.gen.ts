@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedCenariosRouteImport } from './routes/_authenticated/cenarios'
 import { Route as AuthenticatedDespesasRouteImport } from './routes/_authenticated/despesas'
 import { Route as AuthenticatedDreRouteImport } from './routes/_authenticated/dre'
@@ -19,6 +20,7 @@ import { Route as AuthenticatedFolhaRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedInicioRouteImport } from './routes/_authenticated/inicio'
 import { Route as AuthenticatedParametrosRouteImport } from './routes/_authenticated/parametros'
 import { Route as AuthenticatedReceitasRouteImport } from './routes/_authenticated/receitas'
+import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -33,6 +35,11 @@ const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
+  id: '/auditoria',
+  path: '/auditoria',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCenariosRoute = AuthenticatedCenariosRouteImport.update({
   id: '/cenarios',
@@ -69,10 +76,16 @@ const AuthenticatedReceitasRoute = AuthenticatedReceitasRouteImport.update({
   path: '/receitas',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/cenarios': typeof AuthenticatedCenariosRoute
   '/despesas': typeof AuthenticatedDespesasRoute
   '/dre': typeof AuthenticatedDreRoute
@@ -80,10 +93,12 @@ export interface FileRoutesByFullPath {
   '/inicio': typeof AuthenticatedInicioRoute
   '/parametros': typeof AuthenticatedParametrosRoute
   '/receitas': typeof AuthenticatedReceitasRoute
+  '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/cenarios': typeof AuthenticatedCenariosRoute
   '/despesas': typeof AuthenticatedDespesasRoute
   '/dre': typeof AuthenticatedDreRoute
@@ -91,12 +106,14 @@ export interface FileRoutesByTo {
   '/inicio': typeof AuthenticatedInicioRoute
   '/parametros': typeof AuthenticatedParametrosRoute
   '/receitas': typeof AuthenticatedReceitasRoute
+  '/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/cenarios': typeof AuthenticatedCenariosRoute
   '/_authenticated/despesas': typeof AuthenticatedDespesasRoute
   '/_authenticated/dre': typeof AuthenticatedDreRoute
@@ -104,12 +121,14 @@ export interface FileRoutesById {
   '/_authenticated/inicio': typeof AuthenticatedInicioRoute
   '/_authenticated/parametros': typeof AuthenticatedParametrosRoute
   '/_authenticated/receitas': typeof AuthenticatedReceitasRoute
+  '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/auth'
+    | '/auditoria'
     | '/cenarios'
     | '/despesas'
     | '/dre'
@@ -117,10 +136,12 @@ export interface FileRouteTypes {
     | '/inicio'
     | '/parametros'
     | '/receitas'
+    | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/auditoria'
     | '/cenarios'
     | '/despesas'
     | '/dre'
@@ -128,11 +149,13 @@ export interface FileRouteTypes {
     | '/inicio'
     | '/parametros'
     | '/receitas'
+    | '/usuarios'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/auditoria'
     | '/_authenticated/cenarios'
     | '/_authenticated/despesas'
     | '/_authenticated/dre'
@@ -140,6 +163,7 @@ export interface FileRouteTypes {
     | '/_authenticated/inicio'
     | '/_authenticated/parametros'
     | '/_authenticated/receitas'
+    | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -170,6 +194,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/auditoria': {
+      id: '/_authenticated/auditoria'
+      path: '/auditoria'
+      fullPath: '/auditoria'
+      preLoaderRoute: typeof AuthenticatedAuditoriaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/cenarios': {
       id: '/_authenticated/cenarios'
@@ -220,10 +251,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReceitasRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/usuarios': {
+      id: '/_authenticated/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof AuthenticatedUsuariosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCenariosRoute: typeof AuthenticatedCenariosRoute
   AuthenticatedDespesasRoute: typeof AuthenticatedDespesasRoute
   AuthenticatedDreRoute: typeof AuthenticatedDreRoute
@@ -231,9 +270,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedInicioRoute: typeof AuthenticatedInicioRoute
   AuthenticatedParametrosRoute: typeof AuthenticatedParametrosRoute
   AuthenticatedReceitasRoute: typeof AuthenticatedReceitasRoute
+  AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCenariosRoute: AuthenticatedCenariosRoute,
   AuthenticatedDespesasRoute: AuthenticatedDespesasRoute,
   AuthenticatedDreRoute: AuthenticatedDreRoute,
@@ -241,6 +282,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedInicioRoute: AuthenticatedInicioRoute,
   AuthenticatedParametrosRoute: AuthenticatedParametrosRoute,
   AuthenticatedReceitasRoute: AuthenticatedReceitasRoute,
+  AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
