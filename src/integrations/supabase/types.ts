@@ -158,6 +158,7 @@ export type Database = {
           kind: string
           month: number
           person_id: string | null
+          unit_id: string | null
           updated_at: string
           year: number
         }
@@ -168,6 +169,7 @@ export type Database = {
           kind?: string
           month: number
           person_id?: string | null
+          unit_id?: string | null
           updated_at?: string
           year?: number
         }
@@ -178,6 +180,7 @@ export type Database = {
           kind?: string
           month?: number
           person_id?: string | null
+          unit_id?: string | null
           updated_at?: string
           year?: number
         }
@@ -187,6 +190,13 @@ export type Database = {
             columns: ["person_id"]
             isOneToOne: false
             referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
