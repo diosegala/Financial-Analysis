@@ -128,7 +128,7 @@ function UsuariosPage() {
           <div className="space-y-1.5">
             <Label>Unidades do líder</Label>
             <div className="flex flex-wrap gap-4 pt-1">
-              {(data?.units ?? []).map((u) => (
+              {(data?.units ?? []).map((u: { id: string; name: string }) => (
                 <label key={u.id} className="flex items-center gap-2 text-sm">
                   <Checkbox checked={unitIds.includes(u.id)} onCheckedChange={() => toggleUnit(u.id)} />
                   {u.name}
@@ -156,12 +156,12 @@ function UsuariosPage() {
               </tr>
             </thead>
             <tbody>
-              {(data?.users ?? []).map((u) => (
+              {(data?.users ?? []).map((u: { id: string; fullName: string; email: string; roles: string[]; unitIds: string[] }) => (
                 <tr key={u.id} className="border-b border-border last:border-0">
                   <td className="px-3 py-1.5 font-medium">{u.fullName || "—"}</td>
                   <td className="px-3 py-1.5">{u.email}</td>
                   <td className="px-3 py-1.5">
-                    {u.roles.map((r) => (
+                    {u.roles.map((r: string) => (
                       <Badge key={r} variant="secondary" className="mr-1">{ROLE_LABELS[r] ?? r}</Badge>
                     ))}
                   </td>
