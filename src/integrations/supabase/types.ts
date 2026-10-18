@@ -157,7 +157,7 @@ export type Database = {
           id: string
           kind: string
           month: number
-          person_id: string
+          person_id: string | null
           updated_at: string
           year: number
         }
@@ -167,7 +167,7 @@ export type Database = {
           id?: string
           kind?: string
           month: number
-          person_id: string
+          person_id?: string | null
           updated_at?: string
           year?: number
         }
@@ -177,7 +177,7 @@ export type Database = {
           id?: string
           kind?: string
           month?: number
-          person_id?: string
+          person_id?: string | null
           updated_at?: string
           year?: number
         }

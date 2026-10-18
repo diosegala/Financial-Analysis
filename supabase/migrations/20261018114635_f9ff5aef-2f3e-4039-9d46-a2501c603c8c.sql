@@ -1,0 +1,1 @@
+ALTER TABLE public.payroll_entries ALTER COLUMN person_id DROP NOT NULL;
