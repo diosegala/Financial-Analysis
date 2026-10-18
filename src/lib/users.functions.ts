@@ -8,6 +8,7 @@ async function assertFinanceiro(supabase: any, userId: string) {
 
 export const listUsers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
+  .inputValidator((input: Record<string, never>) => input)
   .handler(async ({ context }) => {
     await assertFinanceiro(context.supabase, context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

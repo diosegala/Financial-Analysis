@@ -80,7 +80,7 @@ function ReceitasPage() {
         if (!map.has(key)) {
           map.set(key, { key, client: e.client_name, product: e.product_name, type: e.revenue_type, entries: new Map() });
         }
-        map.get(key)!.entries.set(e.month, { id: e.id, amount: Number(e.amount) });
+        map.get(key)!.entries.set(e.month, { id: e.id, month: e.month, amount: Number(e.amount) });
       }
       return [...map.values()].sort((a, b) => a.client.localeCompare(b.client));
     },

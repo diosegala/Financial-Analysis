@@ -33,7 +33,8 @@ function CenariosPage() {
 
   async function saveVariation(id: string, field: "revenue_variation" | "expense_variation", text: string) {
     const value = parseNum(text) / 100;
-    const { error } = await supabase.from("scenarios").update({ [field]: value }).eq("id", id);
+    const patch = field === "revenue_variation" ? { revenue_variation: value } : { expense_variation: value };
+    const { error } = await supabase.from("scenarios").update(patch).eq("id", id);
     if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     queryClient.invalidateQueries({ queryKey: ["dre-data"] });
     queryClient.invalidateQueries({ queryKey: ["scenarios"] });
