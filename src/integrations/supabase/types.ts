@@ -14,16 +14,410 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_log: {
+        Row: {
+          action: string
+          changed_by: string | null
+          created_at: string
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          row_id: string | null
+          table_name: string
+        }
+        Insert: {
+          action: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          row_id?: string | null
+          table_name: string
+        }
+        Update: {
+          action?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          row_id?: string | null
+          table_name?: string
+        }
+        Relationships: []
+      }
+      expense_categories: {
+        Row: {
+          created_at: string
+          dre_line: string
+          id: string
+          name: string
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dre_line?: string
+          id?: string
+          name: string
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dre_line?: string
+          id?: string
+          name?: string
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_categories_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_entries: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          month: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          amount?: number
+          category_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month: number
+          updated_at?: string
+          year?: number
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parameters: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          key: string
+          valid_from: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key: string
+          valid_from: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          key?: string
+          valid_from?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      payroll_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          kind: string
+          month: number
+          person_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          kind?: string
+          month: number
+          person_id: string
+          updated_at?: string
+          year?: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          kind?: string
+          month?: number
+          person_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_entries_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      people: {
+        Row: {
+          contract_type: string
+          created_at: string
+          id: string
+          name: string
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          contract_type?: string
+          created_at?: string
+          id?: string
+          name: string
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          contract_type?: string
+          created_at?: string
+          id?: string
+          name?: string
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "people_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      revenue_entries: {
+        Row: {
+          amount: number
+          client_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          month: number
+          product_name: string
+          revenue_type: string
+          unit_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          amount?: number
+          client_name: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month: number
+          product_name: string
+          revenue_type?: string
+          unit_id: string
+          updated_at?: string
+          year?: number
+        }
+        Update: {
+          amount?: number
+          client_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month?: number
+          product_name?: string
+          revenue_type?: string
+          unit_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scenarios: {
+        Row: {
+          created_at: string
+          expense_variation: number
+          id: string
+          is_official: boolean
+          name: string
+          revenue_variation: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expense_variation?: number
+          id?: string
+          is_official?: boolean
+          name: string
+          revenue_variation?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expense_variation?: number
+          id?: string
+          is_official?: boolean
+          name?: string
+          revenue_variation?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      units: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_units: {
+        Row: {
+          id: string
+          unit_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          unit_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          unit_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_any_role: {
+        Args: {
+          _roles: Database["public"]["Enums"]["app_role"][]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      has_unit: {
+        Args: { _unit_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "financeiro" | "vp" | "ceo" | "lider"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +544,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["financeiro", "vp", "ceo", "lider"],
+    },
   },
 } as const
