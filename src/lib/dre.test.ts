@@ -8,8 +8,13 @@ const params: Parameter[] = [
 ];
 
 const base = {
-  receitaComercial: 1000, receitaParceiro: 0, despesasProdutos: 0,
-  folhaBase: 0, beneficios: 0, rescisoes: 0, despesas: 0,
+  receitaComercial: 1000,
+  receitaParceiro: 0,
+  despesasProdutos: 0,
+  folhaBase: 0,
+  beneficios: 0,
+  rescisoes: 0,
+  despesas: 0,
 };
 
 describe("parâmetros com vigência", () => {
@@ -24,7 +29,9 @@ describe("parâmetros com vigência", () => {
 
 describe("cenários por variação %", () => {
   it("otimista +10% de receita aumenta a receita bruta", () => {
-    expect(computeMonth(base, params, 2027, 1, { receitaPct: 0.1, despesaPct: 0 }).receitaBruta).toBeCloseTo(1100);
+    expect(
+      computeMonth(base, params, 2027, 1, { receitaPct: 0.1, despesaPct: 0 }).receitaBruta,
+    ).toBeCloseTo(1100);
   });
   it("contribuição líquida desconta comissão e imposto", () => {
     // 1000 - 50 comissão - 100 imposto

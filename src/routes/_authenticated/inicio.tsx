@@ -43,35 +43,52 @@ function InicioPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Receita bruta no ano</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Receita bruta no ano
+                </CardTitle>
               </CardHeader>
-              <CardContent className="font-mono text-2xl font-semibold tabular-nums">{fmtBRL(total.receitaBruta)}</CardContent>
+              <CardContent className="font-mono text-2xl font-semibold tabular-nums">
+                {fmtBRL(total.receitaBruta)}
+              </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Custos indiretos no ano</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Custos indiretos no ano
+                </CardTitle>
               </CardHeader>
-              <CardContent className="font-mono text-2xl font-semibold tabular-nums">{fmtBRL(total.custosIndiretos)}</CardContent>
+              <CardContent className="font-mono text-2xl font-semibold tabular-nums">
+                {fmtBRL(total.custosIndiretos)}
+              </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Contribuição líquida no ano</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Contribuição líquida no ano
+                </CardTitle>
               </CardHeader>
-              <CardContent className={`font-mono text-2xl font-semibold tabular-nums ${total.contribuicaoLiquida < 0 ? "text-destructive" : ""}`}>
+              <CardContent
+                className={`font-mono text-2xl font-semibold tabular-nums ${total.contribuicaoLiquida < 0 ? "text-destructive" : ""}`}
+              >
                 {fmtBRL(total.contribuicaoLiquida)}
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">%MCL no ano</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  %MCL no ano
+                </CardTitle>
               </CardHeader>
-              <CardContent className={`font-mono text-2xl font-semibold tabular-nums ${total.mcl < 0 ? "text-destructive" : ""}`}>
+              <CardContent
+                className={`font-mono text-2xl font-semibold tabular-nums ${total.mcl < 0 ? "text-destructive" : ""}`}
+              >
                 {fmtPct(total.mcl)}
               </CardContent>
             </Card>
           </div>
           <p className="text-sm text-muted-foreground">
-            Use o menu lateral para lançar receitas, folha e despesas de {monthName} em diante e acompanhar a DRE prevista da unidade.
+            Use o menu lateral para lançar receitas, folha e despesas de {monthName} em diante e
+            acompanhar a DRE prevista da unidade.
           </p>
         </>
       )}

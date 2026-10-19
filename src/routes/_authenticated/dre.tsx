@@ -18,7 +18,12 @@ export const Route = createFileRoute("/_authenticated/dre")({
   component: DrePage,
 });
 
-const LINES: { key: keyof Omit<DreMonth, "mcl">; label: string; bold?: boolean; negative?: boolean }[] = [
+const LINES: {
+  key: keyof Omit<DreMonth, "mcl">;
+  label: string;
+  bold?: boolean;
+  negative?: boolean;
+}[] = [
   { key: "receitaBruta", label: "Receita bruta", bold: true },
   { key: "despesasProdutos", label: "(-) Despesas de produtos" },
   { key: "custosIndiretos", label: "(-) Custos indiretos (folha + encargos)" },
@@ -54,14 +59,19 @@ function DrePage() {
               <tr className="border-b border-border bg-muted/50 text-left">
                 <th className="sticky left-0 bg-muted/50 px-3 py-2 font-medium">Linha</th>
                 {MONTHS.map((m) => (
-                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">{m}</th>
+                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
+                    {m}
+                  </th>
                 ))}
                 <th className="px-3 py-2 text-right font-medium">Total</th>
               </tr>
             </thead>
             <tbody>
               {LINES.map((line) => (
-                <tr key={line.key} className={`border-b border-border ${line.bold ? "bg-muted/30 font-semibold" : ""}`}>
+                <tr
+                  key={line.key}
+                  className={`border-b border-border ${line.bold ? "bg-muted/30 font-semibold" : ""}`}
+                >
                   <td className="sticky left-0 bg-inherit px-3 py-1.5">{line.label}</td>
                   {months.map((m, i) => (
                     <td
@@ -85,11 +95,16 @@ function DrePage() {
               <tr className="font-semibold">
                 <td className="sticky left-0 bg-card px-3 py-1.5">%MCL</td>
                 {months.map((m, i) => (
-                  <td key={i} className={`px-2 py-1.5 text-right font-mono tabular-nums ${m.mcl < 0 ? "text-destructive" : ""}`}>
+                  <td
+                    key={i}
+                    className={`px-2 py-1.5 text-right font-mono tabular-nums ${m.mcl < 0 ? "text-destructive" : ""}`}
+                  >
                     {fmtPct(m.mcl)}
                   </td>
                 ))}
-                <td className={`px-3 py-1.5 text-right font-mono tabular-nums ${total.mcl < 0 ? "text-destructive" : ""}`}>
+                <td
+                  className={`px-3 py-1.5 text-right font-mono tabular-nums ${total.mcl < 0 ? "text-destructive" : ""}`}
+                >
                   {fmtPct(total.mcl)}
                 </td>
               </tr>

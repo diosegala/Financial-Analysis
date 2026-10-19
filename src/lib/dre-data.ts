@@ -5,7 +5,13 @@ import { computeMonth } from "./dre";
 
 export interface DreData {
   parameters: Parameter[];
-  scenarios: { id: string; name: string; revenue_variation: number; expense_variation: number; is_official: boolean }[];
+  scenarios: {
+    id: string;
+    name: string;
+    revenue_variation: number;
+    expense_variation: number;
+    is_official: boolean;
+  }[];
   months: MonthInputs[];
 }
 
@@ -15,13 +21,23 @@ export function useDreData(unitId: string | null, year: number) {
     enabled: !!unitId,
     queryFn: async (): Promise<DreData> => {
       const [revRes, peopleRes, payRes, catRes, expRes, parRes, sceRes] = await Promise.all([
-        supabase.from("revenue_entries").select("month, amount, revenue_type").eq("unit_id", unitId!).eq("year", year),
+        supabase
+          .from("revenue_entries")
+          .select("month, amount, revenue_type")
+          .eq("unit_id", unitId!)
+          .eq("year", year),
         supabase.from("people").select("id").eq("unit_id", unitId!),
-        supabase.from("payroll_entries").select("month, amount, kind, person_id, unit_id").eq("year", year),
+        supabase
+          .from("payroll_entries")
+          .select("month, amount, kind, person_id, unit_id")
+          .eq("year", year),
         supabase.from("expense_categories").select("id, dre_line").eq("unit_id", unitId!),
         supabase.from("expense_entries").select("month, amount, category_id").eq("year", year),
         supabase.from("parameters").select("key, value, valid_from"),
-        supabase.from("scenarios").select("id, name, revenue_variation, expense_variation, is_official").order("name"),
+        supabase
+          .from("scenarios")
+          .select("id, name, revenue_variation, expense_variation, is_official")
+          .order("name"),
       ]);
 
       const personIds = new Set((peopleRes.data ?? []).map((p) => p.id));

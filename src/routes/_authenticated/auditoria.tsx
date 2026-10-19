@@ -38,13 +38,23 @@ function summarize(action: string, oldData: any, newData: any): string {
   const d = newData ?? oldData ?? {};
   if (action === "update" && oldData && newData) {
     const changes = Object.keys(newData).filter(
-      (k) => !["updated_at", "created_at", "id", "created_by"].includes(k) && JSON.stringify(oldData[k]) !== JSON.stringify(newData[k]),
+      (k) =>
+        !["updated_at", "created_at", "id", "created_by"].includes(k) &&
+        JSON.stringify(oldData[k]) !== JSON.stringify(newData[k]),
     );
     if (changes.length > 0) {
       return changes.map((k) => `${k}: ${oldData[k]} → ${newData[k]}`).join("; ");
     }
   }
-  const parts = [d.client_name, d.product_name, d.name, d.key, d.month != null ? `mês ${d.month}` : null, d.amount != null ? `valor ${d.amount}` : null, d.value != null ? `valor ${d.value}` : null].filter(Boolean);
+  const parts = [
+    d.client_name,
+    d.product_name,
+    d.name,
+    d.key,
+    d.month != null ? `mês ${d.month}` : null,
+    d.amount != null ? `valor ${d.amount}` : null,
+    d.value != null ? `valor ${d.value}` : null,
+  ].filter(Boolean);
   return parts.join(" · ") || "—";
 }
 
@@ -63,10 +73,13 @@ function AuditoriaPage() {
       if (error) throw error;
       const ids = [...new Set((data ?? []).map((r) => r.changed_by).filter(Boolean))] as string[];
       const profiles = ids.length
-        ? (await supabase.from("profiles").select("id, full_name").in("id", ids)).data ?? []
+        ? ((await supabase.from("profiles").select("id, full_name").in("id", ids)).data ?? [])
         : [];
       const nameOf = new Map(profiles.map((p) => [p.id, p.full_name]));
-      return (data ?? []).map((r) => ({ ...r, who: r.changed_by ? (nameOf.get(r.changed_by) ?? "Usuário") : "Sistema" }));
+      return (data ?? []).map((r) => ({
+        ...r,
+        who: r.changed_by ? (nameOf.get(r.changed_by) ?? "Usuário") : "Sistema",
+      }));
     },
   });
 
@@ -78,7 +91,9 @@ function AuditoriaPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Auditoria</h1>
-        <p className="text-sm text-muted-foreground">Quem alterou o quê e quando (últimos 200 registros).</p>
+        <p className="text-sm text-muted-foreground">
+          Quem alterou o quê e quando (últimos 200 registros).
+        </p>
       </div>
 
       {isLoading ? (

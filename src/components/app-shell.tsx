@@ -46,12 +46,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const { data: units } = useQuery({
     queryKey: ["units"],
-    queryFn: async () => (await supabase.from("units").select("id, name, kind").order("name")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("units").select("id, name, kind").order("name")).data ?? [],
   });
 
   const { data: scenarios } = useQuery({
     queryKey: ["scenarios"],
-    queryFn: async () => (await supabase.from("scenarios").select("id, name, is_official").order("name")).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("scenarios").select("id, name, is_official").order("name")).data ?? [],
   });
 
   const visibleUnits = user?.isManagement
@@ -74,7 +76,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
         <div className="border-b border-sidebar-border px-5 py-4">
           <img src="/brand/cupola-branca.png" alt="CUPOLA" className="h-7 w-auto" />
-          <div className="mt-1 text-xs text-sidebar-foreground/60">Planejamento financeiro {planning.year}</div>
+          <div className="mt-1 text-xs text-sidebar-foreground/60">
+            Planejamento financeiro {planning.year}
+          </div>
         </div>
         <nav className="flex-1 space-y-0.5 p-2">
           {NAV.filter((item) => {
@@ -102,7 +106,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="border-t border-sidebar-border p-3">
           <div className="truncate px-1 text-sm font-medium text-foreground">{user?.fullName}</div>
           <div className="truncate px-1 text-xs text-muted-foreground">{user?.email}</div>
-          <Button variant="ghost" size="sm" className="mt-2 w-full justify-start gap-2" onClick={handleSignOut}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-2 w-full justify-start gap-2"
+            onClick={handleSignOut}
+          >
             <LogOut className="h-4 w-4" /> Sair
           </Button>
         </div>
@@ -153,7 +162,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 // Keeps the context in sync with the effective defaults shown in the selectors.
-function PlanningSetter({ unitId, scenarioId }: { unitId: string | null; scenarioId: string | null }) {
+function PlanningSetter({
+  unitId,
+  scenarioId,
+}: {
+  unitId: string | null;
+  scenarioId: string | null;
+}) {
   const planning = usePlanning();
   useEffect(() => {
     if (unitId && planning.unitId !== unitId) planning.setUnitId(unitId);

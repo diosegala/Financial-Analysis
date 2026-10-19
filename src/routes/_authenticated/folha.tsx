@@ -22,9 +22,15 @@ export const Route = createFileRoute("/_authenticated/folha")({
   head: () => ({
     meta: [
       { title: "Folha — CUPOLA Planejamento Financeiro" },
-      { name: "description", content: "Pessoas da unidade e valores mensais de salário, pró-labore e CIEE." },
+      {
+        name: "description",
+        content: "Pessoas da unidade e valores mensais de salário, pró-labore e CIEE.",
+      },
       { property: "og:title", content: "Folha — CUPOLA Planejamento Financeiro" },
-      { property: "og:description", content: "Pessoas da unidade e valores mensais de salário, pró-labore e CIEE." },
+      {
+        property: "og:description",
+        content: "Pessoas da unidade e valores mensais de salário, pró-labore e CIEE.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -66,7 +72,13 @@ function FolhaPage() {
     queryKey: ["people", unitId],
     enabled: !!unitId,
     queryFn: async () =>
-      (await supabase.from("people").select("id, name, contract_type").eq("unit_id", unitId!).order("name")).data ?? [],
+      (
+        await supabase
+          .from("people")
+          .select("id, name, contract_type")
+          .eq("unit_id", unitId!)
+          .order("name")
+      ).data ?? [],
   });
 
   const personIds = (people ?? []).map((p) => p.id);
@@ -81,7 +93,7 @@ function FolhaPage() {
         .eq("year", year);
       if (error) throw error;
       return (data ?? []).filter(
-        (e) => (e.unit_id === unitId) || (e.person_id != null && personIds.includes(e.person_id)),
+        (e) => e.unit_id === unitId || (e.person_id != null && personIds.includes(e.person_id)),
       ) as PayEntry[];
     },
   });
@@ -95,8 +107,14 @@ function FolhaPage() {
   async function commit(personId: string | null, kind: string, month: number, value: number) {
     const existing = entryFor(personId, kind, month);
     if (existing) {
-      const { error } = await supabase.from("payroll_entries").update({ amount: value }).eq("id", existing.id);
-      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+      const { error } = await supabase
+        .from("payroll_entries")
+        .update({ amount: value })
+        .eq("id", existing.id);
+      if (error) {
+        toast.error("Erro ao salvar: " + error.message);
+        return;
+      }
     } else if (value !== 0) {
       const { error } = await supabase.from("payroll_entries").insert({
         person_id: personId,
@@ -106,20 +124,29 @@ function FolhaPage() {
         amount: value,
         kind,
       });
-      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+      if (error) {
+        toast.error("Erro ao salvar: " + error.message);
+        return;
+      }
     }
     queryClient.invalidateQueries({ queryKey: ["payroll", unitId, year] });
     queryClient.invalidateQueries({ queryKey: ["dre-data", unitId, year] });
   }
 
   async function addPerson() {
-    if (!name.trim()) { toast.error("Informe o nome."); return; }
+    if (!name.trim()) {
+      toast.error("Informe o nome.");
+      return;
+    }
     const { error } = await supabase.from("people").insert({
       unit_id: unitId!,
       name: name.trim(),
       contract_type: contract,
     });
-    if (error) { toast.error("Erro ao adicionar: " + error.message); return; }
+    if (error) {
+      toast.error("Erro ao adicionar: " + error.message);
+      return;
+    }
     setName("");
     queryClient.invalidateQueries({ queryKey: ["people", unitId] });
   }
@@ -144,14 +171,21 @@ function FolhaPage() {
 
       {canEdit && (
         <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-card p-3">
-          <Input placeholder="Nome da pessoa" value={name} onChange={(e) => setName(e.target.value)} className="w-56" />
+          <Input
+            placeholder="Nome da pessoa"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-56"
+          />
           <Select value={contract} onValueChange={setContract}>
             <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {CONTRACTS.map((c) => (
-                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                <SelectItem key={c.value} value={c.value}>
+                  {c.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -171,7 +205,9 @@ function FolhaPage() {
                 <th className="sticky left-0 bg-muted/50 px-3 py-2 font-medium">Pessoa</th>
                 <th className="px-3 py-2 font-medium">Vínculo</th>
                 {MONTHS.map((m) => (
-                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">{m}</th>
+                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
+                    {m}
+                  </th>
                 ))}
                 <th className="px-3 py-2 text-right font-medium">Total</th>
               </tr>
@@ -180,7 +216,9 @@ function FolhaPage() {
               {(people ?? []).map((p) => (
                 <tr key={p.id} className="border-b border-border">
                   <td className="sticky left-0 bg-card px-3 py-1 font-medium">{p.name}</td>
-                  <td className="px-3 py-1 text-muted-foreground">{CONTRACT_LABELS[p.contract_type] ?? p.contract_type}</td>
+                  <td className="px-3 py-1 text-muted-foreground">
+                    {CONTRACT_LABELS[p.contract_type] ?? p.contract_type}
+                  </td>
                   {MONTHS.map((_, i) => (
                     <td key={i} className="border-l border-border/50 p-0">
                       <MoneyCell
@@ -190,7 +228,9 @@ function FolhaPage() {
                       />
                     </td>
                   ))}
-                  <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">{fmtBRL(rowTotal(p.id, "salario"))}</td>
+                  <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
+                    {fmtBRL(rowTotal(p.id, "salario"))}
+                  </td>
                 </tr>
               ))}
               {EXTRA_ROWS.map((r) => (
@@ -206,7 +246,9 @@ function FolhaPage() {
                       />
                     </td>
                   ))}
-                  <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">{fmtBRL(rowTotal(null, r.kind))}</td>
+                  <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
+                    {fmtBRL(rowTotal(null, r.kind))}
+                  </td>
                 </tr>
               ))}
               {(people ?? []).length === 0 && (

@@ -31,18 +31,29 @@ function CenariosPage() {
 
   const canEdit = !!user?.isFinanceiro;
 
-  async function saveVariation(id: string, field: "revenue_variation" | "expense_variation", text: string) {
+  async function saveVariation(
+    id: string,
+    field: "revenue_variation" | "expense_variation",
+    text: string,
+  ) {
     const value = parseNum(text) / 100;
-    const patch = field === "revenue_variation" ? { revenue_variation: value } : { expense_variation: value };
+    const patch =
+      field === "revenue_variation" ? { revenue_variation: value } : { expense_variation: value };
     const { error } = await supabase.from("scenarios").update(patch).eq("id", id);
-    if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+    if (error) {
+      toast.error("Erro ao salvar: " + error.message);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ["dre-data"] });
     queryClient.invalidateQueries({ queryKey: ["scenarios"] });
   }
 
   async function setOfficial(id: string) {
     const { error } = await supabase.from("scenarios").update({ is_official: true }).eq("id", id);
-    if (error) { toast.error("Erro: " + error.message); return; }
+    if (error) {
+      toast.error("Erro: " + error.message);
+      return;
+    }
     await supabase.from("scenarios").update({ is_official: false }).neq("id", id);
     queryClient.invalidateQueries({ queryKey: ["dre-data"] });
     queryClient.invalidateQueries({ queryKey: ["scenarios"] });
@@ -59,7 +70,8 @@ function CenariosPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Cenários</h1>
         <p className="text-sm text-muted-foreground">
-          O Realista é lançado; Otimista e Conservador são variações percentuais aplicadas pelo financeiro.
+          O Realista é lançado; Otimista e Conservador são variações percentuais aplicadas pelo
+          financeiro.
         </p>
       </div>
 
@@ -114,7 +126,9 @@ function CenariosPage() {
                   <tr className="border-b border-border bg-muted/50 text-left">
                     <th className="px-3 py-2 font-medium">Linha</th>
                     {computed.map((s) => (
-                      <th key={s.id} className="px-3 py-2 text-right font-medium">{s.name}</th>
+                      <th key={s.id} className="px-3 py-2 text-right font-medium">
+                        {s.name}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -133,7 +147,9 @@ function CenariosPage() {
                         <td
                           key={s.id}
                           className={`px-3 py-1.5 text-right font-mono tabular-nums ${
-                            key === "contribuicaoLiquida" && (s.total?.[key] ?? 0) < 0 ? "text-destructive" : ""
+                            key === "contribuicaoLiquida" && (s.total?.[key] ?? 0) < 0
+                              ? "text-destructive"
+                              : ""
                           }`}
                         >
                           {s.total ? fmtBRL(s.total[key]) : "—"}
@@ -144,7 +160,10 @@ function CenariosPage() {
                   <tr className="font-semibold">
                     <td className="px-3 py-1.5">%MCL</td>
                     {computed.map((s) => (
-                      <td key={s.id} className={`px-3 py-1.5 text-right font-mono tabular-nums ${(s.total?.mcl ?? 0) < 0 ? "text-destructive" : ""}`}>
+                      <td
+                        key={s.id}
+                        className={`px-3 py-1.5 text-right font-mono tabular-nums ${(s.total?.mcl ?? 0) < 0 ? "text-destructive" : ""}`}
+                      >
                         {s.total ? fmtPct(s.total.mcl) : "—"}
                       </td>
                     ))}

@@ -6,3 +6,8 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+
+# Gerados pelo Lovable / Supabase
+.lovable
+AGENTS.md
+src/integrations/supabase
