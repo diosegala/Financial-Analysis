@@ -26,6 +26,20 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  async function handleForgot() {
+    setError(null);
+    if (!/.+@.+\..+/.test(email)) {
+      setError("Digite seu e-mail acima e clique de novo em “Esqueci minha senha”.");
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/definir-senha`,
+    });
+    if (error) setError(error.message);
+    else setNotice(`Se ${email} tiver acesso, você vai receber um link para criar uma nova senha.`);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -73,9 +87,17 @@ function AuthPage() {
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
+            {notice && <p className="text-sm text-muted-foreground">{notice}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Entrando…" : "Entrar"}
             </Button>
+            <button
+              type="button"
+              onClick={handleForgot}
+              className="w-full text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
+            >
+              Esqueci minha senha
+            </button>
           </form>
         </CardContent>
       </Card>

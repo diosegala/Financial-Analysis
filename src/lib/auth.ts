@@ -12,7 +12,8 @@ export interface CurrentUser {
   isFinanceiro: boolean;
   isCeo: boolean;
   isManagement: boolean; // financeiro, vp ou ceo — veem todas as unidades
-  canWrite: boolean; // ceo não escreve
+  isLider: boolean;
+  canWrite: boolean; // lança valores: financeiro ou líder (VP e CEO só leem — D4)
 }
 
 async function loadCurrentUser(): Promise<CurrentUser | null> {
@@ -40,7 +41,8 @@ async function loadCurrentUser(): Promise<CurrentUser | null> {
     isFinanceiro,
     isCeo,
     isManagement,
-    canWrite: !isCeo,
+    isLider: roles.includes("lider"),
+    canWrite: isFinanceiro || roles.includes("lider"),
   };
 }
 

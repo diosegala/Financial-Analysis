@@ -1,199 +1,87 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "@/lib/auth";
+import { MoreHorizontal, Plus } from "lucide-react";
+import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
-import { MONTHS, fmtBRL } from "@/lib/format";
-import { MoneyCell } from "@/components/money-cell";
+import { useCurrentUser } from "@/lib/auth";
+import { byId, useContractTypes } from "@/lib/catalog";
+import { salaryFor, usePeople, usePeopleMutations, type Person } from "@/lib/payroll";
+import { MONTHS, MONTHS_FULL, fmtBRL, fmtInput, parseNum } from "@/lib/format";
+import { PageHeader } from "@/components/page-header";
+import { PlanGrid } from "@/components/plan-grid";
+import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Plus } from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/folha")({
-  head: () => ({
-    meta: [
-      { title: "Folha — CUPOLA Planejamento Financeiro" },
-      {
-        name: "description",
-        content: "Pessoas da unidade e valores mensais de salário, pró-labore e CIEE.",
-      },
-      { property: "og:title", content: "Folha — CUPOLA Planejamento Financeiro" },
-      {
-        property: "og:description",
-        content: "Pessoas da unidade e valores mensais de salário, pró-labore e CIEE.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: pageHead(
+    "Folha",
+    "Pessoas da unidade, remuneração, reajustes e outros lançamentos de folha.",
+  ),
   component: FolhaPage,
 });
 
-const CONTRACTS = [
-  { value: "socio", label: "Sócio (pró-labore)" },
-  { value: "clt", label: "CLT" },
-  { value: "estagiario", label: "Estagiário (CIEE)" },
-] as const;
-
-const CONTRACT_LABELS = Object.fromEntries(CONTRACTS.map((c) => [c.value, c.label]));
-
-const EXTRA_ROWS = [
-  { kind: "beneficios", label: "Benefícios" },
-  { kind: "rescisao", label: "Rescisões" },
-] as const;
-
-interface PayEntry {
-  id: string;
-  month: number;
-  amount: number;
-  kind: string;
-  person_id: string | null;
-}
+type Dialogs =
+  | { type: "person"; person: Person | null }
+  | { type: "raises"; person: Person }
+  | { type: "delete"; person: Person }
+  | null;
 
 function FolhaPage() {
-  const { unitId, year } = usePlanning();
+  const { unit, version, versionId, unitId, canEdit: unitEditable, lockReason } = usePlanning();
   const { data: user } = useCurrentUser();
-  const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [contract, setContract] = useState("clt");
-
-  const canEdit = !!user?.isFinanceiro;
-
-  const { data: people } = useQuery({
-    queryKey: ["people", unitId],
-    enabled: !!unitId,
-    queryFn: async () =>
-      (
-        await supabase
-          .from("people")
-          .select("id, name, contract_type")
-          .eq("unit_id", unitId!)
-          .order("name")
-      ).data ?? [],
-  });
-
-  const personIds = (people ?? []).map((p) => p.id);
-
-  const { data: entries, isLoading } = useQuery({
-    queryKey: ["payroll", unitId, year, personIds.join(",")],
-    enabled: !!unitId && !!people,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payroll_entries")
-        .select("id, month, amount, kind, person_id, unit_id")
-        .eq("year", year);
-      if (error) throw error;
-      return (data ?? []).filter(
-        (e) => e.unit_id === unitId || (e.person_id != null && personIds.includes(e.person_id)),
-      ) as PayEntry[];
-    },
-  });
-
-  function entryFor(personId: string | null, kind: string, month: number) {
-    return (entries ?? []).find(
-      (e) => e.person_id === personId && e.kind === kind && e.month === month,
-    );
-  }
-
-  async function commit(personId: string | null, kind: string, month: number, value: number) {
-    const existing = entryFor(personId, kind, month);
-    if (existing) {
-      const { error } = await supabase
-        .from("payroll_entries")
-        .update({ amount: value })
-        .eq("id", existing.id);
-      if (error) {
-        toast.error("Erro ao salvar: " + error.message);
-        return;
-      }
-    } else if (value !== 0) {
-      const { error } = await supabase.from("payroll_entries").insert({
-        person_id: personId,
-        unit_id: personId ? null : unitId!,
-        year,
-        month,
-        amount: value,
-        kind,
-      });
-      if (error) {
-        toast.error("Erro ao salvar: " + error.message);
-        return;
-      }
-    }
-    queryClient.invalidateQueries({ queryKey: ["payroll", unitId, year] });
-    queryClient.invalidateQueries({ queryKey: ["dre-data", unitId, year] });
-  }
-
-  async function addPerson() {
-    if (!name.trim()) {
-      toast.error("Informe o nome.");
-      return;
-    }
-    const { error } = await supabase.from("people").insert({
-      unit_id: unitId!,
-      name: name.trim(),
-      contract_type: contract,
-    });
-    if (error) {
-      toast.error("Erro ao adicionar: " + error.message);
-      return;
-    }
-    setName("");
-    queryClient.invalidateQueries({ queryKey: ["people", unitId] });
-  }
-
-  function rowTotal(personId: string | null, kind: string) {
-    return (entries ?? [])
-      .filter((e) => e.person_id === personId && e.kind === kind)
-      .reduce((a, e) => a + Number(e.amount), 0);
-  }
+  const { data: people, isLoading } = usePeople(versionId, unitId);
+  const { data: contractTypes } = useContractTypes();
+  const [dialog, setDialog] = useState<Dialogs>(null);
+  const canEdit = unitEditable && !!user?.isFinanceiro;
+  const ctMap = byId(contractTypes);
+  const rows = people ?? [];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Folha</h1>
-        <p className="text-sm text-muted-foreground">
-          Pessoas da unidade × 12 meses · {year}
-          {canEdit
-            ? " · Para reajuste, altere o valor a partir do mês desejado."
-            : " · Somente o financeiro edita a folha."}
-        </p>
-      </div>
-
-      {canEdit && (
-        <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-card p-3">
-          <Input
-            placeholder="Nome da pessoa"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-56"
-          />
-          <Select value={contract} onValueChange={setContract}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CONTRACTS.map((c) => (
-                <SelectItem key={c.value} value={c.value}>
-                  {c.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={addPerson} size="sm" className="gap-1.5">
-            <Plus className="h-4 w-4" /> Adicionar pessoa
-          </Button>
-        </div>
-      )}
+    <div className="space-y-6">
+      <PageHeader
+        title="Folha"
+        subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"} · ${
+          canEdit
+            ? "Encargos, provisões e benefícios por pessoa são calculados pelos parâmetros."
+            : (lockReason ?? "Somente o financeiro edita a folha.")
+        }`}
+        actions={
+          canEdit && (
+            <Button
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setDialog({ type: "person", person: null })}
+            >
+              <Plus className="h-4 w-4" /> Adicionar pessoa
+            </Button>
+          )
+        }
+      />
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
@@ -202,58 +90,90 @@ function FolhaPage() {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left">
-                <th className="sticky left-0 bg-muted/50 px-3 py-2 font-medium">Pessoa</th>
-                <th className="px-3 py-2 font-medium">Vínculo</th>
+                <th className="sticky left-0 z-10 min-w-56 bg-muted px-3 py-2 font-medium">
+                  Pessoa
+                </th>
                 {MONTHS.map((m) => (
-                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
+                  <th key={m} className="min-w-20 px-2 py-2 text-right font-medium">
                     {m}
                   </th>
                 ))}
                 <th className="px-3 py-2 text-right font-medium">Total</th>
+                <th className="w-10" />
               </tr>
             </thead>
             <tbody>
-              {(people ?? []).map((p) => (
-                <tr key={p.id} className="border-b border-border">
-                  <td className="sticky left-0 bg-card px-3 py-1 font-medium">{p.name}</td>
-                  <td className="px-3 py-1 text-muted-foreground">
-                    {CONTRACT_LABELS[p.contract_type] ?? p.contract_type}
-                  </td>
-                  {MONTHS.map((_, i) => (
-                    <td key={i} className="border-l border-border/50 p-0">
-                      <MoneyCell
-                        value={Number(entryFor(p.id, "salario", i + 1)?.amount ?? 0)}
-                        disabled={!canEdit}
-                        onCommit={(v) => commit(p.id, "salario", i + 1, v)}
-                      />
+              {rows.map((p) => {
+                const monthly = MONTHS.map((_, i) => salaryFor(p, i + 1));
+                const raises = [...p.salary_changes].sort((a, b) => a.month - b.month);
+                return (
+                  <tr key={p.id} className="border-b border-border">
+                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5">
+                      <div className="font-medium">{p.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {[
+                          p.role_title,
+                          ctMap.get(p.contract_type_id)?.name,
+                          p.start_month ? `entra em ${MONTHS[p.start_month - 1]}` : null,
+                          p.end_month ? `sai em ${MONTHS[p.end_month - 1]}` : null,
+                          raises.length ? `${raises.length} reajuste(s)` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
                     </td>
-                  ))}
-                  <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
-                    {fmtBRL(rowTotal(p.id, "salario"))}
-                  </td>
-                </tr>
-              ))}
-              {EXTRA_ROWS.map((r) => (
-                <tr key={r.kind} className="border-b border-border bg-muted/20 last:border-0">
-                  <td className="sticky left-0 bg-muted/20 px-3 py-1 font-medium">{r.label}</td>
-                  <td className="px-3 py-1 text-muted-foreground">unidade</td>
-                  {MONTHS.map((_, i) => (
-                    <td key={i} className="border-l border-border/50 p-0">
-                      <MoneyCell
-                        value={Number(entryFor(null, r.kind, i + 1)?.amount ?? 0)}
-                        disabled={!canEdit}
-                        onCommit={(v) => commit(null, r.kind, i + 1, v)}
-                      />
+                    {monthly.map((v, i) => (
+                      <td
+                        key={i}
+                        className="px-2 py-1.5 text-right font-mono tabular-nums text-muted-foreground"
+                      >
+                        {v ? fmtBRL(v) : "—"}
+                      </td>
+                    ))}
+                    <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                      {fmtBRL(monthly.reduce((a, v) => a + v, 0))}
                     </td>
-                  ))}
-                  <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
-                    {fmtBRL(rowTotal(null, r.kind))}
-                  </td>
-                </tr>
-              ))}
-              {(people ?? []).length === 0 && (
+                    <td className="px-1">
+                      {canEdit && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              aria-label="Ações"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => setDialog({ type: "person", person: p })}
+                            >
+                              Editar pessoa
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setDialog({ type: "raises", person: p })}
+                            >
+                              Reajustes…
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => setDialog({ type: "delete", person: p })}
+                            >
+                              Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {rows.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="px-3 py-4 text-center text-muted-foreground">
+                  <td colSpan={15} className="px-3 py-8 text-center text-muted-foreground">
                     Nenhuma pessoa cadastrada nesta unidade.
                   </td>
                 </tr>
@@ -262,6 +182,234 @@ function FolhaPage() {
           </table>
         </div>
       )}
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Outros lançamentos de folha</h2>
+        <PlanGrid
+          kind="folha"
+          emptyText="Rescisões, bônus ou benefícios específicos entram aqui."
+        />
+      </div>
+
+      {dialog?.type === "person" && (
+        <PersonDialog person={dialog.person} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.type === "raises" && (
+        <RaisesDialog
+          person={rows.find((p) => p.id === dialog.person.id) ?? dialog.person}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.type === "delete" && (
+        <DeletePersonDialog person={dialog.person} onClose={() => setDialog(null)} />
+      )}
     </div>
+  );
+}
+
+function PersonDialog({ person, onClose }: { person: Person | null; onClose: () => void }) {
+  const { versionId, unitId } = usePlanning();
+  const { data: contractTypes } = useContractTypes();
+  const { addPerson, updatePerson } = usePeopleMutations();
+  const [name, setName] = useState(person?.name ?? "");
+  const [roleTitle, setRoleTitle] = useState(person?.role_title ?? "");
+  const [contractTypeId, setContractTypeId] = useState<string | null>(
+    person?.contract_type_id ?? contractTypes?.[0]?.id ?? null,
+  );
+  const [salary, setSalary] = useState(person ? fmtInput(Number(person.base_salary)) : "");
+  const [start, setStart] = useState<number | null>(person?.start_month ?? null);
+  const [end, setEnd] = useState<number | null>(person?.end_month ?? null);
+  const salaryValue = parseNum(salary);
+  const valid =
+    name.trim() !== "" &&
+    contractTypeId &&
+    salaryValue !== null &&
+    (!start || !end || start <= end);
+
+  async function save() {
+    if (!valid) return;
+    const fields = {
+      name: name.trim(),
+      role_title: roleTitle.trim() || null,
+      contract_type_id: contractTypeId!,
+      base_salary: salaryValue!,
+      start_month: start,
+      end_month: end,
+    };
+    const ok = person
+      ? await updatePerson(person.id, fields)
+      : await addPerson({ ...fields, version_id: versionId!, unit_id: unitId! });
+    if (ok) onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{person ? "Editar pessoa" : "Nova pessoa"}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Nome">
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label="Cargo">
+            <Input
+              value={roleTitle}
+              onChange={(e) => setRoleTitle(e.target.value)}
+              placeholder="opcional"
+            />
+          </Field>
+          <Field label="Vínculo">
+            <OptionSelect
+              value={contractTypeId}
+              onChange={setContractTypeId}
+              options={(contractTypes ?? [])
+                .filter((c) => c.active)
+                .map((c) => ({ value: c.id, label: c.name }))}
+            />
+          </Field>
+          <Field label="Remuneração mensal" hint="Salário, pró-labore ou bolsa.">
+            <Input
+              value={salary}
+              onChange={(e) => setSalary(e.target.value)}
+              className="font-mono"
+            />
+          </Field>
+          <Field label="Entrada">
+            <MonthSelect value={start} onChange={setStart} noneLabel="Já está no início do ano" />
+          </Field>
+          <Field label="Saída">
+            <MonthSelect value={end} onChange={setEnd} noneLabel="Fica até o fim do ano" />
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={save} disabled={!valid}>
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RaisesDialog({ person, onClose }: { person: Person; onClose: () => void }) {
+  const { setSalaryChange, deleteSalaryChange } = usePeopleMutations();
+  const [month, setMonth] = useState<number | null>(1);
+  const [mode, setMode] = useState<"valor" | "pct">("pct");
+  const [input, setInput] = useState("");
+  const parsed = parseNum(input);
+  const current = month ? salaryFor({ ...person, start_month: null, end_month: null }, month) : 0;
+  const newSalary =
+    parsed === null || input.trim() === ""
+      ? null
+      : mode === "pct"
+        ? Math.round(current * (1 + parsed / 100) * 100) / 100
+        : parsed;
+  const raises = [...person.salary_changes].sort((a, b) => a.month - b.month);
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Reajustes de {person.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <ul className="divide-y divide-border rounded-md border border-border text-sm">
+            <li className="flex justify-between px-3 py-1.5 text-muted-foreground">
+              <span>Base</span>
+              <span className="font-mono">{fmtBRL(Number(person.base_salary))}</span>
+            </li>
+            {raises.map((r) => (
+              <li key={r.id} className="flex items-center justify-between px-3 py-1.5">
+                <span>A partir de {MONTHS_FULL[r.month - 1]}</span>
+                <span className="flex items-center gap-2 font-mono">
+                  {fmtBRL(Number(r.new_salary))}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => deleteSalaryChange(r.id)}
+                  >
+                    remover
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="A partir de">
+              <MonthSelect value={month} onChange={setMonth} />
+            </Field>
+            <Field label="Tipo">
+              <OptionSelect
+                value={mode}
+                onChange={(v) => setMode((v as "valor" | "pct") ?? "pct")}
+                options={[
+                  { value: "pct", label: "Percentual" },
+                  { value: "valor", label: "Novo valor" },
+                ]}
+              />
+            </Field>
+            <Field label={mode === "pct" ? "Reajuste (%)" : "Novo valor"}>
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                className="font-mono"
+              />
+            </Field>
+          </div>
+          {newSalary !== null && month && (
+            <p className="text-sm text-muted-foreground">
+              De {fmtBRL(current)} para <strong>{fmtBRL(newSalary)}</strong> a partir de{" "}
+              {MONTHS_FULL[month - 1]}.
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Fechar
+          </Button>
+          <Button
+            disabled={newSalary === null || !month}
+            onClick={async () => {
+              if (
+                newSalary !== null &&
+                month &&
+                (await setSalaryChange(person.id, month, newSalary))
+              )
+                setInput("");
+            }}
+          >
+            Adicionar reajuste
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeletePersonDialog({ person, onClose }: { person: Person; onClose: () => void }) {
+  const { deletePerson } = usePeopleMutations();
+  return (
+    <AlertDialog open onOpenChange={(o) => !o && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir {person.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Para planejar um desligamento, prefira informar o mês de saída. A exclusão remove a
+            pessoa e os reajustes desta versão.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={async () => (await deletePerson(person.id)) && onClose()}>
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

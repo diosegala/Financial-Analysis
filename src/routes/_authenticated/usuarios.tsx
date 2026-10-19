@@ -2,170 +2,86 @@ import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Plus } from "lucide-react";
+import { pageHead } from "@/lib/head";
 import { useCurrentUser } from "@/lib/auth";
-import { listUsers, inviteUser } from "@/lib/users.functions";
+import { inviteUser, listUsers, setUserActive, updateUserAccess } from "@/lib/users.functions";
+import { PageHeader } from "@/components/page-header";
+import { Field, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Plus } from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_authenticated/usuarios")({
-  head: () => ({
-    meta: [
-      { title: "Usuários — CUPOLA Planejamento Financeiro" },
-      { name: "description", content: "Convite de usuários e definição de perfis e unidades." },
-      { property: "og:title", content: "Usuários — CUPOLA Planejamento Financeiro" },
-      {
-        property: "og:description",
-        content: "Convite de usuários e definição de perfis e unidades.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: pageHead("Usuários", "Convite de usuários e definição de perfis e unidades."),
   component: UsuariosPage,
 });
 
 const ROLES = [
-  { value: "financeiro", label: "Financeiro" },
-  { value: "vp", label: "VP" },
-  { value: "ceo", label: "CEO" },
+  { value: "financeiro", label: "Financeiro (administrador)" },
+  { value: "vp", label: "VP (leitura)" },
+  { value: "ceo", label: "CEO (leitura)" },
   { value: "lider", label: "Líder de unidade" },
 ] as const;
-
+type Role = (typeof ROLES)[number]["value"];
 const ROLE_LABELS = Object.fromEntries(ROLES.map((r) => [r.value, r.label]));
+
+type UserRow = Awaited<ReturnType<typeof listUsers>>["users"][number];
+
+const errorText = (err: unknown) => {
+  const msg = err instanceof Error ? err.message : String(err);
+  try {
+    // Erros de validação (zod) chegam como JSON.
+    const parsed = JSON.parse(msg) as { message?: string }[];
+    return parsed[0]?.message ?? msg;
+  } catch {
+    return msg;
+  }
+};
 
 function UsuariosPage() {
   const { data: currentUser, isLoading: loadingUser } = useCurrentUser();
   const queryClient = useQueryClient();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<string>("lider");
-  const [unitIds, setUnitIds] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-
+  const [dialog, setDialog] = useState<UserRow | "new" | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["users-list"],
     enabled: !!currentUser?.isFinanceiro,
     queryFn: () => listUsers({ data: {} }),
   });
 
-  if (!loadingUser && currentUser && !currentUser.isFinanceiro) {
-    return <Navigate to="/inicio" />;
-  }
-
-  function toggleUnit(id: string) {
-    setUnitIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (password.length < 6) {
-      toast.error("A senha precisa de pelo menos 6 caracteres.");
-      return;
-    }
-    setSaving(true);
-    try {
-      await inviteUser({
-        data: {
-          email,
-          password,
-          fullName,
-          role: role as "financeiro" | "vp" | "ceo" | "lider",
-          unitIds,
-        },
-      });
-      toast.success("Usuário criado. Ele já pode entrar com e-mail e senha.");
-      setEmail("");
-      setPassword("");
-      setFullName("");
-      setUnitIds([]);
-      queryClient.invalidateQueries({ queryKey: ["users-list"] });
-    } catch (err) {
-      toast.error("Erro ao criar usuário: " + (err instanceof Error ? err.message : String(err)));
-    } finally {
-      setSaving(false);
-    }
-  }
+  if (!loadingUser && currentUser && !currentUser.isFinanceiro) return <Navigate to="/inicio" />;
 
   const unitName = (id: string) => data?.units.find((u) => u.id === id)?.name ?? "";
 
+  async function toggleActive(u: UserRow) {
+    try {
+      await setUserActive({ data: { userId: u.id, active: !u.active } });
+      toast.success(u.active ? "Acesso desativado." : "Acesso reativado.");
+      await queryClient.invalidateQueries({ queryKey: ["users-list"] });
+    } catch (err) {
+      toast.error(errorText(err));
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Usuários</h1>
-        <p className="text-sm text-muted-foreground">
-          Convide pessoas, defina o perfil e as unidades de cada uma.
-        </p>
-      </div>
-
-      <form onSubmit={submit} className="space-y-3 rounded-md border border-border bg-card p-4">
-        <h2 className="font-semibold">Novo usuário</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="space-y-1.5">
-            <Label>Nome completo</Label>
-            <Input required value={fullName} onChange={(e) => setFullName(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>E-mail</Label>
-            <Input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Senha inicial</Label>
-            <Input
-              required
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Perfil</Label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLES.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        {role === "lider" && (
-          <div className="space-y-1.5">
-            <Label>Unidades do líder</Label>
-            <div className="flex flex-wrap gap-4 pt-1">
-              {(data?.units ?? []).map((u: { id: string; name: string }) => (
-                <label key={u.id} className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={unitIds.includes(u.id)}
-                    onCheckedChange={() => toggleUnit(u.id)}
-                  />
-                  {u.name}
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-        <Button type="submit" size="sm" disabled={saving} className="gap-1.5">
-          <Plus className="h-4 w-4" /> {saving ? "Criando…" : "Criar usuário"}
-        </Button>
-      </form>
-
+    <div className="space-y-4">
+      <PageHeader
+        title="Usuários"
+        subtitle="Convide pessoas e defina o perfil e as unidades de cada uma. Sempre precisa existir pelo menos um financeiro ativo."
+        actions={
+          <Button size="sm" className="gap-1.5" onClick={() => setDialog("new")}>
+            <Plus className="h-4 w-4" /> Convidar usuário
+          </Button>
+        }
+      />
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : (
@@ -177,37 +93,199 @@ function UsuariosPage() {
                 <th className="px-3 py-2 font-medium">E-mail</th>
                 <th className="px-3 py-2 font-medium">Perfil</th>
                 <th className="px-3 py-2 font-medium">Unidades</th>
+                <th className="px-3 py-2 font-medium">Situação</th>
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
-              {(data?.users ?? []).map(
-                (u: {
-                  id: string;
-                  fullName: string;
-                  email: string;
-                  roles: string[];
-                  unitIds: string[];
-                }) => (
-                  <tr key={u.id} className="border-b border-border last:border-0">
-                    <td className="px-3 py-1.5 font-medium">{u.fullName || "—"}</td>
-                    <td className="px-3 py-1.5">{u.email}</td>
-                    <td className="px-3 py-1.5">
-                      {u.roles.map((r: string) => (
-                        <Badge key={r} variant="secondary" className="mr-1">
-                          {ROLE_LABELS[r] ?? r}
-                        </Badge>
-                      ))}
-                    </td>
-                    <td className="px-3 py-1.5 text-muted-foreground">
-                      {u.unitIds.length > 0 ? u.unitIds.map(unitName).join(", ") : "—"}
-                    </td>
-                  </tr>
-                ),
-              )}
+              {(data?.users ?? []).map((u) => (
+                <tr
+                  key={u.id}
+                  className={`border-b border-border last:border-0 ${u.active ? "" : "opacity-50"}`}
+                >
+                  <td className="px-3 py-1.5 font-medium">{u.fullName || "—"}</td>
+                  <td className="px-3 py-1.5">{u.email}</td>
+                  <td className="px-3 py-1.5">
+                    {u.roles.map((r) => (
+                      <Badge key={r} variant="secondary" className="mr-1">
+                        {ROLE_LABELS[r] ?? r}
+                      </Badge>
+                    ))}
+                  </td>
+                  <td className="px-3 py-1.5 text-muted-foreground">
+                    {u.unitIds.length > 0 ? u.unitIds.map(unitName).join(", ") : "—"}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {!u.active ? (
+                      <Badge variant="outline">Inativo</Badge>
+                    ) : u.invitedPending ? (
+                      <Badge variant="outline">Nunca entrou</Badge>
+                    ) : (
+                      <Badge variant="secondary">Ativo</Badge>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => setDialog(u)}>
+                      Editar acesso
+                    </Button>
+                    {u.id !== currentUser?.id && (
+                      <Button variant="ghost" size="sm" onClick={() => toggleActive(u)}>
+                        {u.active ? "Desativar" : "Reativar"}
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
+      {dialog && data && (
+        <UserDialog
+          user={dialog === "new" ? null : dialog}
+          units={data.units}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function UserDialog({
+  user,
+  units,
+  onClose,
+}: {
+  user: UserRow | null;
+  units: { id: string; name: string }[];
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [fullName, setFullName] = useState(user?.fullName ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
+  const [role, setRole] = useState<Role>((user?.roles[0] as Role | undefined) ?? "lider");
+  const [unitIds, setUnitIds] = useState<string[]>(user?.unitIds ?? []);
+  const [mode, setMode] = useState<"email" | "senha">("email");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      if (user) {
+        await updateUserAccess({ data: { userId: user.id, fullName, role, unitIds } });
+        toast.success("Acesso atualizado.");
+      } else {
+        await inviteUser({
+          data: {
+            email,
+            fullName,
+            role,
+            unitIds,
+            password: mode === "senha" ? password : undefined,
+            redirectTo: `${window.location.origin}/definir-senha`,
+          },
+        });
+        toast.success(
+          mode === "email"
+            ? `Convite enviado para ${email}.`
+            : "Usuário criado. Ele já pode entrar com a senha informada.",
+        );
+      }
+      await queryClient.invalidateQueries({ queryKey: ["users-list"] });
+      onClose();
+    } catch (err) {
+      toast.error(errorText(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const valid =
+    fullName.trim() !== "" &&
+    (user || /.+@.+\..+/.test(email)) &&
+    (role !== "lider" || unitIds.length > 0) &&
+    (user || mode === "email" || password.length >= 8);
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {user ? `Acesso de ${user.fullName || user.email}` : "Convidar usuário"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <Field label="Nome completo">
+            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </Field>
+          {!user && (
+            <Field label="E-mail">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+          )}
+          <Field label="Perfil">
+            <OptionSelect
+              value={role}
+              onChange={(v) => setRole((v as Role) ?? "lider")}
+              options={[...ROLES]}
+            />
+          </Field>
+          {role === "lider" && (
+            <Field label="Unidades do líder">
+              <div className="grid grid-cols-2 gap-1.5 rounded-md border border-border p-2">
+                {units.map((u) => (
+                  <label key={u.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={unitIds.includes(u.id)}
+                      onCheckedChange={(c) =>
+                        setUnitIds((prev) => (c ? [...prev, u.id] : prev.filter((x) => x !== u.id)))
+                      }
+                    />
+                    {u.name}
+                  </label>
+                ))}
+              </div>
+            </Field>
+          )}
+          {!user && (
+            <>
+              <Field label="Como dar o acesso">
+                <OptionSelect
+                  value={mode}
+                  onChange={(v) => setMode((v as "email" | "senha") ?? "email")}
+                  options={[
+                    { value: "email", label: "Enviar convite por e-mail (a pessoa cria a senha)" },
+                    { value: "senha", label: "Definir uma senha inicial" },
+                  ]}
+                />
+              </Field>
+              {mode === "senha" && (
+                <Field
+                  label="Senha inicial"
+                  hint="Mínimo de 8 caracteres. Peça para a pessoa trocar no primeiro acesso."
+                >
+                  <Input value={password} onChange={(e) => setPassword(e.target.value)} />
+                </Field>
+              )}
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={save} disabled={saving || !valid}>
+            {saving
+              ? "Salvando…"
+              : user
+                ? "Salvar"
+                : mode === "email"
+                  ? "Enviar convite"
+                  : "Criar usuário"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

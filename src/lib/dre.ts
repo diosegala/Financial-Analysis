@@ -1,85 +1,71 @@
-// Pure DRE calculation engine (no I/O). Months are 1..12 of a given year.
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { DreLine } from "./catalog";
+import { MONTHS, fmtBRL, fmtPct } from "./format";
 
-export type ParamName = "imposto" | "comissao_comercial" | "comissao_parceiro" | "encargos";
+/** dre_line_id → month (0 = ano, 1–12) → valor. Calculado no banco por dre_report. */
+export type DreValues = Map<string, Map<number, number>>;
 
-export interface Parameter {
-  name: ParamName;
-  value: number; // fraction, e.g. 0.15 = 15%
-  validFrom: string; // ISO date yyyy-mm-dd
+export function useDreReport(
+  versionId: string | null,
+  scenarioId: string | null,
+  unitIds: string[] | null,
+) {
+  return useQuery({
+    queryKey: ["dre", versionId, scenarioId, unitIds?.join(",") ?? "all"],
+    enabled: !!versionId && !!scenarioId && (unitIds === null || unitIds.length > 0),
+    queryFn: async (): Promise<DreValues> => {
+      const { data, error } = await supabase.rpc("dre_report", {
+        _version_id: versionId!,
+        _scenario_id: scenarioId!,
+        ...(unitIds ? { _unit_ids: unitIds } : {}),
+      });
+      if (error) throw error;
+      const out: DreValues = new Map();
+      for (const r of data ?? []) {
+        if (!out.has(r.dre_line_id)) out.set(r.dre_line_id, new Map());
+        out.get(r.dre_line_id)!.set(r.month, Number(r.amount));
+      }
+      return out;
+    },
+  });
 }
 
-/** Value in force on the first day of the given month; latest validFrom <= that date wins. */
-export function paramFor(
-  params: Parameter[],
-  name: ParamName,
-  year: number,
+export const dreValue = (
+  values: DreValues | undefined,
+  lineId: string | undefined,
   month: number,
-): number {
-  const ref = `${year}-${String(month).padStart(2, "0")}-01`;
-  const hit = params
-    .filter((p) => p.name === name && p.validFrom <= ref)
-    .sort((a, b) => (a.validFrom < b.validFrom ? 1 : -1))[0];
-  return hit ? hit.value : 0;
+) => (lineId && values?.get(lineId)?.get(month)) || 0;
+
+export function lineLabel(line: DreLine) {
+  if (line.kind === "subtotal") return `(=) ${line.name}`;
+  if (line.kind === "percentual") return line.name;
+  return line.sign < 0 ? `(-) ${line.name}` : line.name;
 }
 
-export interface MonthInputs {
-  receitaComercial: number; // revenue subject to commercial commission
-  receitaParceiro: number; // revenue subject to partner commission
-  despesasProdutos: number;
-  folhaBase: number; // salaries / pró-labore / CIEE
-  beneficios: number;
-  rescisoes: number;
-  despesas: number;
+export const fmtLine = (line: DreLine, v: number) =>
+  line.kind === "percentual" ? fmtPct(v) : fmtBRL(v);
+
+/** CSV (separador ;) que o Excel em português abre direto, com BOM para acentos. */
+export function dreCsv(lines: DreLine[], values: DreValues): string {
+  const num = (line: DreLine, v: number) =>
+    line.kind === "percentual"
+      ? (v * 100).toFixed(2).replace(".", ",") + "%"
+      : v.toFixed(2).replace(".", ",");
+  const header = ["Linha", ...MONTHS, "Total"].join(";");
+  const rows = lines.map((l) =>
+    [
+      `"${lineLabel(l)}"`,
+      ...[...MONTHS.keys()].map((i) => num(l, dreValue(values, l.id, i + 1))),
+      num(l, dreValue(values, l.id, 0)),
+    ].join(";"),
+  );
+  return "﻿" + [header, ...rows].join("\n");
 }
 
-export interface Scenario {
-  receitaPct: number; // e.g. 0.1 = +10%
-  despesaPct: number;
-}
-
-export const REALISTA: Scenario = { receitaPct: 0, despesaPct: 0 };
-
-export interface DreMonth {
-  receitaBruta: number;
-  despesasProdutos: number;
-  custosIndiretos: number;
-  despesas: number;
-  comissionamento: number;
-  impostos: number;
-  contribuicaoLiquida: number;
-  mcl: number; // fraction of receita bruta
-}
-
-export function computeMonth(
-  input: MonthInputs,
-  params: Parameter[],
-  year: number,
-  month: number,
-  scenario: Scenario = REALISTA,
-): DreMonth {
-  const r = 1 + scenario.receitaPct;
-  const d = 1 + scenario.despesaPct;
-  const recCom = input.receitaComercial * r;
-  const recPar = input.receitaParceiro * r;
-  const receitaBruta = recCom + recPar;
-  const encargos = input.folhaBase * paramFor(params, "encargos", year, month);
-  const custosIndiretos = (input.folhaBase + encargos + input.beneficios + input.rescisoes) * d;
-  const despesasProdutos = input.despesasProdutos * d;
-  const despesas = input.despesas * d;
-  const comissionamento =
-    recCom * paramFor(params, "comissao_comercial", year, month) +
-    recPar * paramFor(params, "comissao_parceiro", year, month);
-  const impostos = receitaBruta * paramFor(params, "imposto", year, month);
-  const contribuicaoLiquida =
-    receitaBruta - despesasProdutos - custosIndiretos - despesas - comissionamento - impostos;
-  return {
-    receitaBruta,
-    despesasProdutos,
-    custosIndiretos,
-    despesas,
-    comissionamento,
-    impostos,
-    contribuicaoLiquida,
-    mcl: receitaBruta === 0 ? 0 : contribuicaoLiquida / receitaBruta,
-  };
+export function downloadText(filename: string, content: string, type = "text/csv;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+  a.click();
+  URL.revokeObjectURL(url);
 }

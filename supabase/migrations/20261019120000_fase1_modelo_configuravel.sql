@@ -24,6 +24,9 @@ ALTER TABLE public.units
   ADD COLUMN omie_department_code TEXT,
   ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   ADD CONSTRAINT units_kind_check CHECK (kind IN ('negocio', 'apoio'));
+UPDATE public.units SET sort_order = CASE name
+  WHEN 'Agência' THEN 10 WHEN 'Consultoria' THEN 20 WHEN 'Educação' THEN 30 WHEN 'RH' THEN 40
+  WHEN 'Financeiro' THEN 50 WHEN 'CRO' THEN 60 WHEN 'ADM' THEN 70 WHEN 'Growth' THEN 80 ELSE 100 END;
 GRANT INSERT, UPDATE ON public.units TO authenticated;
 CREATE POLICY "Financeiro writes units" ON public.units FOR INSERT TO authenticated
   WITH CHECK (public.has_role(auth.uid(), 'financeiro'));

@@ -81,5 +81,5 @@ export function parseNum(s: string): number | null {
 
 /** Display a stored number in an editable input, pt-BR style, without float noise. */
 export function fmtInput(v: number, maxDecimals = 2): string {
-  return v.toLocaleString("pt-BR", { maximumFractionDigits: maxDecimals, useGrouping: false });
+  return v.toLocaleString("pt-BR", { maximumFractionDigits: maxDecimals });
 }
