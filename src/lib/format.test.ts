@@ -33,6 +33,8 @@ describe("fmtInput", () => {
   it("não mostra ruído de ponto flutuante", () => {
     expect(fmtInput(0.07 * 100)).toBe("7");
     expect(fmtInput(12.5)).toBe("12,5");
-    expect(fmtInput(1234.5)).toBe("1234,5");
+    expect(fmtInput(1234.5)).toBe("1.234,5");
+    expect(parseNum(fmtInput(1234.5))).toBe(1234.5);
+    expect(parseNum(fmtInput(10000))).toBe(10000);
   });
 });

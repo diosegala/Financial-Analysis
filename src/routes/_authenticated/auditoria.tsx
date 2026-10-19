@@ -19,13 +19,32 @@ export const Route = createFileRoute("/_authenticated/auditoria")({
 });
 
 const TABLE_LABELS: Record<string, string> = {
+  plan_lines: "Linhas de lançamento",
+  plan_values: "Valores mensais",
+  people: "Pessoas",
+  salary_changes: "Reajustes",
+  events: "Eventos",
+  parameter_values: "Valores de parâmetros",
+  parameter_definitions: "Parâmetros",
+  calc_rules: "Regras de cálculo",
+  scenarios: "Cenários",
+  budget_versions: "Versões",
+  unit_submissions: "Envio e aprovação",
+  units: "Unidades",
+  dre_lines: "Estrutura da DRE",
+  accounts: "Plano de contas",
+  revenue_types: "Tipos de receita",
+  contract_types: "Vínculos",
+  products: "Produtos",
+  clients: "Clientes",
+  user_roles: "Perfis de usuário",
+  user_units: "Unidades de usuário",
+  // Tabelas da Fase 0 (registros antigos)
   revenue_entries: "Receitas",
   payroll_entries: "Folha",
   expense_entries: "Despesas",
   expense_categories: "Categorias de despesa",
-  people: "Pessoas",
   parameters: "Parâmetros",
-  scenarios: "Cenários",
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -37,6 +56,9 @@ const ACTION_LABELS: Record<string, string> = {
 interface Row {
   [field: string]: unknown;
   client_name?: unknown;
+  description?: unknown;
+  label?: unknown;
+  status?: unknown;
   product_name?: unknown;
   name?: unknown;
   key?: unknown;
@@ -65,6 +87,9 @@ function summarize(action: string, oldJson: unknown, newJson: unknown): string {
   }
   const parts = [
     d.client_name,
+    d.description,
+    d.label,
+    d.status,
     d.product_name,
     d.name,
     d.key,

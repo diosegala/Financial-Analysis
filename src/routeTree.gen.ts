@@ -14,8 +14,10 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedCenariosRouteImport } from './routes/_authenticated/cenarios'
+import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedDespesasRouteImport } from './routes/_authenticated/despesas'
 import { Route as AuthenticatedDreRouteImport } from './routes/_authenticated/dre'
+import { Route as AuthenticatedEventosRouteImport } from './routes/_authenticated/eventos'
 import { Route as AuthenticatedFolhaRouteImport } from './routes/_authenticated/folha'
 import { Route as AuthenticatedInicioRouteImport } from './routes/_authenticated/inicio'
 import { Route as AuthenticatedParametrosRouteImport } from './routes/_authenticated/parametros'
@@ -46,6 +48,12 @@ const AuthenticatedCenariosRoute = AuthenticatedCenariosRouteImport.update({
   path: '/cenarios',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedConfiguracoesRoute =
+  AuthenticatedConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDespesasRoute = AuthenticatedDespesasRouteImport.update({
   id: '/despesas',
   path: '/despesas',
@@ -54,6 +62,11 @@ const AuthenticatedDespesasRoute = AuthenticatedDespesasRouteImport.update({
 const AuthenticatedDreRoute = AuthenticatedDreRouteImport.update({
   id: '/dre',
   path: '/dre',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedEventosRoute = AuthenticatedEventosRouteImport.update({
+  id: '/eventos',
+  path: '/eventos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedFolhaRoute = AuthenticatedFolhaRouteImport.update({
@@ -87,8 +100,10 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/cenarios': typeof AuthenticatedCenariosRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/despesas': typeof AuthenticatedDespesasRoute
   '/dre': typeof AuthenticatedDreRoute
+  '/eventos': typeof AuthenticatedEventosRoute
   '/folha': typeof AuthenticatedFolhaRoute
   '/inicio': typeof AuthenticatedInicioRoute
   '/parametros': typeof AuthenticatedParametrosRoute
@@ -100,8 +115,10 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/cenarios': typeof AuthenticatedCenariosRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/despesas': typeof AuthenticatedDespesasRoute
   '/dre': typeof AuthenticatedDreRoute
+  '/eventos': typeof AuthenticatedEventosRoute
   '/folha': typeof AuthenticatedFolhaRoute
   '/inicio': typeof AuthenticatedInicioRoute
   '/parametros': typeof AuthenticatedParametrosRoute
@@ -115,8 +132,10 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/cenarios': typeof AuthenticatedCenariosRoute
+  '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/despesas': typeof AuthenticatedDespesasRoute
   '/_authenticated/dre': typeof AuthenticatedDreRoute
+  '/_authenticated/eventos': typeof AuthenticatedEventosRoute
   '/_authenticated/folha': typeof AuthenticatedFolhaRoute
   '/_authenticated/inicio': typeof AuthenticatedInicioRoute
   '/_authenticated/parametros': typeof AuthenticatedParametrosRoute
@@ -130,8 +149,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/auditoria'
     | '/cenarios'
+    | '/configuracoes'
     | '/despesas'
     | '/dre'
+    | '/eventos'
     | '/folha'
     | '/inicio'
     | '/parametros'
@@ -143,8 +164,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/auditoria'
     | '/cenarios'
+    | '/configuracoes'
     | '/despesas'
     | '/dre'
+    | '/eventos'
     | '/folha'
     | '/inicio'
     | '/parametros'
@@ -157,8 +180,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/auditoria'
     | '/_authenticated/cenarios'
+    | '/_authenticated/configuracoes'
     | '/_authenticated/despesas'
     | '/_authenticated/dre'
+    | '/_authenticated/eventos'
     | '/_authenticated/folha'
     | '/_authenticated/inicio'
     | '/_authenticated/parametros'
@@ -209,6 +234,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCenariosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/despesas': {
       id: '/_authenticated/despesas'
       path: '/despesas'
@@ -221,6 +253,13 @@ declare module '@tanstack/react-router' {
       path: '/dre'
       fullPath: '/dre'
       preLoaderRoute: typeof AuthenticatedDreRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/eventos': {
+      id: '/_authenticated/eventos'
+      path: '/eventos'
+      fullPath: '/eventos'
+      preLoaderRoute: typeof AuthenticatedEventosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/folha': {
@@ -264,8 +303,10 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCenariosRoute: typeof AuthenticatedCenariosRoute
+  AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedDespesasRoute: typeof AuthenticatedDespesasRoute
   AuthenticatedDreRoute: typeof AuthenticatedDreRoute
+  AuthenticatedEventosRoute: typeof AuthenticatedEventosRoute
   AuthenticatedFolhaRoute: typeof AuthenticatedFolhaRoute
   AuthenticatedInicioRoute: typeof AuthenticatedInicioRoute
   AuthenticatedParametrosRoute: typeof AuthenticatedParametrosRoute
@@ -276,8 +317,10 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCenariosRoute: AuthenticatedCenariosRoute,
+  AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedDespesasRoute: AuthenticatedDespesasRoute,
   AuthenticatedDreRoute: AuthenticatedDreRoute,
+  AuthenticatedEventosRoute: AuthenticatedEventosRoute,
   AuthenticatedFolhaRoute: AuthenticatedFolhaRoute,
   AuthenticatedInicioRoute: AuthenticatedInicioRoute,
   AuthenticatedParametrosRoute: AuthenticatedParametrosRoute,

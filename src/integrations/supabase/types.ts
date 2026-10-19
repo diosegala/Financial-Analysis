@@ -7,13 +7,86 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.18"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
+      accounts: {
+        Row: {
+          active: boolean
+          code: string | null
+          created_at: string
+          dre_line_id: string
+          generates_tax_credit: boolean
+          id: string
+          kind: string
+          name: string
+          omie_category_code: string | null
+          sort_order: number
+          unit_ids: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code?: string | null
+          created_at?: string
+          dre_line_id: string
+          generates_tax_credit?: boolean
+          id?: string
+          kind: string
+          name: string
+          omie_category_code?: string | null
+          sort_order?: number
+          unit_ids?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string | null
+          created_at?: string
+          dre_line_id?: string
+          generates_tax_credit?: boolean
+          id?: string
+          kind?: string
+          name?: string
+          omie_category_code?: string | null
+          sort_order?: number
+          unit_ids?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_dre_line_id_fkey"
+            columns: ["dre_line_id"]
+            isOneToOne: false
+            referencedRelation: "dre_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -47,153 +120,454 @@ export type Database = {
         }
         Relationships: []
       }
-      expense_categories: {
+      budget_versions: {
         Row: {
+          base_version_id: string | null
           created_at: string
-          dre_line: string
+          first_editable_month: number
+          id: string
+          is_default: boolean
+          kind: string
+          name: string
+          status: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          base_version_id?: string | null
+          created_at?: string
+          first_editable_month?: number
+          id?: string
+          is_default?: boolean
+          kind?: string
+          name: string
+          status?: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          base_version_id?: string | null
+          created_at?: string
+          first_editable_month?: number
+          id?: string
+          is_default?: boolean
+          kind?: string
+          name?: string
+          status?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_versions_base_version_id_fkey"
+            columns: ["base_version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calc_rules: {
+        Row: {
+          account_ids: string[] | null
+          active: boolean
+          base_kind: string
+          contract_type_ids: string[] | null
+          created_at: string
           id: string
           name: string
-          unit_id: string
+          parameter_definition_id: string
+          revenue_type_ids: string[] | null
+          sort_order: number
+          target_dre_line_id: string
           updated_at: string
         }
         Insert: {
+          account_ids?: string[] | null
+          active?: boolean
+          base_kind: string
+          contract_type_ids?: string[] | null
           created_at?: string
-          dre_line?: string
           id?: string
           name: string
-          unit_id: string
+          parameter_definition_id: string
+          revenue_type_ids?: string[] | null
+          sort_order?: number
+          target_dre_line_id: string
           updated_at?: string
         }
         Update: {
+          account_ids?: string[] | null
+          active?: boolean
+          base_kind?: string
+          contract_type_ids?: string[] | null
           created_at?: string
-          dre_line?: string
           id?: string
           name?: string
-          unit_id?: string
+          parameter_definition_id?: string
+          revenue_type_ids?: string[] | null
+          sort_order?: number
+          target_dre_line_id?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "expense_categories_unit_id_fkey"
+            foreignKeyName: "calc_rules_parameter_definition_id_fkey"
+            columns: ["parameter_definition_id"]
+            isOneToOne: false
+            referencedRelation: "parameter_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calc_rules_target_dre_line_id_fkey"
+            columns: ["target_dre_line_id"]
+            isOneToOne: false
+            referencedRelation: "dre_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          active: boolean
+          created_at: string
+          document: string | null
+          id: string
+          name: string
+          omie_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          document?: string | null
+          id?: string
+          name: string
+          omie_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          document?: string | null
+          id?: string
+          name?: string
+          omie_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      contract_types: {
+        Row: {
+          account_id: string
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_types_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dre_lines: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          denominator_line_id: string | null
+          id: string
+          kind: string
+          name: string
+          numerator_line_id: string | null
+          sign: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          denominator_line_id?: string | null
+          id?: string
+          kind: string
+          name: string
+          numerator_line_id?: string | null
+          sign?: number
+          sort_order: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          denominator_line_id?: string | null
+          id?: string
+          kind?: string
+          name?: string
+          numerator_line_id?: string | null
+          sign?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dre_lines_denominator_line_id_fkey"
+            columns: ["denominator_line_id"]
+            isOneToOne: false
+            referencedRelation: "dre_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dre_lines_numerator_line_id_fkey"
+            columns: ["numerator_line_id"]
+            isOneToOne: false
+            referencedRelation: "dre_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          cost_account_id: string
+          cost_per_participant: number
+          created_at: string
+          created_by: string | null
+          fixed_cost: number
+          id: string
+          month: number
+          name: string
+          price: number
+          product_id: string | null
+          quantity: number
+          revenue_account_id: string
+          revenue_type_id: string
+          unit_id: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          cost_account_id: string
+          cost_per_participant?: number
+          created_at?: string
+          created_by?: string | null
+          fixed_cost?: number
+          id?: string
+          month: number
+          name: string
+          price?: number
+          product_id?: string | null
+          quantity?: number
+          revenue_account_id: string
+          revenue_type_id: string
+          unit_id: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          cost_account_id?: string
+          cost_per_participant?: number
+          created_at?: string
+          created_by?: string | null
+          fixed_cost?: number
+          id?: string
+          month?: number
+          name?: string
+          price?: number
+          product_id?: string | null
+          quantity?: number
+          revenue_account_id?: string
+          revenue_type_id?: string
+          unit_id?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_cost_account_id_fkey"
+            columns: ["cost_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_revenue_account_id_fkey"
+            columns: ["revenue_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_revenue_type_id_fkey"
+            columns: ["revenue_type_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      expense_entries: {
-        Row: {
-          amount: number
-          category_id: string
-          created_at: string
-          created_by: string | null
-          id: string
-          month: number
-          updated_at: string
-          year: number
-        }
-        Insert: {
-          amount?: number
-          category_id: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          month: number
-          updated_at?: string
-          year?: number
-        }
-        Update: {
-          amount?: number
-          category_id?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          month?: number
-          updated_at?: string
-          year?: number
-        }
-        Relationships: [
           {
-            foreignKeyName: "expense_entries_category_id_fkey"
-            columns: ["category_id"]
+            foreignKeyName: "events_version_id_fkey"
+            columns: ["version_id"]
             isOneToOne: false
-            referencedRelation: "expense_categories"
+            referencedRelation: "budget_versions"
             referencedColumns: ["id"]
           },
         ]
       }
-      parameters: {
+      parameter_definitions: {
         Row: {
+          active: boolean
+          allowed_scopes: string[]
           created_at: string
-          created_by: string | null
+          description: string | null
           id: string
           key: string
-          valid_from: string
-          value: number
+          label: string
+          max_value: number | null
+          min_value: number | null
+          sort_order: number
+          updated_at: string
+          value_type: string
         }
         Insert: {
+          active?: boolean
+          allowed_scopes?: string[]
           created_at?: string
-          created_by?: string | null
+          description?: string | null
           id?: string
           key: string
-          valid_from: string
-          value: number
+          label: string
+          max_value?: number | null
+          min_value?: number | null
+          sort_order?: number
+          updated_at?: string
+          value_type?: string
         }
         Update: {
+          active?: boolean
+          allowed_scopes?: string[]
           created_at?: string
-          created_by?: string | null
+          description?: string | null
           id?: string
           key?: string
-          valid_from?: string
-          value?: number
+          label?: string
+          max_value?: number | null
+          min_value?: number | null
+          sort_order?: number
+          updated_at?: string
+          value_type?: string
         }
         Relationships: []
       }
-      payroll_entries: {
+      parameter_values: {
         Row: {
-          amount: number
+          contract_type_id: string | null
           created_at: string
+          created_by: string | null
+          definition_id: string
           id: string
-          kind: string
-          month: number
-          person_id: string | null
+          note: string | null
+          product_id: string | null
+          revenue_type_id: string | null
           unit_id: string | null
-          updated_at: string
-          year: number
+          valid_from: string
+          value: number
         }
         Insert: {
-          amount?: number
+          contract_type_id?: string | null
           created_at?: string
+          created_by?: string | null
+          definition_id: string
           id?: string
-          kind?: string
-          month: number
-          person_id?: string | null
+          note?: string | null
+          product_id?: string | null
+          revenue_type_id?: string | null
           unit_id?: string | null
-          updated_at?: string
-          year?: number
+          valid_from: string
+          value: number
         }
         Update: {
-          amount?: number
+          contract_type_id?: string | null
           created_at?: string
+          created_by?: string | null
+          definition_id?: string
           id?: string
-          kind?: string
-          month?: number
-          person_id?: string | null
+          note?: string | null
+          product_id?: string | null
+          revenue_type_id?: string | null
           unit_id?: string | null
-          updated_at?: string
-          year?: number
+          valid_from?: string
+          value?: number
         }
         Relationships: [
           {
-            foreignKeyName: "payroll_entries_person_id_fkey"
-            columns: ["person_id"]
+            foreignKeyName: "parameter_values_contract_type_id_fkey"
+            columns: ["contract_type_id"]
             isOneToOne: false
-            referencedRelation: "people"
+            referencedRelation: "contract_types"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "payroll_entries_unit_id_fkey"
+            foreignKeyName: "parameter_values_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "parameter_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parameter_values_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parameter_values_revenue_type_id_fkey"
+            columns: ["revenue_type_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parameter_values_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
@@ -203,32 +577,232 @@ export type Database = {
       }
       people: {
         Row: {
-          contract_type: string
+          base_salary: number
+          contract_type_id: string
           created_at: string
+          end_month: number | null
           id: string
           name: string
+          role_title: string | null
+          start_month: number | null
           unit_id: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          base_salary?: number
+          contract_type_id: string
+          created_at?: string
+          end_month?: number | null
+          id?: string
+          name: string
+          role_title?: string | null
+          start_month?: number | null
+          unit_id: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          base_salary?: number
+          contract_type_id?: string
+          created_at?: string
+          end_month?: number | null
+          id?: string
+          name?: string
+          role_title?: string | null
+          start_month?: number | null
+          unit_id?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "people_contract_type_id_fkey"
+            columns: ["contract_type_id"]
+            isOneToOne: false
+            referencedRelation: "contract_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "people_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "people_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_lines: {
+        Row: {
+          account_id: string
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          origin: string
+          product_id: string | null
+          revenue_type_id: string | null
+          sort_order: number
+          unit_id: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          account_id: string
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          origin?: string
+          product_id?: string | null
+          revenue_type_id?: string | null
+          sort_order?: number
+          unit_id: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          account_id?: string
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          origin?: string
+          product_id?: string | null
+          revenue_type_id?: string | null
+          sort_order?: number
+          unit_id?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_revenue_type_id_fkey"
+            columns: ["revenue_type_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_values: {
+        Row: {
+          amount: number
+          id: string
+          line_id: string
+          month: number
           updated_at: string
         }
         Insert: {
-          contract_type?: string
-          created_at?: string
+          amount?: number
           id?: string
-          name: string
-          unit_id: string
+          line_id: string
+          month: number
           updated_at?: string
         }
         Update: {
-          contract_type?: string
-          created_at?: string
+          amount?: number
           id?: string
-          name?: string
-          unit_id?: string
+          line_id?: string
+          month?: number
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "people_unit_id_fkey"
+            foreignKeyName: "plan_values_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "plan_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          omie_code: string | null
+          revenue_type_id: string | null
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          omie_code?: string | null
+          revenue_type_id?: string | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          omie_code?: string | null
+          revenue_type_id?: string | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_revenue_type_id_fkey"
+            columns: ["revenue_type_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
@@ -257,104 +831,205 @@ export type Database = {
         }
         Relationships: []
       }
-      revenue_entries: {
+      revenue_types: {
         Row: {
-          amount: number
-          client_name: string
+          active: boolean
           created_at: string
-          created_by: string | null
           id: string
-          month: number
-          product_name: string
-          revenue_type: string
-          unit_id: string
+          max_months: number | null
+          name: string
+          recurrence_months: number | null
+          sort_order: number
           updated_at: string
-          year: number
         }
         Insert: {
-          amount?: number
-          client_name: string
+          active?: boolean
           created_at?: string
-          created_by?: string | null
           id?: string
-          month: number
-          product_name: string
-          revenue_type?: string
-          unit_id: string
+          max_months?: number | null
+          name: string
+          recurrence_months?: number | null
+          sort_order?: number
           updated_at?: string
-          year?: number
         }
         Update: {
-          amount?: number
-          client_name?: string
+          active?: boolean
           created_at?: string
-          created_by?: string | null
+          id?: string
+          max_months?: number | null
+          name?: string
+          recurrence_months?: number | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      salary_changes: {
+        Row: {
+          created_at: string
+          id: string
+          month: number
+          new_salary: number
+          person_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: number
+          new_salary: number
+          person_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
           id?: string
           month?: number
-          product_name?: string
-          revenue_type?: string
-          unit_id?: string
+          new_salary?: number
+          person_id?: string
           updated_at?: string
-          year?: number
         }
         Relationships: [
           {
-            foreignKeyName: "revenue_entries_unit_id_fkey"
-            columns: ["unit_id"]
+            foreignKeyName: "salary_changes_person_id_fkey"
+            columns: ["person_id"]
             isOneToOne: false
-            referencedRelation: "units"
+            referencedRelation: "people"
             referencedColumns: ["id"]
           },
         ]
       }
       scenarios: {
         Row: {
+          applies_to_payroll: boolean
           created_at: string
           expense_variation: number
           id: string
           is_official: boolean
           name: string
           revenue_variation: number
+          sort_order: number
           updated_at: string
+          version_id: string
         }
         Insert: {
+          applies_to_payroll?: boolean
           created_at?: string
           expense_variation?: number
           id?: string
           is_official?: boolean
           name: string
           revenue_variation?: number
+          sort_order?: number
           updated_at?: string
+          version_id: string
         }
         Update: {
+          applies_to_payroll?: boolean
           created_at?: string
           expense_variation?: number
           id?: string
           is_official?: boolean
           name?: string
           revenue_variation?: number
+          sort_order?: number
           updated_at?: string
+          version_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "scenarios_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unit_submissions: {
+        Row: {
+          comment: string | null
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          unit_id: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          comment?: string | null
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          unit_id: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          comment?: string | null
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          unit_id?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_submissions_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_submissions_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       units: {
         Row: {
+          active: boolean
           created_at: string
           id: string
           kind: string
           name: string
+          omie_department_code: string | null
+          sort_order: number
+          updated_at: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
           id?: string
           kind?: string
           name: string
+          omie_department_code?: string | null
+          sort_order?: number
+          updated_at?: string
         }
         Update: {
+          active?: boolean
           created_at?: string
           id?: string
           kind?: string
           name?: string
+          omie_department_code?: string | null
+          sort_order?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -407,6 +1082,53 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_kind: { Args: { _account_id: string }; Returns: string }
+      assert_editable: {
+        Args: { _month: number; _unit_id: string; _version_id: string }
+        Returns: undefined
+      }
+      can_write_line: {
+        Args: { _line_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_write_unit: {
+        Args: { _unit_id: string; _user_id: string }
+        Returns: boolean
+      }
+      copy_version: {
+        Args: {
+          _kind?: string
+          _name: string
+          _source_id: string
+          _year: number
+        }
+        Returns: string
+      }
+      dre_report: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          amount: number
+          dre_line_id: string
+          month: number
+        }[]
+      }
+      dre_unit_values: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          amount: number
+          dre_line_id: string
+          month: number
+          unit_id: string
+        }[]
+      }
       has_any_role: {
         Args: {
           _roles: Database["public"]["Enums"]["app_role"][]
@@ -424,6 +1146,48 @@ export type Database = {
       has_unit: {
         Args: { _unit_id: string; _user_id: string }
         Returns: boolean
+      }
+      param_value: {
+        Args: {
+          _contract_type_id: string
+          _definition_id: string
+          _product_id: string
+          _ref: string
+          _revenue_type_id: string
+          _unit_id: string
+        }
+        Returns: number
+      }
+      plan_base_rows: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          account_id: string
+          amount: number
+          contract_type_id: string
+          dre_line_id: string
+          month: number
+          product_id: string
+          revenue_type_id: string
+          row_kind: string
+          unit_id: string
+        }[]
+      }
+      set_official_scenario: {
+        Args: { _scenario_id: string }
+        Returns: undefined
+      }
+      set_unit_status: {
+        Args: {
+          _comment?: string
+          _status: string
+          _unit_id: string
+          _version_id: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
@@ -443,12 +1207,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -472,11 +1236,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -497,11 +1261,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends (DefaultSchemaTableNameOrOptions extends {
+  TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -522,11 +1286,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never) = never,
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -539,11 +1303,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never) = never,
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -553,9 +1317,13 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["financeiro", "vp", "ceo", "lider"],
     },
   },
 } as const
+

@@ -1,63 +1,87 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { Download } from "lucide-react";
+import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
-import { useDreData, computeYear, scenarioOf, totals } from "@/lib/dre-data";
-import { MONTHS, fmtBRL, fmtPct } from "@/lib/format";
-import type { DreMonth } from "@/lib/dre";
+import { useCurrentUser } from "@/lib/auth";
+import { useDreLines, useUnits } from "@/lib/catalog";
+import { dreCsv, dreValue, downloadText, fmtLine, lineLabel, useDreReport } from "@/lib/dre";
+import { MONTHS } from "@/lib/format";
+import { PageHeader } from "@/components/page-header";
+import { OptionSelect } from "@/components/form-fields";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/dre")({
-  head: () => ({
-    meta: [
-      { title: "DRE prevista — CUPOLA Planejamento Financeiro" },
-      { name: "description", content: "DRE prevista da unidade por mês e total do ano." },
-      { property: "og:title", content: "DRE prevista — CUPOLA Planejamento Financeiro" },
-      { property: "og:description", content: "DRE prevista da unidade por mês e total do ano." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: pageHead(
+    "DRE prevista",
+    "DRE prevista por unidade ou consolidada, por mês e total do ano.",
+  ),
   component: DrePage,
 });
 
-const LINES: {
-  key: keyof Omit<DreMonth, "mcl">;
-  label: string;
-  bold?: boolean;
-  negative?: boolean;
-}[] = [
-  { key: "receitaBruta", label: "Receita bruta", bold: true },
-  { key: "despesasProdutos", label: "(-) Despesas de produtos" },
-  { key: "custosIndiretos", label: "(-) Custos indiretos (folha + encargos)" },
-  { key: "despesas", label: "(-) Despesas" },
-  { key: "comissionamento", label: "(-) Comissionamento" },
-  { key: "impostos", label: "(-) Impostos" },
-  { key: "contribuicaoLiquida", label: "(=) Contribuição líquida", bold: true, negative: true },
-];
-
 function DrePage() {
-  const { unitId, scenarioId, year } = usePlanning();
-  const { data, isLoading } = useDreData(unitId, year);
-
-  const scenario = data?.scenarios.find((s) => s.id === scenarioId) ?? data?.scenarios[0];
-  const months = data ? computeYear(data, year, scenarioOf(scenario!)) : [];
-  const total = months.length ? totals(months) : null;
+  const { unit, unitId, version, versionId, scenario, scenarioId } = usePlanning();
+  const { data: user } = useCurrentUser();
+  const { data: lines } = useDreLines();
+  const { data: units } = useUnits();
+  const [scope, setScope] = useState<"unit" | "all">("unit");
+  const allUnits = scope === "all" && !!user?.isManagement;
+  const unitIds = allUnits
+    ? (units ?? []).filter((u) => u.active).map((u) => u.id)
+    : unitId
+      ? [unitId]
+      : [];
+  const { data: values, isLoading } = useDreReport(versionId, scenarioId, unitIds);
+  const active = (lines ?? []).filter((l) => l.active);
+  const title = allUnits ? "Todas as unidades" : (unit?.name ?? "…");
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">DRE prevista da unidade</h1>
-        <p className="text-sm text-muted-foreground">
-          Cenário {scenario?.name ?? "…"} · Ano {year}
-        </p>
-      </div>
+      <PageHeader
+        title="DRE prevista"
+        subtitle={`${title} · ${version?.name ?? "…"} · Cenário ${scenario?.name ?? "…"}`}
+        actions={
+          <div className="flex items-center gap-2">
+            {user?.isManagement && (
+              <OptionSelect
+                className="w-48"
+                value={scope}
+                onChange={(v) => setScope((v as "unit" | "all") ?? "unit")}
+                options={[
+                  { value: "unit", label: "Unidade selecionada" },
+                  { value: "all", label: "Todas as unidades" },
+                ]}
+              />
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              disabled={!values}
+              onClick={() =>
+                values &&
+                downloadText(
+                  `DRE ${title} - ${version?.name} - ${scenario?.name}.csv`,
+                  dreCsv(active, values),
+                )
+              }
+            >
+              <Download className="h-4 w-4" /> Exportar para Excel
+            </Button>
+          </div>
+        }
+      />
 
-      {isLoading || !total ? (
+      {isLoading || !values ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : (
         <div className="overflow-x-auto rounded-md border border-border bg-card">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-left">
-                <th className="sticky left-0 bg-muted/50 px-3 py-2 font-medium">Linha</th>
+                <th className="sticky left-0 z-10 min-w-64 bg-muted px-3 py-2 font-medium">
+                  Linha
+                </th>
                 {MONTHS.map((m) => (
                   <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
                     {m}
@@ -67,47 +91,37 @@ function DrePage() {
               </tr>
             </thead>
             <tbody>
-              {LINES.map((line) => (
-                <tr
-                  key={line.key}
-                  className={`border-b border-border ${line.bold ? "bg-muted/30 font-semibold" : ""}`}
-                >
-                  <td className="sticky left-0 bg-inherit px-3 py-1.5">{line.label}</td>
-                  {months.map((m, i) => (
+              {active.map((line) => {
+                const strong =
+                  line.kind === "subtotal" || line.kind === "percentual" || line.sign > 0;
+                const signed = line.kind === "subtotal" || line.kind === "percentual";
+                return (
+                  <tr
+                    key={line.id}
+                    className={`border-b border-border ${strong ? "bg-muted/30 font-semibold" : ""}`}
+                  >
                     <td
-                      key={i}
-                      className={`px-2 py-1.5 text-right font-mono tabular-nums ${
-                        line.negative && m[line.key] < 0 ? "text-destructive" : ""
-                      }`}
+                      className={`sticky left-0 z-10 px-3 py-1.5 ${strong ? "bg-muted" : "bg-card"}`}
                     >
-                      {fmtBRL(m[line.key])}
+                      {lineLabel(line)}
                     </td>
-                  ))}
-                  <td
-                    className={`px-3 py-1.5 text-right font-mono font-semibold tabular-nums ${
-                      line.negative && total[line.key] < 0 ? "text-destructive" : ""
-                    }`}
-                  >
-                    {fmtBRL(total[line.key])}
-                  </td>
-                </tr>
-              ))}
-              <tr className="font-semibold">
-                <td className="sticky left-0 bg-card px-3 py-1.5">%MCL</td>
-                {months.map((m, i) => (
-                  <td
-                    key={i}
-                    className={`px-2 py-1.5 text-right font-mono tabular-nums ${m.mcl < 0 ? "text-destructive" : ""}`}
-                  >
-                    {fmtPct(m.mcl)}
-                  </td>
-                ))}
-                <td
-                  className={`px-3 py-1.5 text-right font-mono tabular-nums ${total.mcl < 0 ? "text-destructive" : ""}`}
-                >
-                  {fmtPct(total.mcl)}
-                </td>
-              </tr>
+                    {[...MONTHS.keys(), 12].map((i) => {
+                      const month = i === 12 ? 0 : i + 1;
+                      const v = dreValue(values, line.id, month);
+                      return (
+                        <td
+                          key={i}
+                          className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+                            signed && v < 0 ? "text-destructive" : ""
+                          } ${month === 0 ? "font-semibold" : ""}`}
+                        >
+                          {fmtLine(line, v)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
