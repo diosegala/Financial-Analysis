@@ -34,8 +34,25 @@ const ACTION_LABELS: Record<string, string> = {
   delete: "exclusão",
 };
 
-function summarize(action: string, oldData: any, newData: any): string {
-  const d = newData ?? oldData ?? {};
+interface Row {
+  [field: string]: unknown;
+  client_name?: unknown;
+  product_name?: unknown;
+  name?: unknown;
+  key?: unknown;
+  month?: unknown;
+  amount?: unknown;
+  value?: unknown;
+}
+
+function asRow(v: unknown): Row | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Row) : null;
+}
+
+function summarize(action: string, oldJson: unknown, newJson: unknown): string {
+  const oldData = asRow(oldJson);
+  const newData = asRow(newJson);
+  const d: Row = newData ?? oldData ?? {};
   if (action === "update" && oldData && newData) {
     const changes = Object.keys(newData).filter(
       (k) =>
@@ -43,7 +60,7 @@ function summarize(action: string, oldData: any, newData: any): string {
         JSON.stringify(oldData[k]) !== JSON.stringify(newData[k]),
     );
     if (changes.length > 0) {
-      return changes.map((k) => `${k}: ${oldData[k]} → ${newData[k]}`).join("; ");
+      return changes.map((k) => `${k}: ${String(oldData[k])} → ${String(newData[k])}`).join("; ");
     }
   }
   const parts = [
