@@ -119,7 +119,7 @@ Os bugs estruturais (limite de 1.000 linhas, duplicidade, renomear e excluir, fo
 
 **1d. Coleta e aprovação.** O líder envia a unidade, o financeiro aprova ou devolve com comentário, e o que foi aprovado fica travado. Um painel mostra o status das unidades na versão. Isso estava previsto para a Fase 2, mas sem esse fluxo não há "orçamento oficial".
 
-**1e. Usuários.** Convite por e-mail (o usuário define a própria senha), editar perfil e unidades, desativar. Validação de dados nas funções do servidor. Criação em passos que não deixam usuário sem perfil.
+**1e. Usuários.** Convite por e-mail (o usuário define a própria senha), editar perfil e unidades, desativar. Validação de dados nas funções do servidor. Criação em passos que não deixam usuário sem perfil. Trava: não é possível remover ou rebaixar o último usuário financeiro (ex.: quando o Dioner passar de financeiro para líder, outra pessoa precisa já ser financeiro).
 
 **1f. Exportar** a DRE e as grades para Excel.
 
@@ -188,11 +188,11 @@ Regra de posse: o que vem do Omie é só leitura no app. O app só acrescenta ca
 | D4  | **VP só lê**, não lança valores                                                                                                                                                       | Políticas de acesso: escrita só para financeiro e líder (na própria unidade)                                 |
 | D5  | **Comissões variam por produto e unidade.** O imposto é o mesmo para toda a empresa, que é do **Lucro Real**                                                                          | Parâmetros de comissão com escopo produto e unidade (o mais específico prevalece). Imposto com escopo global |
 | D6  | **Líder não vê outros usuários**                                                                                                                                                      | Perfis visíveis só para o próprio usuário e para financeiro, VP e CEO                                        |
+| D7  | **"Administrador" = perfil financeiro.** O Dioner está como financeiro só durante o desenvolvimento e depois passa a líder de unidade                                                 | Trocar o próprio perfil pela tela de Usuários. Trava: o app não deixa remover o último financeiro            |
 
 **Em aberto:**
 
 - P3 e P4 da seção 2.
-- "Administrador" em D1 é o perfil **financeiro** atual ou um perfil novo? A suposição até a resposta: o perfil financeiro.
 - **Lucro Real (D5):** um "imposto = % da receita" único simplifica demais. No Lucro Real, PIS (1,65%) e COFINS (7,6%) são não cumulativos, e há créditos sobre parte das despesas. O ISS varia por município. IRPJ e CSLL incidem sobre o lucro, não sobre a receita. Proposta: na DRE da unidade, "impostos sobre a receita" = PIS + COFINS + ISS, como parâmetros globais separados, e uma marca opcional "gera crédito de PIS/COFINS" nas contas de despesa. IRPJ e CSLL só na DRE consolidada. **Confirmar com a contabilidade.**
 
 ## 9. Próximos passos
