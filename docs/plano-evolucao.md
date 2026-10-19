@@ -123,19 +123,7 @@ Os bugs estruturais (limite de 1.000 linhas, duplicidade, renomear e excluir, fo
 
 **1f. Exportar** a DRE e as grades para Excel.
 
-**1g. Histórico do Omie e "Gerar previsão"**
-
-As planilhas históricas não estão disponíveis (18/10). A fonte do histórico passa a ser o **Omie**. Para o botão ter dados até 10/11, a **carga do histórico do Omie (só leitura)** sai da Fase 2 e entra aqui: departamentos, categorias e títulos de 2023 em diante, com a tela de mapeamento. A sincronização contínua, a conciliação e o agendamento continuam na Fase 2.
-
-- **Importador de planilhas:** fica no backlog, para o caso de surgirem planilhas ou exportações de Excel do Omie para períodos em que o Omie não é confiável.
-- **Botão "Gerar previsão"** (o "estou com sorte") por unidade e seção:
-  - Base: último ano, média dos últimos N anos ou o mesmo mês do ano anterior (mantém a sazonalidade).
-  - Correção: % global, com ajuste opcional por unidade ou por linha (ex.: IPCA nas despesas e meta de crescimento na receita). Os percentuais ficam salvos como parâmetros da versão.
-  - Prévia lado a lado (histórico, correção, previsto) antes de aplicar.
-  - O resultado vira linhas comuns da grade, marcadas como "gerado do histórico", editáveis como qualquer outra linha. Rodar de novo **não apaga o que o líder editou à mão**.
-  - Cuidados já previstos: a folha é gerada por pessoa (quem saiu não volta), contratos recorrentes encerrados e eventos pontuais aparecem destacados para revisão, em vez de serem copiados sem critério.
-
-**Se o prazo apertar, sai primeiro:** a carga do histórico do Omie e o "Gerar previsão" (sem histórico, o botão não tem o que usar; os líderes lançam manualmente), regras de cálculo editáveis pela tela (os valores iniciais ficam e a edição vem depois), exportação para Excel e aba de Clientes. **Não sai:** modelo novo, versões, grades editáveis e aprovação.
+**Se o prazo apertar, sai primeiro:** regras de cálculo editáveis pela tela (os valores iniciais ficam e a edição vem depois), exportação para Excel e aba de Clientes. **Não sai:** modelo novo, versões, grades editáveis e aprovação.
 
 ### Fase 2: conexão com o Omie (nov–dez, pronta antes de janeiro/27)
 
@@ -147,6 +135,16 @@ As planilhas históricas não estão disponíveis (18/10). A fonte do histórico
 | **Tela de mapeamento**: categoria do Omie → conta, departamento → unidade. Uma fila de "não mapeados" que impede o realizado de sumir em silêncio                                                                                                                         | M    |
 | **Conciliação automática**: total do Omie no mês = total do realizado no app. Diferença gera alerta                                                                                                                                                                       | M    |
 | Carga do histórico de 2025–2026. Coluna "Realizado 2026" nas grades e sugestão de valor inicial (ex.: média dos últimos 6 meses)                                                                                                                                          | M    |
+
+**Depois da carga do histórico: "Gerar previsão"** (despriorizado em 18/10: o orçamento de 2027 será lançado manualmente). Serve para os forecasts de 2027 e para o orçamento de 2028.
+
+- **Botão "Gerar previsão"** (o "estou com sorte") por unidade e seção:
+  - Base: último ano, média dos últimos N anos ou o mesmo mês do ano anterior (mantém a sazonalidade).
+  - Correção: % global, com ajuste opcional por unidade ou por linha (ex.: IPCA nas despesas e meta de crescimento na receita). Os percentuais ficam salvos como parâmetros da versão.
+  - Prévia lado a lado (histórico, correção, previsto) antes de aplicar.
+  - O resultado vira linhas comuns da grade, marcadas como "gerado do histórico", editáveis como qualquer outra linha. Rodar de novo **não apaga o que o líder editou à mão**.
+  - Cuidados já previstos: a folha é gerada por pessoa (quem saiu não volta), contratos recorrentes encerrados e eventos pontuais aparecem destacados para revisão, em vez de serem copiados sem critério.
+- Importador de planilhas: backlog, para o caso de surgirem planilhas ou exportações de Excel do Omie de períodos em que o Omie não é confiável.
 
 Planilha × Omie: nos meses em que existe dado do Omie, o **Omie prevalece** e o dado da planilha fica guardado só como referência. A planilha cobre os períodos anteriores ao uso do Omie, ou em que o Omie não é confiável.
 
@@ -202,4 +200,4 @@ Regra de posse: o que vem do Omie é só leitura no app. O app só acrescenta ca
 1. ✅ Fase 0 concluída (PR #1, 18/10).
 2. ✅ Migrations aplicadas pela Supabase CLI, ligada ao projeto.
 3. Fase 1: migration do modelo novo, revisada antes de ser aplicada.
-4. Credenciais da API do Omie (app_key e app_secret), guardadas como segredo no Supabase, para a carga do histórico.
+4. Credenciais da API do Omie (app_key e app_secret), guardadas como segredo no Supabase. Necessárias só na Fase 2.
