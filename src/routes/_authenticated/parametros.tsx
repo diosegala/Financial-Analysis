@@ -23,7 +23,10 @@ export const Route = createFileRoute("/_authenticated/parametros")({
       { title: "Parâmetros — CUPOLA Planejamento Financeiro" },
       { name: "description", content: "Parâmetros de imposto, comissões e encargos com vigência." },
       { property: "og:title", content: "Parâmetros — CUPOLA Planejamento Financeiro" },
-      { property: "og:description", content: "Parâmetros de imposto, comissões e encargos com vigência." },
+      {
+        property: "og:description",
+        content: "Parâmetros de imposto, comissões e encargos com vigência.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -50,7 +53,12 @@ function ParametrosPage() {
   const { data: params, isLoading } = useQuery({
     queryKey: ["parameters"],
     queryFn: async () =>
-      (await supabase.from("parameters").select("id, key, value, valid_from, created_at").order("valid_from", { ascending: false })).data ?? [],
+      (
+        await supabase
+          .from("parameters")
+          .select("id, key, value, valid_from, created_at")
+          .order("valid_from", { ascending: false })
+      ).data ?? [],
   });
 
   if (!loadingUser && user && !user.isFinanceiro) {
@@ -58,8 +66,11 @@ function ParametrosPage() {
   }
 
   async function addParam() {
-    const n = parseNum(value);
-    if (n <= 0) { toast.error("Informe um valor percentual maior que zero."); return; }
+    const n = value.trim() === "" ? null : parseNum(value);
+    if (n === null || n < 0) {
+      toast.error("Informe um percentual válido (zero ou maior).");
+      return;
+    }
     const validFrom = `${YEAR}-${month.padStart(2, "0")}-01`;
     const { error } = await supabase.from("parameters").insert({
       key,
@@ -67,7 +78,10 @@ function ParametrosPage() {
       valid_from: validFrom,
       created_by: user!.id,
     });
-    if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+    if (error) {
+      toast.error("Erro ao salvar: " + error.message);
+      return;
+    }
     setValue("");
     toast.success("Parâmetro salvo.");
     queryClient.invalidateQueries({ queryKey: ["parameters"] });
@@ -90,7 +104,9 @@ function ParametrosPage() {
           </SelectTrigger>
           <SelectContent>
             {KEYS.map((k) => (
-              <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
+              <SelectItem key={k.value} value={k.value}>
+                {k.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -106,7 +122,9 @@ function ParametrosPage() {
           </SelectTrigger>
           <SelectContent>
             {MONTHS_FULL.map((m, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>A partir de {m}/{YEAR}</SelectItem>
+              <SelectItem key={i + 1} value={String(i + 1)}>
+                A partir de {m}/{YEAR}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -135,8 +153,15 @@ function ParametrosPage() {
                   <td className="px-3 py-1.5 text-right font-mono tabular-nums">
                     {(Number(p.value) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%
                   </td>
-                  <td className="px-3 py-1.5">{new Date(p.valid_from + "T00:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</td>
-                  <td className="px-3 py-1.5 text-muted-foreground">{new Date(p.created_at).toLocaleDateString("pt-BR")}</td>
+                  <td className="px-3 py-1.5">
+                    {new Date(p.valid_from + "T00:00:00").toLocaleDateString("pt-BR", {
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </td>
+                  <td className="px-3 py-1.5 text-muted-foreground">
+                    {new Date(p.created_at).toLocaleDateString("pt-BR")}
+                  </td>
                 </tr>
               ))}
               {(params ?? []).length === 0 && (

@@ -9,7 +9,12 @@ export interface Parameter {
 }
 
 /** Value in force on the first day of the given month; latest validFrom <= that date wins. */
-export function paramFor(params: Parameter[], name: ParamName, year: number, month: number): number {
+export function paramFor(
+  params: Parameter[],
+  name: ParamName,
+  year: number,
+  month: number,
+): number {
   const ref = `${year}-${String(month).padStart(2, "0")}-01`;
   const hit = params
     .filter((p) => p.name === name && p.validFrom <= ref)

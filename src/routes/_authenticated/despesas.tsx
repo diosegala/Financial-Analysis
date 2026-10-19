@@ -59,7 +59,13 @@ function DespesasPage() {
     queryKey: ["expense-categories", unitId],
     enabled: !!unitId,
     queryFn: async () =>
-      (await supabase.from("expense_categories").select("id, name, dre_line").eq("unit_id", unitId!).order("name")).data as Cat[] ?? [],
+      ((
+        await supabase
+          .from("expense_categories")
+          .select("id, name, dre_line")
+          .eq("unit_id", unitId!)
+          .order("name")
+      ).data as Cat[]) ?? [],
   });
 
   const catIds = (categories ?? []).map((c) => c.id);
@@ -86,8 +92,14 @@ function DespesasPage() {
   async function commit(catId: string, month: number, value: number) {
     const existing = entryFor(catId, month);
     if (existing) {
-      const { error } = await supabase.from("expense_entries").update({ amount: value }).eq("id", existing.id);
-      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+      const { error } = await supabase
+        .from("expense_entries")
+        .update({ amount: value })
+        .eq("id", existing.id);
+      if (error) {
+        toast.error("Erro ao salvar: " + error.message);
+        return;
+      }
     } else if (value !== 0) {
       const { error } = await supabase.from("expense_entries").insert({
         category_id: catId,
@@ -96,20 +108,29 @@ function DespesasPage() {
         amount: value,
         created_by: user!.id,
       });
-      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+      if (error) {
+        toast.error("Erro ao salvar: " + error.message);
+        return;
+      }
     }
     queryClient.invalidateQueries({ queryKey: ["expenses", unitId, year] });
     queryClient.invalidateQueries({ queryKey: ["dre-data", unitId, year] });
   }
 
   async function addCategory() {
-    if (!name.trim()) { toast.error("Informe o nome da categoria."); return; }
+    if (!name.trim()) {
+      toast.error("Informe o nome da categoria.");
+      return;
+    }
     const { error } = await supabase.from("expense_categories").insert({
       unit_id: unitId!,
       name: name.trim(),
       dre_line: dreLine,
     });
-    if (error) { toast.error("Erro ao criar categoria: " + error.message); return; }
+    if (error) {
+      toast.error("Erro ao criar categoria: " + error.message);
+      return;
+    }
     setName("");
     queryClient.invalidateQueries({ queryKey: ["expense-categories", unitId] });
   }
@@ -123,14 +144,21 @@ function DespesasPage() {
 
       {canAddCategory && (
         <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-card p-3">
-          <Input placeholder="Nova categoria" value={name} onChange={(e) => setName(e.target.value)} className="w-56" />
+          <Input
+            placeholder="Nova categoria"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-56"
+          />
           <Select value={dreLine} onValueChange={setDreLine}>
             <SelectTrigger className="w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {DRE_LINES.map((l) => (
-                <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -150,7 +178,9 @@ function DespesasPage() {
                 <th className="sticky left-0 bg-muted/50 px-3 py-2 font-medium">Categoria</th>
                 <th className="px-3 py-2 font-medium">Linha da DRE</th>
                 {MONTHS.map((m) => (
-                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">{m}</th>
+                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
+                    {m}
+                  </th>
                 ))}
                 <th className="px-3 py-2 text-right font-medium">Total</th>
               </tr>
@@ -163,7 +193,9 @@ function DespesasPage() {
                 return (
                   <tr key={c.id} className="border-b border-border last:border-0">
                     <td className="sticky left-0 bg-card px-3 py-1 font-medium">{c.name}</td>
-                    <td className="px-3 py-1 text-muted-foreground">{DRE_LINE_LABELS[c.dre_line] ?? c.dre_line}</td>
+                    <td className="px-3 py-1 text-muted-foreground">
+                      {DRE_LINE_LABELS[c.dre_line] ?? c.dre_line}
+                    </td>
                     {MONTHS.map((_, i) => (
                       <td key={i} className="border-l border-border/50 p-0">
                         <MoneyCell
@@ -173,7 +205,9 @@ function DespesasPage() {
                         />
                       </td>
                     ))}
-                    <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">{fmtBRL(total)}</td>
+                    <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
+                      {fmtBRL(total)}
+                    </td>
                   </tr>
                 );
               })}

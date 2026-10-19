@@ -24,7 +24,10 @@ export const Route = createFileRoute("/_authenticated/usuarios")({
       { title: "Usuários — CUPOLA Planejamento Financeiro" },
       { name: "description", content: "Convite de usuários e definição de perfis e unidades." },
       { property: "og:title", content: "Usuários — CUPOLA Planejamento Financeiro" },
-      { property: "og:description", content: "Convite de usuários e definição de perfis e unidades." },
+      {
+        property: "og:description",
+        content: "Convite de usuários e definição de perfis e unidades.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -67,11 +70,20 @@ function UsuariosPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 6) { toast.error("A senha precisa de pelo menos 6 caracteres."); return; }
+    if (password.length < 6) {
+      toast.error("A senha precisa de pelo menos 6 caracteres.");
+      return;
+    }
     setSaving(true);
     try {
       await inviteUser({
-        data: { email, password, fullName, role: role as "financeiro" | "vp" | "ceo" | "lider", unitIds },
+        data: {
+          email,
+          password,
+          fullName,
+          role: role as "financeiro" | "vp" | "ceo" | "lider",
+          unitIds,
+        },
       });
       toast.success("Usuário criado. Ele já pode entrar com e-mail e senha.");
       setEmail("");
@@ -92,7 +104,9 @@ function UsuariosPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Usuários</h1>
-        <p className="text-sm text-muted-foreground">Convide pessoas, defina o perfil e as unidades de cada uma.</p>
+        <p className="text-sm text-muted-foreground">
+          Convide pessoas, defina o perfil e as unidades de cada uma.
+        </p>
       </div>
 
       <form onSubmit={submit} className="space-y-3 rounded-md border border-border bg-card p-4">
@@ -108,7 +122,12 @@ function UsuariosPage() {
           </div>
           <div className="space-y-1.5">
             <Label>Senha inicial</Label>
-            <Input required type="text" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              required
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Perfil</Label>
@@ -118,7 +137,9 @@ function UsuariosPage() {
               </SelectTrigger>
               <SelectContent>
                 {ROLES.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -130,7 +151,10 @@ function UsuariosPage() {
             <div className="flex flex-wrap gap-4 pt-1">
               {(data?.units ?? []).map((u: { id: string; name: string }) => (
                 <label key={u.id} className="flex items-center gap-2 text-sm">
-                  <Checkbox checked={unitIds.includes(u.id)} onCheckedChange={() => toggleUnit(u.id)} />
+                  <Checkbox
+                    checked={unitIds.includes(u.id)}
+                    onCheckedChange={() => toggleUnit(u.id)}
+                  />
                   {u.name}
                 </label>
               ))}
@@ -156,20 +180,30 @@ function UsuariosPage() {
               </tr>
             </thead>
             <tbody>
-              {(data?.users ?? []).map((u: { id: string; fullName: string; email: string; roles: string[]; unitIds: string[] }) => (
-                <tr key={u.id} className="border-b border-border last:border-0">
-                  <td className="px-3 py-1.5 font-medium">{u.fullName || "—"}</td>
-                  <td className="px-3 py-1.5">{u.email}</td>
-                  <td className="px-3 py-1.5">
-                    {u.roles.map((r: string) => (
-                      <Badge key={r} variant="secondary" className="mr-1">{ROLE_LABELS[r] ?? r}</Badge>
-                    ))}
-                  </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">
-                    {u.unitIds.length > 0 ? u.unitIds.map(unitName).join(", ") : "—"}
-                  </td>
-                </tr>
-              ))}
+              {(data?.users ?? []).map(
+                (u: {
+                  id: string;
+                  fullName: string;
+                  email: string;
+                  roles: string[];
+                  unitIds: string[];
+                }) => (
+                  <tr key={u.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-1.5 font-medium">{u.fullName || "—"}</td>
+                    <td className="px-3 py-1.5">{u.email}</td>
+                    <td className="px-3 py-1.5">
+                      {u.roles.map((r: string) => (
+                        <Badge key={r} variant="secondary" className="mr-1">
+                          {ROLE_LABELS[r] ?? r}
+                        </Badge>
+                      ))}
+                    </td>
+                    <td className="px-3 py-1.5 text-muted-foreground">
+                      {u.unitIds.length > 0 ? u.unitIds.map(unitName).join(", ") : "—"}
+                    </td>
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>

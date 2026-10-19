@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { parseNum } from "@/lib/format";
+import { fmtInput, parseNum } from "@/lib/format";
 
 interface MoneyCellProps {
   value: number;
@@ -15,7 +15,8 @@ export function MoneyCell({ value, onCommit, disabled }: MoneyCellProps) {
     if (text === null) return;
     const n = parseNum(text);
     setText(null);
-    if (n !== value) onCommit(n);
+    // Unparseable input reverts to the stored value instead of overwriting it with 0.
+    if (n !== null && n !== value) onCommit(n);
   }
 
   return (
@@ -24,7 +25,7 @@ export function MoneyCell({ value, onCommit, disabled }: MoneyCellProps) {
       inputMode="decimal"
       disabled={disabled}
       className="h-8 w-full rounded-none border-0 bg-transparent px-2 text-right font-mono text-sm tabular-nums text-foreground outline-none focus:bg-accent disabled:cursor-not-allowed disabled:text-muted-foreground"
-      value={text ?? (value === 0 ? "" : String(value).replace(".", ","))}
+      value={text ?? (value === 0 ? "" : fmtInput(value))}
       onChange={(e) => setText(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {

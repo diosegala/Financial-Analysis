@@ -6,9 +6,17 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "CUPOLA — Planejamento Financeiro 2027" },
-      { name: "description", content: "Planejamento financeiro CUPOLA 2027: receitas, folha, despesas, cenários e DRE prevista por unidade." },
+      {
+        name: "description",
+        content:
+          "Planejamento financeiro CUPOLA 2027: receitas, folha, despesas, cenários e DRE prevista por unidade.",
+      },
       { property: "og:title", content: "CUPOLA — Planejamento Financeiro 2027" },
-      { property: "og:description", content: "Planejamento financeiro CUPOLA 2027: receitas, folha, despesas, cenários e DRE prevista por unidade." },
+      {
+        property: "og:description",
+        content:
+          "Planejamento financeiro CUPOLA 2027: receitas, folha, despesas, cenários e DRE prevista por unidade.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],

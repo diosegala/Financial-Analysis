@@ -78,7 +78,13 @@ function ReceitasPage() {
       for (const e of data ?? []) {
         const key = `${e.client_name}|||${e.product_name}|||${e.revenue_type}`;
         if (!map.has(key)) {
-          map.set(key, { key, client: e.client_name, product: e.product_name, type: e.revenue_type, entries: new Map() });
+          map.set(key, {
+            key,
+            client: e.client_name,
+            product: e.product_name,
+            type: e.revenue_type,
+            entries: new Map(),
+          });
         }
         map.get(key)!.entries.set(e.month, { id: e.id, month: e.month, amount: Number(e.amount) });
       }
@@ -91,8 +97,14 @@ function ReceitasPage() {
   async function commit(row: Row, month: number, value: number) {
     const existing = row.entries.get(month);
     if (existing) {
-      const { error } = await supabase.from("revenue_entries").update({ amount: value }).eq("id", existing.id);
-      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+      const { error } = await supabase
+        .from("revenue_entries")
+        .update({ amount: value })
+        .eq("id", existing.id);
+      if (error) {
+        toast.error("Erro ao salvar: " + error.message);
+        return;
+      }
     } else if (value !== 0) {
       const { error } = await supabase.from("revenue_entries").insert({
         unit_id: unitId!,
@@ -104,14 +116,20 @@ function ReceitasPage() {
         amount: value,
         created_by: user!.id,
       });
-      if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+      if (error) {
+        toast.error("Erro ao salvar: " + error.message);
+        return;
+      }
     }
     queryClient.invalidateQueries({ queryKey: ["revenue", unitId, year] });
     queryClient.invalidateQueries({ queryKey: ["dre-data", unitId, year] });
   }
 
   async function addRow() {
-    if (!client.trim() || !product.trim()) { toast.error("Preencha cliente e produto."); return; }
+    if (!client.trim() || !product.trim()) {
+      toast.error("Preencha cliente e produto.");
+      return;
+    }
     const { error } = await supabase.from("revenue_entries").insert({
       unit_id: unitId!,
       year,
@@ -122,7 +140,10 @@ function ReceitasPage() {
       amount: 0,
       created_by: user!.id,
     });
-    if (error) { toast.error("Erro ao criar linha: " + error.message); return; }
+    if (error) {
+      toast.error("Erro ao criar linha: " + error.message);
+      return;
+    }
     setClient("");
     setProduct("");
     queryClient.invalidateQueries({ queryKey: ["revenue", unitId, year] });
@@ -137,15 +158,27 @@ function ReceitasPage() {
 
       {canEdit && (
         <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-card p-3">
-          <Input placeholder="Cliente" value={client} onChange={(e) => setClient(e.target.value)} className="w-48" />
-          <Input placeholder="Produto / evento" value={product} onChange={(e) => setProduct(e.target.value)} className="w-48" />
+          <Input
+            placeholder="Cliente"
+            value={client}
+            onChange={(e) => setClient(e.target.value)}
+            className="w-48"
+          />
+          <Input
+            placeholder="Produto / evento"
+            value={product}
+            onChange={(e) => setProduct(e.target.value)}
+            className="w-48"
+          />
           <Select value={type} onValueChange={setType}>
             <SelectTrigger className="w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {TYPES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -166,7 +199,9 @@ function ReceitasPage() {
                 <th className="px-3 py-2 font-medium">Produto</th>
                 <th className="px-3 py-2 font-medium">Tipo</th>
                 {MONTHS.map((m) => (
-                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">{m}</th>
+                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
+                    {m}
+                  </th>
                 ))}
                 <th className="px-3 py-2 text-right font-medium">Total</th>
               </tr>
@@ -178,7 +213,9 @@ function ReceitasPage() {
                   <tr key={row.key} className="border-b border-border last:border-0">
                     <td className="sticky left-0 bg-card px-3 py-1 font-medium">{row.client}</td>
                     <td className="px-3 py-1">{row.product}</td>
-                    <td className="px-3 py-1 text-muted-foreground">{TYPE_LABELS[row.type] ?? row.type}</td>
+                    <td className="px-3 py-1 text-muted-foreground">
+                      {TYPE_LABELS[row.type] ?? row.type}
+                    </td>
                     {MONTHS.map((_, i) => (
                       <td key={i} className="border-l border-border/50 p-0">
                         <MoneyCell
@@ -188,7 +225,9 @@ function ReceitasPage() {
                         />
                       </td>
                     ))}
-                    <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">{fmtBRL(total)}</td>
+                    <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
+                      {fmtBRL(total)}
+                    </td>
                   </tr>
                 );
               })}

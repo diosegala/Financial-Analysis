@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { usePlanning } from "@/lib/planning";
 import { useDreData, computeYear, scenarioOf, totals } from "@/lib/dre-data";
-import { fmtBRL, fmtPct, parseNum } from "@/lib/format";
+import { fmtBRL, fmtInput, fmtPct, parseNum } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -31,18 +31,37 @@ function CenariosPage() {
 
   const canEdit = !!user?.isFinanceiro;
 
-  async function saveVariation(id: string, field: "revenue_variation" | "expense_variation", text: string) {
-    const value = parseNum(text) / 100;
-    const patch = field === "revenue_variation" ? { revenue_variation: value } : { expense_variation: value };
+  async function saveVariation(
+    id: string,
+    field: "revenue_variation" | "expense_variation",
+    input: HTMLInputElement,
+    current: number,
+  ) {
+    const pct = parseNum(input.value);
+    if (pct === null) {
+      toast.error("Valor inválido. Use, por exemplo, 10 ou -5,5.");
+      input.value = fmtInput(current * 100);
+      return;
+    }
+    const value = pct / 100;
+    if (Math.abs(value - current) < 1e-9) return;
+    const patch =
+      field === "revenue_variation" ? { revenue_variation: value } : { expense_variation: value };
     const { error } = await supabase.from("scenarios").update(patch).eq("id", id);
-    if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+    if (error) {
+      toast.error("Erro ao salvar: " + error.message);
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ["dre-data"] });
     queryClient.invalidateQueries({ queryKey: ["scenarios"] });
   }
 
   async function setOfficial(id: string) {
     const { error } = await supabase.from("scenarios").update({ is_official: true }).eq("id", id);
-    if (error) { toast.error("Erro: " + error.message); return; }
+    if (error) {
+      toast.error("Erro: " + error.message);
+      return;
+    }
     await supabase.from("scenarios").update({ is_official: false }).neq("id", id);
     queryClient.invalidateQueries({ queryKey: ["dre-data"] });
     queryClient.invalidateQueries({ queryKey: ["scenarios"] });
@@ -59,7 +78,8 @@ function CenariosPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Cenários</h1>
         <p className="text-sm text-muted-foreground">
-          O Realista é lançado; Otimista e Conservador são variações percentuais aplicadas pelo financeiro.
+          O Realista é lançado; Otimista e Conservador são variações percentuais aplicadas pelo
+          financeiro.
         </p>
       </div>
 
@@ -86,8 +106,15 @@ function CenariosPage() {
                     type="text"
                     inputMode="decimal"
                     disabled={!canEdit || s.name === "Realista"}
-                    defaultValue={String(Number(s.revenue_variation) * 100).replace(".", ",")}
-                    onBlur={(e) => saveVariation(s.id, "revenue_variation", e.target.value)}
+                    defaultValue={fmtInput(Number(s.revenue_variation) * 100)}
+                    onBlur={(e) =>
+                      saveVariation(
+                        s.id,
+                        "revenue_variation",
+                        e.target,
+                        Number(s.revenue_variation),
+                      )
+                    }
                     className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm tabular-nums disabled:opacity-60"
                   />
                 </label>
@@ -97,8 +124,15 @@ function CenariosPage() {
                     type="text"
                     inputMode="decimal"
                     disabled={!canEdit || s.name === "Realista"}
-                    defaultValue={String(Number(s.expense_variation) * 100).replace(".", ",")}
-                    onBlur={(e) => saveVariation(s.id, "expense_variation", e.target.value)}
+                    defaultValue={fmtInput(Number(s.expense_variation) * 100)}
+                    onBlur={(e) =>
+                      saveVariation(
+                        s.id,
+                        "expense_variation",
+                        e.target,
+                        Number(s.expense_variation),
+                      )
+                    }
                     className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm tabular-nums disabled:opacity-60"
                   />
                 </label>
@@ -114,7 +148,9 @@ function CenariosPage() {
                   <tr className="border-b border-border bg-muted/50 text-left">
                     <th className="px-3 py-2 font-medium">Linha</th>
                     {computed.map((s) => (
-                      <th key={s.id} className="px-3 py-2 text-right font-medium">{s.name}</th>
+                      <th key={s.id} className="px-3 py-2 text-right font-medium">
+                        {s.name}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -133,7 +169,9 @@ function CenariosPage() {
                         <td
                           key={s.id}
                           className={`px-3 py-1.5 text-right font-mono tabular-nums ${
-                            key === "contribuicaoLiquida" && (s.total?.[key] ?? 0) < 0 ? "text-destructive" : ""
+                            key === "contribuicaoLiquida" && (s.total?.[key] ?? 0) < 0
+                              ? "text-destructive"
+                              : ""
                           }`}
                         >
                           {s.total ? fmtBRL(s.total[key]) : "—"}
@@ -144,7 +182,10 @@ function CenariosPage() {
                   <tr className="font-semibold">
                     <td className="px-3 py-1.5">%MCL</td>
                     {computed.map((s) => (
-                      <td key={s.id} className={`px-3 py-1.5 text-right font-mono tabular-nums ${(s.total?.mcl ?? 0) < 0 ? "text-destructive" : ""}`}>
+                      <td
+                        key={s.id}
+                        className={`px-3 py-1.5 text-right font-mono tabular-nums ${(s.total?.mcl ?? 0) < 0 ? "text-destructive" : ""}`}
+                      >
                         {s.total ? fmtPct(s.total.mcl) : "—"}
                       </td>
                     ))}
