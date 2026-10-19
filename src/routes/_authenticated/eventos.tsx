@@ -10,6 +10,7 @@ import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
 import { byId, friendlyError, useAccounts, useProducts, useRevenueTypes } from "@/lib/catalog";
 import { MONTHS, fmtBRL, fmtInput, parseNum } from "@/lib/format";
+import { describePrice, inputOf } from "@/lib/products";
 import { PageHeader } from "@/components/page-header";
 import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
@@ -241,6 +242,11 @@ function EventDialog({
   const revenueAccounts = allowed.filter((a) => a.kind === "receita");
   const costAccounts = allowed.filter((a) => a.kind === "despesa");
   const source = event ?? last;
+  const eventProducts = (products ?? []).filter(
+    (p) =>
+      p.kind === "evento" &&
+      ((p.active && (!p.unit_id || p.unit_id === unitId)) || p.id === event?.product_id),
+  );
 
   const [name, setName] = useState(event?.name ?? "");
   const [productId, setProductId] = useState<string | null>(event?.product_id ?? null);
@@ -270,9 +276,17 @@ function EventDialog({
 
   function pickProduct(id: string | null) {
     setProductId(id);
-    const p = (products ?? []).find((x) => x.id === id);
-    if (p?.revenue_type_id) setRevenueTypeId(p.revenue_type_id);
-    if (p && !name) setName(p.name);
+    const p = eventProducts.find((x) => x.id === id);
+    if (!p) return;
+    // Tudo o que o produto traz é preenchido; o mês e o que ficou em branco continuam com você.
+    setName(p.name);
+    if (p.revenue_type_id) setRevenueTypeId(p.revenue_type_id);
+    if (p.price !== null) setPrice(inputOf(p.price));
+    if (p.default_seats !== null) setQuantity(inputOf(p.default_seats));
+    if (p.cost_per_participant !== null) setCpp(inputOf(p.cost_per_participant));
+    if (p.fixed_cost !== null) setFixed(inputOf(p.fixed_cost));
+    if (p.revenue_account_id) setRevenueAccountId(p.revenue_account_id);
+    if (p.cost_account_id) setCostAccountId(p.cost_account_id);
   }
 
   async function save() {
@@ -319,9 +333,10 @@ function EventDialog({
               value={productId}
               onChange={pickProduct}
               noneLabel="Sem produto"
-              options={(products ?? [])
-                .filter((p) => p.active && (!p.unit_id || p.unit_id === unitId))
-                .map((p) => ({ value: p.id, label: p.name }))}
+              options={eventProducts.map((p) => ({
+                value: p.id,
+                label: `${p.name} — ${describePrice(p)}`,
+              }))}
             />
           </Field>
           <Field label="Nome do evento">

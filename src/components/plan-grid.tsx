@@ -1,7 +1,25 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { MoreHorizontal, Plus, AlertTriangle } from "lucide-react";
 import { usePlanning } from "@/lib/planning";
-import { byId, useAccounts, useClients, useProducts, useRevenueTypes } from "@/lib/catalog";
+import {
+  byId,
+  friendlyError,
+  useAccounts,
+  useClients,
+  useProducts,
+  useRevenueTypes,
+} from "@/lib/catalog";
+import {
+  contractPlan,
+  describePlan,
+  describePrice,
+  inputOf,
+  type PriceModel,
+} from "@/lib/products";
+import { norm } from "@/lib/products-import";
 import {
   adjustFrom,
   monthRange,
@@ -134,16 +152,18 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
                 const type = line.revenue_type_id ? typeMap.get(line.revenue_type_id) : undefined;
                 const filled = [...line.values.values()].filter((v) => v !== 0).length;
                 const overMax = type?.max_months != null && filled > type.max_months;
-                const sub = [
-                  accountMap.get(line.account_id)?.name,
-                  line.client_id ? clientMap.get(line.client_id)?.name : null,
-                  line.product_id ? productMap.get(line.product_id)?.name : null,
-                  type?.name,
-                ].filter(Boolean);
+                const accountName = accountMap.get(line.account_id)?.name;
+                const clientName = line.client_id ? clientMap.get(line.client_id)?.name : null;
+                const productName = line.product_id ? productMap.get(line.product_id)?.name : null;
+                const label =
+                  line.description ||
+                  [clientName, productName].filter(Boolean).join(" — ") ||
+                  accountName;
+                const sub = [accountName, type?.name].filter(Boolean);
                 return (
                   <tr key={line.id} className="border-b border-border last:border-0">
                     <td className="sticky left-0 z-10 bg-card px-3 py-1">
-                      <div className="font-medium">{line.description || sub[0]}</div>
+                      <div className="font-medium">{label}</div>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {sub.join(" · ")}
                         {overMax && (
@@ -259,15 +279,26 @@ function LineDialog({
   const { data: products } = useProducts();
   const { data: revenueTypes } = useRevenueTypes();
   const { addLine, updateLine } = usePlanMutations();
+  const queryClient = useQueryClient();
+  const isRevenue = kind === "receita";
 
   const options = (accounts ?? []).filter(
     (a) => a.kind === kind && a.active && (!a.unit_ids || a.unit_ids.includes(unitId!)),
   );
+  // Só serviços entram aqui; eventos e treinamentos são lançados em Eventos.
+  const productOptions = (products ?? []).filter(
+    (p) =>
+      p.kind === "servico" &&
+      ((p.active && (!p.unit_id || p.unit_id === unitId)) || p.id === line?.product_id),
+  );
+
   const [accountId, setAccountId] = useState<string | null>(
     line?.account_id ?? options[0]?.id ?? null,
   );
   const [description, setDescription] = useState(line?.description ?? "");
-  const [clientId, setClientId] = useState<string | null>(line?.client_id ?? null);
+  const [clientName, setClientName] = useState(
+    line?.client_id ? ((clients ?? []).find((c) => c.id === line.client_id)?.name ?? "") : "",
+  );
   const [productId, setProductId] = useState<string | null>(line?.product_id ?? null);
   const [revenueTypeId, setRevenueTypeId] = useState<string | null>(line?.revenue_type_id ?? null);
   const [amount, setAmount] = useState("");
@@ -275,125 +306,204 @@ function LineDialog({
   const [months, setMonths] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
+  const product = productOptions.find((p) => p.id === productId);
   const type = (revenueTypes ?? []).find((t) => t.id === revenueTypeId);
-  const defaultMonths = type?.recurrence_months ?? type?.max_months ?? 13 - (startMonth ?? 1);
+  const model = (product?.price_model ?? "mensal") as PriceModel;
+  const priceNum = amount.trim() === "" ? null : parseNum(amount);
+  const monthsNum = months.trim() === "" ? null : Number(months);
+  const defaultMonths =
+    product?.duration_months ?? type?.recurrence_months ?? type?.max_months ?? null;
+
+  // Prévia do que será lançado: preço e prazo do produto (ou os digitados), a partir do mês de início.
+  const plan =
+    !line && priceNum !== null && priceNum >= 0 && startMonth !== null
+      ? contractPlan(
+          { price: priceNum, price_model: model, duration_months: monthsNum ?? defaultMonths },
+          startMonth,
+        )
+      : null;
 
   function pickProduct(id: string | null) {
     setProductId(id);
-    const p = (products ?? []).find((x) => x.id === id);
-    if (p?.revenue_type_id && !revenueTypeId) setRevenueTypeId(p.revenue_type_id);
+    const p = productOptions.find((x) => x.id === id);
+    if (!p) return;
+    if (p.revenue_type_id) setRevenueTypeId(p.revenue_type_id);
+    if (p.revenue_account_id && options.some((a) => a.id === p.revenue_account_id))
+      setAccountId(p.revenue_account_id);
+    if (!line) {
+      setAmount(inputOf(p.price));
+      setMonths(p.duration_months ? String(p.duration_months) : "");
+    }
+  }
+
+  /** Cliente digitado: usa o cadastrado ou cria um novo. false = falhou. */
+  async function resolveClient(): Promise<string | null | false> {
+    const name = clientName.trim();
+    if (!isRevenue || name === "") return null;
+    const hit = (clients ?? []).find((c) => norm(c.name) === norm(name));
+    if (hit) return hit.id;
+    const { data, error } = await supabase.from("clients").insert({ name }).select("id").single();
+    if (error) {
+      toast.error(friendlyError(error.message));
+      return false;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["clients"] });
+    return data.id;
   }
 
   async function save() {
     if (!accountId) return;
     setSaving(true);
+    const clientId = await resolveClient();
+    if (clientId === false) {
+      setSaving(false);
+      return;
+    }
     const fields = {
       account_id: accountId,
       description: description.trim() || null,
-      client_id: kind === "receita" ? clientId : null,
-      product_id: kind === "receita" ? productId : null,
-      revenue_type_id: kind === "receita" ? revenueTypeId : null,
+      client_id: clientId,
+      product_id: isRevenue ? productId : null,
+      revenue_type_id: isRevenue ? revenueTypeId : null,
     };
     let ok: boolean;
     if (line) {
       ok = await updateLine(line.id, fields);
     } else {
-      const value = amount.trim() === "" ? null : parseNum(amount);
-      const count = months.trim() === "" ? defaultMonths : Number(months);
-      const values =
-        value !== null && startMonth !== null
-          ? monthRange(startMonth, count).map((m) => ({ month: m, amount: value }))
-          : [];
       ok =
         (await addLine(
           { ...fields, version_id: versionId!, unit_id: unitId!, created_by: user?.id ?? null },
-          values,
+          plan?.schedule ?? [],
         )) !== null;
     }
     setSaving(false);
     if (ok) onClose();
   }
 
-  const needsType = kind === "receita" && !revenueTypeId;
+  const needsType = isRevenue && !revenueTypeId;
+  const valueLabel =
+    !isRevenue || model === "mensal"
+      ? "Valor por mês"
+      : model === "total"
+        ? "Valor do contrato"
+        : "Valor (cobrado uma vez)";
+
+  const detailFields = (
+    <div className="grid gap-3">
+      <Field label="Conta">
+        <OptionSelect
+          value={accountId}
+          onChange={setAccountId}
+          options={options.map((a) => ({ value: a.id, label: a.name }))}
+        />
+      </Field>
+      {isRevenue && (
+        <Field label="Tipo de receita" hint="Define a recorrência e a base da comissão.">
+          <OptionSelect
+            value={revenueTypeId}
+            onChange={setRevenueTypeId}
+            options={(revenueTypes ?? [])
+              .filter((t) => t.active)
+              .map((t) => ({ value: t.id, label: t.name }))}
+          />
+        </Field>
+      )}
+      <Field label="Descrição" hint="Opcional. Ex.: contrato, fornecedor ou observação.">
+        <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+      </Field>
+    </div>
+  );
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{line ? "Editar linha" : "Nova linha"}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
-          <Field label="Conta">
-            <OptionSelect
-              value={accountId}
-              onChange={setAccountId}
-              options={options.map((a) => ({ value: a.id, label: a.name }))}
-            />
-          </Field>
-          <Field label="Descrição" hint="Opcional. Ex.: contrato, fornecedor ou observação.">
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} />
-          </Field>
-          {kind === "receita" && (
+          {isRevenue && (
             <>
-              <Field label="Cliente">
-                <OptionSelect
-                  value={clientId}
-                  onChange={setClientId}
-                  noneLabel="Sem cliente"
-                  options={(clients ?? [])
-                    .filter((c) => c.active)
-                    .map((c) => ({ value: c.id, label: c.name }))}
-                />
-              </Field>
-              <Field label="Produto">
+              <Field
+                label="Produto"
+                hint={
+                  productOptions.length === 0
+                    ? "Nenhum produto cadastrado para esta unidade. O financeiro cadastra em Produtos."
+                    : "O preço e o prazo do produto são preenchidos sozinhos."
+                }
+              >
                 <OptionSelect
                   value={productId}
                   onChange={pickProduct}
-                  noneLabel="Sem produto"
-                  options={(products ?? [])
-                    .filter((p) => p.active && (!p.unit_id || p.unit_id === unitId))
-                    .map((p) => ({ value: p.id, label: p.name }))}
+                  noneLabel="Sem produto (lançamento avulso)"
+                  options={productOptions.map((p) => ({
+                    value: p.id,
+                    label: `${p.name} — ${describePrice(p)}`,
+                  }))}
                 />
               </Field>
-              <Field label="Tipo de receita">
-                <OptionSelect
-                  value={revenueTypeId}
-                  onChange={setRevenueTypeId}
-                  options={(revenueTypes ?? [])
-                    .filter((t) => t.active)
-                    .map((t) => ({ value: t.id, label: t.name }))}
+              <Field label="Cliente" hint="Escolha da lista ou digite o nome de um cliente novo.">
+                <Input
+                  list="clients-list"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="Nome do cliente"
                 />
+                <datalist id="clients-list">
+                  {(clients ?? [])
+                    .filter((c) => c.active)
+                    .map((c) => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                </datalist>
               </Field>
             </>
           )}
+
           {!line && (
             <div className="grid grid-cols-3 gap-3 rounded-md border border-border p-3">
-              <Field label="Valor mensal">
+              <Field label="Início">
+                <MonthSelect value={startMonth} onChange={setStartMonth} />
+              </Field>
+              <Field label={valueLabel}>
                 <Input
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="opcional"
+                  placeholder={isRevenue ? "" : "opcional"}
                   className="font-mono"
                 />
               </Field>
-              <Field label="A partir de">
-                <MonthSelect value={startMonth} onChange={setStartMonth} />
-              </Field>
-              <Field label="Por quantos meses">
-                <Input
-                  value={months}
-                  onChange={(e) => setMonths(e.target.value.replace(/\D/g, ""))}
-                  placeholder={String(defaultMonths)}
-                  className="font-mono"
-                />
-              </Field>
-              {type?.recurrence_months && (
-                <p className="col-span-3 text-xs text-muted-foreground">
-                  {type.name}: preenche {type.recurrence_months} meses a partir do mês escolhido
-                  (até dezembro).
+              {model !== "unico" && (
+                <Field label="Prazo (meses)">
+                  <Input
+                    value={months}
+                    onChange={(e) => setMonths(e.target.value.replace(/\D/g, ""))}
+                    placeholder={defaultMonths ? String(defaultMonths) : "até dez."}
+                    className="font-mono"
+                  />
+                </Field>
+              )}
+              {plan && priceNum !== null && (
+                <p className="col-span-3 text-sm text-muted-foreground">
+                  {describePlan(plan, [...MONTHS])}
                 </p>
               )}
             </div>
+          )}
+
+          {isRevenue ? (
+            <details open={needsType || undefined} className="rounded-md border border-border">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+                Mais detalhes{type ? ` · ${type.name}` : ""}
+              </summary>
+              <div className="border-t border-border p-3">{detailFields}</div>
+            </details>
+          ) : (
+            detailFields
+          )}
+          {needsType && (
+            <p className="text-sm text-destructive">
+              Escolha o tipo de receita em “Mais detalhes”, ou selecione um produto que já tenha um.
+            </p>
           )}
         </div>
         <DialogFooter>

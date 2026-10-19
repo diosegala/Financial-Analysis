@@ -765,35 +765,76 @@ export type Database = {
       products: {
         Row: {
           active: boolean
+          cost_account_id: string | null
+          cost_per_participant: number | null
           created_at: string
+          default_seats: number | null
+          duration_months: number | null
+          fixed_cost: number | null
           id: string
+          kind: string
           name: string
           omie_code: string | null
+          price: number | null
+          price_model: string
+          revenue_account_id: string | null
           revenue_type_id: string | null
           unit_id: string | null
           updated_at: string
         }
         Insert: {
           active?: boolean
+          cost_account_id?: string | null
+          cost_per_participant?: number | null
           created_at?: string
+          default_seats?: number | null
+          duration_months?: number | null
+          fixed_cost?: number | null
           id?: string
+          kind?: string
           name: string
           omie_code?: string | null
+          price?: number | null
+          price_model?: string
+          revenue_account_id?: string | null
           revenue_type_id?: string | null
           unit_id?: string | null
           updated_at?: string
         }
         Update: {
           active?: boolean
+          cost_account_id?: string | null
+          cost_per_participant?: number | null
           created_at?: string
+          default_seats?: number | null
+          duration_months?: number | null
+          fixed_cost?: number | null
           id?: string
+          kind?: string
           name?: string
           omie_code?: string | null
+          price?: number | null
+          price_model?: string
+          revenue_account_id?: string | null
           revenue_type_id?: string | null
           unit_id?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "products_cost_account_id_fkey"
+            columns: ["cost_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_revenue_account_id_fkey"
+            columns: ["revenue_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_revenue_type_id_fkey"
             columns: ["revenue_type_id"]

@@ -21,6 +21,7 @@ import { Route as AuthenticatedEventosRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedFolhaRouteImport } from './routes/_authenticated/folha'
 import { Route as AuthenticatedInicioRouteImport } from './routes/_authenticated/inicio'
 import { Route as AuthenticatedParametrosRouteImport } from './routes/_authenticated/parametros'
+import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticated/produtos'
 import { Route as AuthenticatedReceitasRouteImport } from './routes/_authenticated/receitas'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 
@@ -84,6 +85,11 @@ const AuthenticatedParametrosRoute = AuthenticatedParametrosRouteImport.update({
   path: '/parametros',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedProdutosRoute = AuthenticatedProdutosRouteImport.update({
+  id: '/produtos',
+  path: '/produtos',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedReceitasRoute = AuthenticatedReceitasRouteImport.update({
   id: '/receitas',
   path: '/receitas',
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/folha': typeof AuthenticatedFolhaRoute
   '/inicio': typeof AuthenticatedInicioRoute
   '/parametros': typeof AuthenticatedParametrosRoute
+  '/produtos': typeof AuthenticatedProdutosRoute
   '/receitas': typeof AuthenticatedReceitasRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -122,6 +129,7 @@ export interface FileRoutesByTo {
   '/folha': typeof AuthenticatedFolhaRoute
   '/inicio': typeof AuthenticatedInicioRoute
   '/parametros': typeof AuthenticatedParametrosRoute
+  '/produtos': typeof AuthenticatedProdutosRoute
   '/receitas': typeof AuthenticatedReceitasRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/_authenticated/folha': typeof AuthenticatedFolhaRoute
   '/_authenticated/inicio': typeof AuthenticatedInicioRoute
   '/_authenticated/parametros': typeof AuthenticatedParametrosRoute
+  '/_authenticated/produtos': typeof AuthenticatedProdutosRoute
   '/_authenticated/receitas': typeof AuthenticatedReceitasRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -156,6 +165,7 @@ export interface FileRouteTypes {
     | '/folha'
     | '/inicio'
     | '/parametros'
+    | '/produtos'
     | '/receitas'
     | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/folha'
     | '/inicio'
     | '/parametros'
+    | '/produtos'
     | '/receitas'
     | '/usuarios'
   id:
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/_authenticated/folha'
     | '/_authenticated/inicio'
     | '/_authenticated/parametros'
+    | '/_authenticated/produtos'
     | '/_authenticated/receitas'
     | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
@@ -283,6 +295,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedParametrosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/produtos': {
+      id: '/_authenticated/produtos'
+      path: '/produtos'
+      fullPath: '/produtos'
+      preLoaderRoute: typeof AuthenticatedProdutosRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/receitas': {
       id: '/_authenticated/receitas'
       path: '/receitas'
@@ -310,6 +329,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFolhaRoute: typeof AuthenticatedFolhaRoute
   AuthenticatedInicioRoute: typeof AuthenticatedInicioRoute
   AuthenticatedParametrosRoute: typeof AuthenticatedParametrosRoute
+  AuthenticatedProdutosRoute: typeof AuthenticatedProdutosRoute
   AuthenticatedReceitasRoute: typeof AuthenticatedReceitasRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
@@ -324,6 +344,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFolhaRoute: AuthenticatedFolhaRoute,
   AuthenticatedInicioRoute: AuthenticatedInicioRoute,
   AuthenticatedParametrosRoute: AuthenticatedParametrosRoute,
+  AuthenticatedProdutosRoute: AuthenticatedProdutosRoute,
   AuthenticatedReceitasRoute: AuthenticatedReceitasRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }
