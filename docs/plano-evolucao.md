@@ -102,6 +102,8 @@ Os bugs estruturais (limite de 1.000 linhas, duplicidade, renomear e excluir, fo
 
 Incluiu também o login com a conta Google da CUPOLA (em vez do convite por e-mail). A exportação para Excel saiu em CSV.
 
+Produtos com preço e prazo (PR #3, 19/10): ao lançar um produto na previsão, valor, prazo e contas vêm do cadastro. Serviços (por mês, valor total ou pagamento único) e eventos/treinamentos (preço, vagas e custos). Financeiro e líderes (só das próprias unidades) cadastram produtos; os lançamentos guardam uma cópia dos valores.
+
 **1a. Banco**
 
 - Migration com o modelo da seção 4. As tabelas antigas, vazias, são removidas. Políticas de acesso reescritas e cobertas por testes no banco (pgTAP).
