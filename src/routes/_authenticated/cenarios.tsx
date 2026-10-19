@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/lib/auth";
 import { usePlanning } from "@/lib/planning";
 import { useDreData, computeYear, scenarioOf, totals } from "@/lib/dre-data";
-import { fmtBRL, fmtPct, parseNum } from "@/lib/format";
+import { fmtBRL, fmtInput, fmtPct, parseNum } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -34,9 +34,17 @@ function CenariosPage() {
   async function saveVariation(
     id: string,
     field: "revenue_variation" | "expense_variation",
-    text: string,
+    input: HTMLInputElement,
+    current: number,
   ) {
-    const value = parseNum(text) / 100;
+    const pct = parseNum(input.value);
+    if (pct === null) {
+      toast.error("Valor inválido. Use, por exemplo, 10 ou -5,5.");
+      input.value = fmtInput(current * 100);
+      return;
+    }
+    const value = pct / 100;
+    if (Math.abs(value - current) < 1e-9) return;
     const patch =
       field === "revenue_variation" ? { revenue_variation: value } : { expense_variation: value };
     const { error } = await supabase.from("scenarios").update(patch).eq("id", id);
@@ -98,8 +106,15 @@ function CenariosPage() {
                     type="text"
                     inputMode="decimal"
                     disabled={!canEdit || s.name === "Realista"}
-                    defaultValue={String(Number(s.revenue_variation) * 100).replace(".", ",")}
-                    onBlur={(e) => saveVariation(s.id, "revenue_variation", e.target.value)}
+                    defaultValue={fmtInput(Number(s.revenue_variation) * 100)}
+                    onBlur={(e) =>
+                      saveVariation(
+                        s.id,
+                        "revenue_variation",
+                        e.target,
+                        Number(s.revenue_variation),
+                      )
+                    }
                     className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm tabular-nums disabled:opacity-60"
                   />
                 </label>
@@ -109,8 +124,15 @@ function CenariosPage() {
                     type="text"
                     inputMode="decimal"
                     disabled={!canEdit || s.name === "Realista"}
-                    defaultValue={String(Number(s.expense_variation) * 100).replace(".", ",")}
-                    onBlur={(e) => saveVariation(s.id, "expense_variation", e.target.value)}
+                    defaultValue={fmtInput(Number(s.expense_variation) * 100)}
+                    onBlur={(e) =>
+                      saveVariation(
+                        s.id,
+                        "expense_variation",
+                        e.target,
+                        Number(s.expense_variation),
+                      )
+                    }
                     className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm tabular-nums disabled:opacity-60"
                   />
                 </label>

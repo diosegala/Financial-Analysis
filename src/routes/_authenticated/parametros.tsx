@@ -66,9 +66,9 @@ function ParametrosPage() {
   }
 
   async function addParam() {
-    const n = parseNum(value);
-    if (n <= 0) {
-      toast.error("Informe um valor percentual maior que zero.");
+    const n = value.trim() === "" ? null : parseNum(value);
+    if (n === null || n < 0) {
+      toast.error("Informe um percentual válido (zero ou maior).");
       return;
     }
     const validFrom = `${YEAR}-${month.padStart(2, "0")}-01`;
