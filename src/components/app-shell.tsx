@@ -42,12 +42,14 @@ import {
   History,
   LogOut,
   CalendarDays,
+  Package,
   Settings,
   Send,
 } from "lucide-react";
 
 const NAV = [
   { to: "/inicio", label: "Início", icon: LayoutDashboard },
+  { to: "/produtos", label: "Produtos", icon: Package },
   { to: "/receitas", label: "Receitas", icon: TrendingUp },
   { to: "/eventos", label: "Eventos", icon: CalendarDays },
   { to: "/folha", label: "Folha", icon: Users },

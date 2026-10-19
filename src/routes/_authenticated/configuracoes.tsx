@@ -14,7 +14,6 @@ import {
   useContractTypes,
   useDreLines,
   useParameterDefinitions,
-  useProducts,
   useRevenueTypes,
   useUnits,
   useVersions,
@@ -67,7 +66,6 @@ function ConfiguracoesPage() {
           <TabsTrigger value="contas">Plano de contas</TabsTrigger>
           <TabsTrigger value="tipos">Tipos de receita</TabsTrigger>
           <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
-          <TabsTrigger value="produtos">Produtos</TabsTrigger>
           <TabsTrigger value="clientes">Clientes</TabsTrigger>
           <TabsTrigger value="parametros">Parâmetros</TabsTrigger>
           <TabsTrigger value="regras">Regras de cálculo</TabsTrigger>
@@ -92,9 +90,6 @@ function ConfiguracoesPage() {
         </TabsContent>
         <TabsContent value="vinculos">
           <ContractTypesTab />
-        </TabsContent>
-        <TabsContent value="produtos">
-          <ProductsTab />
         </TabsContent>
         <TabsContent value="clientes">
           <ClientsTab />
@@ -444,44 +439,13 @@ function ContractTypesTab() {
   );
 }
 
-function ProductsTab() {
-  const { data: products } = useProducts();
-  const { data: units } = useUnits();
-  const { data: types } = useRevenueTypes();
-  return (
-    <CrudTable
-      table="products"
-      rows={products ?? []}
-      fields={[
-        { key: "name", label: "Nome", type: "text", required: true },
-        {
-          key: "unit_id",
-          label: "Unidade",
-          type: "select",
-          options: opts(units),
-          noneLabel: "Todas",
-        },
-        {
-          key: "revenue_type_id",
-          label: "Tipo de receita padrão",
-          type: "select",
-          options: opts(types),
-        },
-        { key: "omie_code", label: "Código no Omie", type: "text", hideInTable: true },
-        active,
-      ]}
-      defaults={{ active: true }}
-    />
-  );
-}
-
 function ClientsTab() {
   const { data: clients } = useClients();
   return (
     <CrudTable
       table="clients"
       rows={clients ?? []}
-      description="Na Fase 2, os clientes passam a vir do Omie."
+      description="Os líderes cadastram clientes novos ao lançar uma receita. Na Fase 2, os clientes passam a vir do Omie."
       fields={[
         { key: "name", label: "Nome", type: "text", required: true },
         { key: "document", label: "CNPJ/CPF", type: "text" },
