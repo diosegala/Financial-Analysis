@@ -144,6 +144,25 @@ export function AppShell({ children }: { children: ReactNode }) {
     navigate({ to: "/auth", replace: true });
   }
 
+  // Entrou (ex.: com Google) mas o financeiro ainda não deu perfil ou unidade.
+  if (user && units && (user.roles.length === 0 || visibleUnits.length === 0)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md space-y-4 rounded-md border border-border bg-card p-6 text-center">
+          <img src="/brand/cupola.png" alt="CUPOLA" className="mx-auto h-9 w-auto" />
+          <h1 className="text-lg font-semibold">Seu acesso ainda não foi liberado</h1>
+          <p className="text-sm text-muted-foreground">
+            Você entrou como <strong>{user.email}</strong>, mas ainda não tem perfil ou unidade no
+            planejamento. Peça ao financeiro para liberar o seu acesso.
+          </p>
+          <Button variant="outline" onClick={handleSignOut} className="gap-2">
+            <LogOut className="h-4 w-4" /> Sair
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <PlanningProvider value={planning}>
       <div className="flex min-h-screen">

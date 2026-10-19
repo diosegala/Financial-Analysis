@@ -87,9 +87,8 @@ const inviteSchema = z.object({
   fullName: z.string().trim().min(1, "Informe o nome."),
   role: z.enum(ROLES),
   unitIds: z.array(z.string().uuid()),
-  /** Sem senha: envia convite por e-mail. Com senha: cria o acesso direto. */
+  /** Sem senha: a pessoa entra com a conta Google do mesmo e-mail. Com senha: entra com e-mail e senha. */
   password: z.string().min(8, "A senha precisa de pelo menos 8 caracteres.").optional(),
-  redirectTo: z.string().url(),
 });
 
 export const inviteUser = createServerFn({ method: "POST" })
@@ -99,17 +98,13 @@ export const inviteUser = createServerFn({ method: "POST" })
     await assertFinanceiro(context.supabase, context.userId);
     const db = await admin();
     const meta = { full_name: data.fullName };
-    const { data: created, error } = data.password
-      ? await db.auth.admin.createUser({
-          email: data.email,
-          password: data.password,
-          email_confirm: true,
-          user_metadata: meta,
-        })
-      : await db.auth.admin.inviteUserByEmail(data.email, {
-          data: meta,
-          redirectTo: data.redirectTo,
-        });
+    // E-mail já confirmado: no primeiro login com Google, o Supabase liga a conta Google a este usuário.
+    const { data: created, error } = await db.auth.admin.createUser({
+      email: data.email,
+      email_confirm: true,
+      user_metadata: meta,
+      ...(data.password ? { password: data.password } : {}),
+    });
     if (error) throw error;
     try {
       await setAccess(db, created.user.id, data.role, data.unitIds);

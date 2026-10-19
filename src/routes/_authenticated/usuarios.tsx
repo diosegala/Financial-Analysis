@@ -75,10 +75,10 @@ function UsuariosPage() {
     <div className="space-y-4">
       <PageHeader
         title="Usuários"
-        subtitle="Convide pessoas e defina o perfil e as unidades de cada uma. Sempre precisa existir pelo menos um financeiro ativo."
+        subtitle="Cadastre o e-mail da pessoa, o perfil e as unidades. Ela entra com a conta Google desse e-mail. Sempre precisa existir pelo menos um financeiro ativo."
         actions={
           <Button size="sm" className="gap-1.5" onClick={() => setDialog("new")}>
-            <Plus className="h-4 w-4" /> Convidar usuário
+            <Plus className="h-4 w-4" /> Dar acesso
           </Button>
         }
       />
@@ -165,7 +165,7 @@ function UserDialog({
   const [email, setEmail] = useState(user?.email ?? "");
   const [role, setRole] = useState<Role>((user?.roles[0] as Role | undefined) ?? "lider");
   const [unitIds, setUnitIds] = useState<string[]>(user?.unitIds ?? []);
-  const [mode, setMode] = useState<"email" | "senha">("email");
+  const [mode, setMode] = useState<"google" | "senha">("google");
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -183,13 +183,12 @@ function UserDialog({
             role,
             unitIds,
             password: mode === "senha" ? password : undefined,
-            redirectTo: `${window.location.origin}/definir-senha`,
           },
         });
         toast.success(
-          mode === "email"
-            ? `Convite enviado para ${email}.`
-            : "Usuário criado. Ele já pode entrar com a senha informada.",
+          mode === "google"
+            ? `Acesso criado. ${email} já pode entrar com o Google.`
+            : "Acesso criado. A pessoa já pode entrar com a senha informada.",
         );
       }
       await queryClient.invalidateQueries({ queryKey: ["users-list"] });
@@ -205,14 +204,14 @@ function UserDialog({
     fullName.trim() !== "" &&
     (user || /.+@.+\..+/.test(email)) &&
     (role !== "lider" || unitIds.length > 0) &&
-    (user || mode === "email" || password.length >= 8);
+    (user || mode === "google" || password.length >= 8);
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {user ? `Acesso de ${user.fullName || user.email}` : "Convidar usuário"}
+            {user ? `Acesso de ${user.fullName || user.email}` : "Dar acesso"}
           </DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
@@ -253,10 +252,10 @@ function UserDialog({
               <Field label="Como dar o acesso">
                 <OptionSelect
                   value={mode}
-                  onChange={(v) => setMode((v as "email" | "senha") ?? "email")}
+                  onChange={(v) => setMode((v as "google" | "senha") ?? "google")}
                   options={[
-                    { value: "email", label: "Enviar convite por e-mail (a pessoa cria a senha)" },
-                    { value: "senha", label: "Definir uma senha inicial" },
+                    { value: "google", label: "Entra com a conta Google (recomendado)" },
+                    { value: "senha", label: "Sem conta Google: definir uma senha inicial" },
                   ]}
                 />
               </Field>
@@ -276,13 +275,7 @@ function UserDialog({
             Cancelar
           </Button>
           <Button onClick={save} disabled={saving || !valid}>
-            {saving
-              ? "Salvando…"
-              : user
-                ? "Salvar"
-                : mode === "email"
-                  ? "Enviar convite"
-                  : "Criar usuário"}
+            {saving ? "Salvando…" : user ? "Salvar" : "Dar acesso"}
           </Button>
         </DialogFooter>
       </DialogContent>

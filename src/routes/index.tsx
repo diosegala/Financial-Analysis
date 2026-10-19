@@ -28,11 +28,6 @@ function Index() {
   const navigate = useNavigate();
   useEffect(() => {
     supabase.auth.getUser().then(({ data }: { data: { user: unknown } }) => {
-      // Links de convite/recuperação que caírem na raiz vão para a definição de senha.
-      if (data.user && /type=(invite|recovery)/.test(window.location.hash)) {
-        navigate({ to: "/definir-senha", replace: true });
-        return;
-      }
       navigate({ to: data.user ? "/inicio" : "/auth", replace: true });
     });
   }, [navigate]);
