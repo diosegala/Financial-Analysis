@@ -69,11 +69,24 @@ function ProdutosPage() {
   const { data: units } = useUnits();
   const { data: types } = useRevenueTypes();
   const { remove } = useTableMutations("products");
-  const [unitFilter, setUnitFilter] = useState<string>(ALL);
+  const [chosenUnit, setUnitFilter] = useState<string | null>(null);
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [deleting, setDeleting] = useState<Product | null>(null);
   const [importing, setImporting] = useState(false);
-  const canEdit = !!user?.isFinanceiro;
+  // Financeiro cadastra tudo; o líder, os produtos das próprias unidades (nunca "todas as unidades").
+  const isFin = !!user?.isFinanceiro;
+  const ownUnitIds = user?.unitIds ?? [];
+  const canCreate = isFin || (!!user?.isLider && ownUnitIds.length > 0);
+  const canEditProduct = (p: Product) =>
+    isFin || (!!user?.isLider && p.unit_id !== null && ownUnitIds.includes(p.unit_id));
+  const unitFilter = chosenUnit ?? (user?.isManagement ? ALL : (ownUnitIds[0] ?? ALL));
+  const unitOptions = (units ?? []).filter((u) => u.active && (isFin || ownUnitIds.includes(u.id)));
+  const newProductUnit =
+    unitFilter !== ALL && unitOptions.some((u) => u.id === unitFilter)
+      ? unitFilter
+      : isFin
+        ? null
+        : (unitOptions[0]?.id ?? null);
   const unitMap = byId(units);
   const typeMap = byId(types);
 
@@ -87,7 +100,7 @@ function ProdutosPage() {
         title="Produtos"
         subtitle="Ao lançar um produto na previsão, o preço e o prazo daqui são preenchidos automaticamente."
         actions={
-          canEdit && (
+          canCreate && (
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -115,9 +128,11 @@ function ProdutosPage() {
             ...(units ?? []).filter((u) => u.active).map((u) => ({ value: u.id, label: u.name })),
           ]}
         />
-        {!canEdit && (
+        {!isFin && (
           <span className="text-sm text-muted-foreground">
-            Somente o financeiro altera o catálogo.
+            {user?.isLider
+              ? "Você cadastra os produtos das suas unidades; os de todas as unidades são do financeiro."
+              : "Somente o financeiro e os líderes de cada unidade alteram o catálogo."}
           </span>
         )}
       </div>
@@ -171,7 +186,7 @@ function ProdutosPage() {
                       : "—"}
                   </td>
                   <td className="whitespace-nowrap px-2 py-1 text-right">
-                    {canEdit && (
+                    {canEditProduct(p) && (
                       <>
                         <Button
                           variant="ghost"
@@ -199,7 +214,7 @@ function ProdutosPage() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
-                    {canEdit
+                    {canCreate
                       ? "Nenhum produto cadastrado. Use “Novo produto” ou cole uma lista do Excel."
                       : "Nenhum produto cadastrado ainda. Peça ao financeiro para cadastrar."}
                   </td>
@@ -213,11 +228,15 @@ function ProdutosPage() {
       {editing && (
         <ProductDialog
           product={editing === "new" ? null : editing}
-          defaultUnitId={unitFilter === ALL ? null : unitFilter}
+          defaultUnitId={newProductUnit}
+          unitOptions={unitOptions}
+          allowAllUnits={isFin}
           onClose={() => setEditing(null)}
         />
       )}
-      {importing && <ImportDialog onClose={() => setImporting(false)} />}
+      {importing && (
+        <ImportDialog ownUnitIds={isFin ? null : ownUnitIds} onClose={() => setImporting(false)} />
+      )}
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -242,14 +261,17 @@ function ProdutosPage() {
 function ProductDialog({
   product,
   defaultUnitId,
+  unitOptions,
+  allowAllUnits,
   onClose,
 }: {
   product: Product | null;
   defaultUnitId: string | null;
+  unitOptions: { id: string; name: string }[];
+  allowAllUnits: boolean;
   onClose: () => void;
 }) {
   const { insert, update } = useTableMutations("products");
-  const { data: units } = useUnits();
   const { data: types } = useRevenueTypes();
   const { data: accounts } = useAccounts();
   const [name, setName] = useState(product?.name ?? "");
@@ -286,7 +308,7 @@ function ProductDialog({
       return s.trim() === "" || (v !== null && v !== undefined && v >= 0);
     }) &&
     (monthsNum === null || (Number.isInteger(monthsNum) && monthsNum >= 1 && monthsNum <= 120));
-  const valid = name.trim() !== "" && numbersOk;
+  const valid = name.trim() !== "" && numbersOk && (allowAllUnits || unitId !== null);
 
   const example =
     kind === "servico" && parsed.price !== null
@@ -341,10 +363,8 @@ function ProductDialog({
             <OptionSelect
               value={unitId}
               onChange={setUnitId}
-              noneLabel="Todas as unidades"
-              options={(units ?? [])
-                .filter((u) => u.active)
-                .map((u) => ({ value: u.id, label: u.name }))}
+              {...(allowAllUnits ? { noneLabel: "Todas as unidades" } : {})}
+              options={unitOptions.map((u) => ({ value: u.id, label: u.name }))}
             />
           </Field>
           <Field label="Tipo">
@@ -482,7 +502,14 @@ function ProductDialog({
   );
 }
 
-function ImportDialog({ onClose }: { onClose: () => void }) {
+function ImportDialog({
+  ownUnitIds,
+  onClose,
+}: {
+  /** null = sem restrição (financeiro); senão, só produtos dessas unidades. */
+  ownUnitIds: string[] | null;
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const { data: units } = useUnits();
   const { data: types } = useRevenueTypes();
@@ -496,6 +523,13 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
     // Produtos que já existem na mesma unidade não são cadastrados de novo.
     const existing = new Set((products ?? []).map((p) => `${p.unit_id ?? ""}|${norm(p.name)}`));
     const rows = parsed.rows.filter((r) => {
+      if (ownUnitIds && (r.unit_id === null || !ownUnitIds.includes(r.unit_id))) {
+        parsed.errors.push({
+          line: r.line,
+          message: `${r.name}: você só cadastra produtos das suas unidades.`,
+        });
+        return false;
+      }
       const dup = existing.has(`${r.unit_id ?? ""}|${norm(r.name)}`);
       if (dup) parsed.errors.push({ line: r.line, message: `${r.name}: já está cadastrado.` });
       return !dup;

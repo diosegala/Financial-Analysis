@@ -28,3 +28,9 @@ CREATE POLICY "Lider creates clients" ON public.clients FOR INSERT TO authentica
 ALTER TABLE public.products DROP CONSTRAINT products_name_key;
 CREATE UNIQUE INDEX products_unit_name_unique
   ON public.products (COALESCE(unit_id, '00000000-0000-0000-0000-000000000000'::uuid), lower(name));
+
+-- O líder cadastra, edita e exclui produtos e eventos/treinamentos das próprias unidades.
+-- Produto "para todas as unidades" (unit_id nulo) e mudar um produto de unidade seguem com o financeiro.
+CREATE POLICY "Lider writes products of own units" ON public.products FOR ALL TO authenticated
+  USING (unit_id IS NOT NULL AND public.can_write_unit(auth.uid(), unit_id))
+  WITH CHECK (unit_id IS NOT NULL AND public.can_write_unit(auth.uid(), unit_id));

@@ -1,6 +1,6 @@
 -- Produtos com preço e prazo, e cadastro de clientes pelo líder.
 BEGIN;
-SELECT plan(13);
+SELECT plan(21);
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT ON ids TO authenticated;
@@ -52,9 +52,26 @@ RESET ROLE;
 -- ───────────── Líder: só lê produtos e cria clientes ─────────────
 SELECT pg_temp.login('lid');
 SELECT is((SELECT count(*)::INT FROM products WHERE name = 'Diagnóstico'), 2, 'Líder lê o catálogo');
+SELECT lives_ok($$
+  INSERT INTO products (name, unit_id, kind, price) VALUES ('Produto do líder', pg_temp.id('consultoria'), 'servico', 1000)
+$$, 'Líder cadastra produto da própria unidade');
 SELECT throws_ok($$
-  INSERT INTO products (name, kind) VALUES ('Produto do líder', 'servico')
-$$, '42501', NULL, 'Líder não cadastra produto');
+  INSERT INTO products (name, unit_id, kind) VALUES ('Produto de outra unidade', pg_temp.id('educacao'), 'servico')
+$$, '42501', NULL, 'Líder não cadastra produto de outra unidade');
+SELECT throws_ok($$
+  INSERT INTO products (name, kind) VALUES ('Produto de todas as unidades', 'servico')
+$$, '42501', NULL, 'Líder não cadastra produto para todas as unidades');
+UPDATE products SET price = 1 WHERE name = 'Treinamento X';
+SELECT is((SELECT price FROM products WHERE name = 'Treinamento X'), 500::NUMERIC, 'Líder não altera produto de outra unidade');
+UPDATE products SET price = 1200 WHERE name = 'Produto do líder';
+SELECT is((SELECT price FROM products WHERE name = 'Produto do líder'), 1200::NUMERIC, 'Líder altera o preço do produto da própria unidade');
+SELECT throws_ok($$
+  UPDATE products SET unit_id = pg_temp.id('educacao') WHERE name = 'Produto do líder'
+$$, '42501', NULL, 'Líder não move produto para outra unidade');
+DELETE FROM products WHERE name = 'Treinamento X';
+SELECT is((SELECT count(*)::INT FROM products WHERE name = 'Treinamento X'), 1, 'Líder não exclui produto de outra unidade');
+DELETE FROM products WHERE name = 'Produto do líder';
+SELECT is((SELECT count(*)::INT FROM products WHERE name = 'Produto do líder'), 0, 'Líder exclui produto da própria unidade');
 SELECT lives_ok($$ INSERT INTO clients (name) VALUES ('Cliente Novo') $$, 'Líder cadastra cliente na hora de lançar');
 UPDATE clients SET name = 'Renomeado' WHERE name = 'Cliente Novo';
 SELECT is((SELECT count(*)::INT FROM clients WHERE name = 'Cliente Novo'), 1, 'Líder não renomeia cliente');
@@ -65,6 +82,9 @@ RESET ROLE;
 -- ───────────── VP só lê ─────────────
 SELECT pg_temp.login('vp');
 SELECT throws_ok($$ INSERT INTO clients (name) VALUES ('Cliente do VP') $$, '42501', NULL, 'VP não cadastra cliente');
+SELECT throws_ok($$
+  INSERT INTO products (name, unit_id, kind) VALUES ('Produto do VP', pg_temp.id('consultoria'), 'servico')
+$$, '42501', NULL, 'VP não cadastra produto');
 RESET ROLE;
 
 SELECT * FROM finish();
