@@ -98,7 +98,9 @@ Tamanhos: **P** ≈ até 1 dia · **M** ≈ 2–4 dias · **G** ≈ 1–2 semana
 
 Os bugs estruturais (limite de 1.000 linhas, duplicidade, renomear e excluir, folha órfã) **não** são corrigidos nas tabelas atuais. Eles somem com o modelo novo da Fase 1, e corrigir nas tabelas velhas seria trabalho jogado fora.
 
-### Fase 1: modelo novo e tudo editável (até 10/11)
+### Fase 1: modelo novo e tudo editável (até 10/11) — ✅ publicada em 19/10 (PR #2)
+
+Incluiu também o login com a conta Google da CUPOLA (em vez do convite por e-mail). A exportação para Excel saiu em CSV.
 
 **1a. Banco**
 
@@ -199,5 +201,7 @@ Regra de posse: o que vem do Omie é só leitura no app. O app só acrescenta ca
 
 1. ✅ Fase 0 concluída (PR #1, 18/10).
 2. ✅ Migrations aplicadas pela Supabase CLI, ligada ao projeto.
-3. Fase 1: migration do modelo novo, revisada antes de ser aplicada.
-4. Credenciais da API do Omie (app_key e app_secret), guardadas como segredo no Supabase. Necessárias só na Fase 2.
+3. ✅ Fase 1 publicada (PR #2, 19/10).
+4. Configurar o login com Google: cliente OAuth "Interno" no Google Cloud e provedor Google no Supabase.
+5. Financeiro: preencher os parâmetros, cadastrar produtos e clientes e liberar o acesso dos líderes.
+6. Credenciais da API do Omie (app_key e app_secret), guardadas como segredo no Supabase. Necessárias só na Fase 2.
