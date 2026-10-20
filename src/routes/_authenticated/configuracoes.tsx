@@ -21,6 +21,7 @@ import {
 import { MONTHS_FULL } from "@/lib/format";
 import { VERSION_STATUS_LABELS } from "@/lib/submissions";
 import { PageHeader } from "@/components/page-header";
+import { AccountsImport } from "@/components/accounts-import";
 import { CrudTable, type FieldDef } from "@/components/crud-table";
 import { Field, OptionSelect } from "@/components/form-fields";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -337,50 +338,59 @@ function AccountsTab() {
   const { data: lines } = useDreLines();
   const { data: units } = useUnits();
   return (
-    <CrudTable
-      table="accounts"
-      rows={accounts ?? []}
-      description="Cada conta aparece numa grade (Receitas, Despesas ou Folha) e soma numa linha da DRE."
-      fields={[
-        { key: "name", label: "Nome", type: "text", required: true },
-        { key: "code", label: "Código", type: "text", hideInTable: true },
-        {
-          key: "kind",
-          label: "Grade",
-          type: "select",
-          required: true,
-          options: [
-            { value: "receita", label: "Receitas" },
-            { value: "despesa", label: "Despesas" },
-            { value: "folha", label: "Folha" },
-          ],
-        },
-        {
-          key: "dre_line_id",
-          label: "Linha da DRE",
-          type: "select",
-          required: true,
-          options: opts((lines ?? []).filter((l) => l.kind === "lancada")),
-        },
-        {
-          key: "unit_ids",
-          label: "Unidades",
-          type: "multi",
-          options: opts(units),
-          emptyLabel: "Todas",
-        },
-        {
-          key: "generates_tax_credit",
-          label: "Gera crédito de PIS/COFINS",
-          type: "boolean",
-          hideInTable: true,
-        },
-        { key: "omie_category_code", label: "Categoria no Omie", type: "text", hideInTable: true },
-        active,
-        order,
-      ]}
-      defaults={{ kind: "despesa", active: true, sort_order: 0, generates_tax_credit: false }}
-    />
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card p-3">
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          Já tem o plano de contas no Omie? Importe a lista em vez de cadastrar uma a uma. As contas
+          importadas guardam o código do Omie, que depois liga o realizado ao planejado.
+        </p>
+        <AccountsImport />
+      </div>
+      <CrudTable
+        table="accounts"
+        rows={accounts ?? []}
+        description="Cada conta aparece numa grade (Receitas, Despesas ou Folha) e soma numa linha da DRE."
+        fields={[
+          { key: "name", label: "Nome", type: "text", required: true },
+          { key: "code", label: "Código", type: "text", hideInTable: true },
+          {
+            key: "kind",
+            label: "Grade",
+            type: "select",
+            required: true,
+            options: [
+              { value: "receita", label: "Receitas" },
+              { value: "despesa", label: "Despesas" },
+              { value: "folha", label: "Folha" },
+            ],
+          },
+          {
+            key: "dre_line_id",
+            label: "Linha da DRE",
+            type: "select",
+            required: true,
+            options: opts((lines ?? []).filter((l) => l.kind === "lancada")),
+          },
+          {
+            key: "unit_ids",
+            label: "Unidades",
+            type: "multi",
+            options: opts(units),
+            emptyLabel: "Todas",
+          },
+          {
+            key: "generates_tax_credit",
+            label: "Gera crédito de PIS/COFINS",
+            type: "boolean",
+            hideInTable: true,
+          },
+          { key: "omie_category_code", label: "Código no Omie", type: "text" },
+          active,
+          order,
+        ]}
+        defaults={{ kind: "despesa", active: true, sort_order: 0, generates_tax_credit: false }}
+      />
+    </div>
   );
 }
 
