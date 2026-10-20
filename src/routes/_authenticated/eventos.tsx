@@ -62,7 +62,10 @@ function useEvents(versionId: string | null, unitId: string | null) {
 }
 
 function EventosPage() {
-  const { unit, version, versionId, unitId, canEdit, lockReason } = usePlanning();
+  const { unit, version, versionId, unitId, canEdit: canAdd, lockReason } = usePlanning();
+  const { data: user } = useCurrentUser();
+  // Alterar ou excluir um evento já lançado é só do financeiro; o líder lança eventos novos.
+  const canEditRows = canAdd && !!user?.isFinanceiro;
   const { data: events, isLoading } = useEvents(versionId, unitId);
   const { data: products } = useProducts();
   const queryClient = useQueryClient();
@@ -89,9 +92,15 @@ function EventosPage() {
     <div className="space-y-4">
       <PageHeader
         title="Eventos e treinamentos"
-        subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"}${canEdit ? "" : ` · ${lockReason}`}`}
+        subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"}${
+          canEditRows
+            ? ""
+            : canAdd
+              ? " · Você adiciona eventos novos; para corrigir ou excluir, peça ao financeiro."
+              : ` · ${lockReason}`
+        }`}
         actions={
-          canEdit && (
+          canAdd && (
             <Button size="sm" className="gap-1.5" onClick={() => setEditing("new")}>
               <Plus className="h-4 w-4" /> Adicionar evento
             </Button>
@@ -153,7 +162,7 @@ function EventosPage() {
                       {fmtBRL(margin)}
                     </td>
                     <td className="px-1">
-                      {canEdit && (
+                      {canEditRows && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -231,7 +240,6 @@ function EventDialog({
   onClose: () => void;
 }) {
   const { versionId, unitId } = usePlanning();
-  const { data: user } = useCurrentUser();
   const { data: accounts } = useAccounts();
   const { data: products } = useProducts();
   const { data: revenueTypes } = useRevenueTypes();
@@ -304,13 +312,22 @@ function EventDialog({
       revenue_account_id: revenueAccountId!,
       cost_account_id: costAccountId!,
     };
+    // Criar passa pela função do banco (o líder só lança eventos novos); editar é só do financeiro.
     const { error } = event
       ? await supabase.from("events").update(row).eq("id", event.id)
-      : await supabase.from("events").insert({
-          ...row,
-          version_id: versionId!,
-          unit_id: unitId!,
-          created_by: user?.id ?? null,
+      : await supabase.rpc("launch_event", {
+          _version_id: versionId!,
+          _unit_id: unitId!,
+          _product_id: row.product_id as string,
+          _revenue_type_id: row.revenue_type_id,
+          _name: row.name,
+          _month: row.month,
+          _quantity: row.quantity,
+          _price: row.price,
+          _cost_per_participant: row.cost_per_participant,
+          _fixed_cost: row.fixed_cost,
+          _revenue_account_id: row.revenue_account_id,
+          _cost_account_id: row.cost_account_id,
         });
     if (error) {
       toast.error(friendlyError(error.message));

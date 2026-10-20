@@ -1,7 +1,7 @@
 -- Testes do modelo da Fase 1: cálculo da DRE, cenários, acesso por perfil e travas.
 -- Rodar com: supabase test db
 BEGIN;
-SELECT plan(31);
+SELECT plan(32);
 
 -- ───────────── Fixtures (como postgres, sem RLS) ─────────────
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
@@ -110,17 +110,15 @@ SELECT pg_temp.login('lid');
 SELECT is(pg_temp.dre('realista', 'receita_bruta', 1), 13000.0000, 'Líder: a DRE só soma as unidades dele');
 SELECT is((SELECT count(*)::INT FROM profiles), 1, 'D6: líder só vê o próprio perfil');
 SELECT lives_ok($$
-  INSERT INTO plan_lines (version_id, unit_id, account_id, description)
-  VALUES (pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Marketing'), 'lider ok')
+  SELECT launch_line(pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Marketing'), 'lider ok', NULL, NULL, NULL,
+    '[{"month": 1, "amount": 100}]'::JSONB)
 $$, 'Líder lança despesa na própria unidade');
 SELECT throws_ok($$
-  INSERT INTO plan_lines (version_id, unit_id, account_id, description)
-  VALUES (pg_temp.id('versao'), pg_temp.id('agencia'), pg_temp.acc('Marketing'), 'x')
-$$, '42501', NULL, 'Líder não lança em outra unidade');
+  SELECT launch_line(pg_temp.id('versao'), pg_temp.id('agencia'), pg_temp.acc('Marketing'), 'x', NULL, NULL, NULL)
+$$, 'P0001', NULL, 'Líder não lança em outra unidade');
 SELECT throws_ok($$
-  INSERT INTO plan_lines (version_id, unit_id, account_id, description)
-  VALUES (pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Rescisões'), 'x')
-$$, '42501', NULL, 'Líder não lança folha');
+  SELECT launch_line(pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Rescisões'), 'x', NULL, NULL, NULL)
+$$, 'P0001', NULL, 'Líder não lança folha');
 SELECT throws_ok($$ SELECT set_official_scenario(pg_temp.id('conservador')) $$, 'P0001', NULL,
   'Líder não define o cenário oficial');
 
@@ -128,9 +126,8 @@ SELECT throws_ok($$ SELECT set_official_scenario(pg_temp.id('conservador')) $$, 
 SELECT lives_ok($$ SELECT set_unit_status(pg_temp.id('versao'), pg_temp.id('consultoria'), 'enviado') $$,
   'Líder envia a unidade');
 SELECT throws_ok($$
-  INSERT INTO plan_values (line_id, month, amount)
-  SELECT id, 2, 1 FROM plan_lines WHERE description = 'lider ok'
-$$, 'P0001', NULL, 'Depois de enviar, o líder não altera');
+  SELECT launch_line(pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Marketing'), 'depois do envio', NULL, NULL, NULL)
+$$, 'P0001', NULL, 'Depois de enviar, o líder não lança mais');
 RESET ROLE;
 
 SELECT pg_temp.login('vp');
@@ -150,9 +147,9 @@ RESET ROLE;
 
 SELECT pg_temp.login('lid');
 SELECT lives_ok($$
-  INSERT INTO plan_values (line_id, month, amount)
-  SELECT id, 2, 1 FROM plan_lines WHERE description = 'lider ok'
-$$, 'Unidade devolvida volta a aceitar lançamentos do líder');
+  SELECT launch_line(pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Marketing'), 'depois da devolução', NULL, NULL, NULL)
+$$, 'Unidade devolvida volta a aceitar lançamentos novos do líder');
+SELECT is((SELECT count(*)::INT FROM plan_lines WHERE description = 'depois da devolução'), 1, 'A linha nova existe');
 RESET ROLE;
 
 -- ───────────── Último financeiro ─────────────
