@@ -84,8 +84,11 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
   const { setValues } = usePlanMutations();
   const [dialog, setDialog] = useState<Dialogs>(null);
 
-  // Folha: só o financeiro lança (as regras do banco garantem o mesmo).
-  const canEdit = unitEditable && (kind !== "folha" || !!user?.isFinanceiro);
+  // Folha: só o financeiro lança. Alterar ou excluir o que já foi lançado também é só do financeiro;
+  // o líder adiciona linhas novas (as regras do banco garantem o mesmo).
+  const isFin = !!user?.isFinanceiro;
+  const canAdd = unitEditable && (kind !== "folha" || isFin);
+  const canEditRows = unitEditable && isFin;
   const accountMap = byId(accounts);
   const clientMap = byId(clients);
   const productMap = byId(products);
@@ -112,11 +115,13 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {canEdit
+          {canEditRows
             ? "Clique numa célula para editar. Enter/setas navegam; cole uma faixa copiada do Excel."
-            : (lockReason ?? (kind === "folha" ? "Somente o financeiro edita a folha." : ""))}
+            : canAdd
+              ? "Você adiciona linhas novas. Para corrigir ou excluir uma linha já lançada, peça ao financeiro."
+              : (lockReason ?? (kind === "folha" ? "Somente o financeiro edita a folha." : ""))}
         </p>
-        {canEdit && (
+        {canAdd && (
           <Button
             size="sm"
             className="gap-1.5"
@@ -177,7 +182,7 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
                       <td key={i} className="border-l border-border/50 p-0">
                         <MoneyCell
                           value={line.values.get(i + 1) ?? 0}
-                          disabled={!canEdit}
+                          disabled={!canEditRows}
                           pos={{ grid, row: r, col: i }}
                           onCommit={(v) => setValues(line.id, [{ month: i + 1, amount: v }])}
                           onPasteBlock={(block) => pasteBlock(r, i + 1, block)}
@@ -188,7 +193,7 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
                       {fmtBRL(total)}
                     </td>
                     <td className="px-1">
-                      {canEdit && (
+                      {canEditRows && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -273,7 +278,6 @@ function LineDialog({
   onClose: () => void;
 }) {
   const { versionId, unitId } = usePlanning();
-  const { data: user } = useCurrentUser();
   const { data: accounts } = useAccounts();
   const { data: clients } = useClients();
   const { data: products } = useProducts();
@@ -372,7 +376,7 @@ function LineDialog({
     } else {
       ok =
         (await addLine(
-          { ...fields, version_id: versionId!, unit_id: unitId!, created_by: user?.id ?? null },
+          { ...fields, version_id: versionId!, unit_id: unitId! },
           plan?.schedule ?? [],
         )) !== null;
     }

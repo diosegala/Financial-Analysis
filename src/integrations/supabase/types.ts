@@ -1188,6 +1188,36 @@ export type Database = {
         Args: { _unit_id: string; _user_id: string }
         Returns: boolean
       }
+      launch_event: {
+        Args: {
+          _cost_account_id: string
+          _cost_per_participant: number
+          _fixed_cost: number
+          _month: number
+          _name: string
+          _price: number
+          _product_id: string
+          _quantity: number
+          _revenue_account_id: string
+          _revenue_type_id: string
+          _unit_id: string
+          _version_id: string
+        }
+        Returns: string
+      }
+      launch_line: {
+        Args: {
+          _account_id: string
+          _client_id: string
+          _description: string
+          _product_id: string
+          _revenue_type_id: string
+          _unit_id: string
+          _values?: Json
+          _version_id: string
+        }
+        Returns: string
+      }
       param_value: {
         Args: {
           _contract_type_id: string

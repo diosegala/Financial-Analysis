@@ -6,6 +6,16 @@ import { friendlyError } from "./catalog";
 
 export type AccountKind = "receita" | "despesa" | "folha";
 
+export interface NewLine {
+  version_id: string;
+  unit_id: string;
+  account_id: string;
+  description?: string | null;
+  client_id?: string | null;
+  product_id?: string | null;
+  revenue_type_id?: string | null;
+}
+
 export type PlanLine = Tables<"plan_lines"> & {
   /** month (1–12) → amount */
   values: Map<number, number>;
@@ -59,15 +69,29 @@ export function usePlanMutations() {
     return true;
   }
 
+  /**
+   * Cria a linha já com os meses. Passa pela função launch_line do banco: o líder só consegue lançar
+   * linhas novas; alterar ou excluir o que já foi lançado é do financeiro.
+   */
   async function addLine(
-    line: TablesInsert<"plan_lines">,
+    line: NewLine,
     values: { month: number; amount: number }[] = [],
-  ) {
-    const { data, error } = await supabase.from("plan_lines").insert(line).select("id").single();
+  ): Promise<string | null> {
+    // As colunas opcionais aceitam null; os tipos gerados as marcam como obrigatórias.
+    const orNull = <T>(v: T | null | undefined) => (v ?? null) as T;
+    const { data, error } = await supabase.rpc("launch_line", {
+      _version_id: line.version_id,
+      _unit_id: line.unit_id,
+      _account_id: line.account_id,
+      _description: orNull(line.description),
+      _client_id: orNull(line.client_id),
+      _product_id: orNull(line.product_id),
+      _revenue_type_id: orNull(line.revenue_type_id),
+      _values: values,
+    });
     if (fail(error) || !data) return null;
-    if (values.length > 0) await setValues(data.id, values);
-    else await refresh();
-    return data.id;
+    await refresh();
+    return data;
   }
 
   async function updateLine(id: string, patch: TablesUpdate<"plan_lines">) {
