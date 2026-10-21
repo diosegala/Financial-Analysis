@@ -34,3 +34,5 @@ jobs:
         run: supabase db start
       - name: Testes do banco (pgTAP)
         run: supabase test db
+      - name: Backup e restauração (ida e volta)
+        run: bash scripts/test-backup-roundtrip.sh

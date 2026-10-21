@@ -34,3 +34,7 @@ dist-ssr
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
+
+# Backups nunca vão para o repositório
+backups/
+*.dump
