@@ -25,7 +25,7 @@ cd ~/Financial-Analysis
 bun run backup
 ```
 
-Por padrão, grava em `Google Drive/Backups CUPOLA/Planejamento Financeiro/`. O Google Drive para computador sincroniza a pasta sozinho. Para gravar em outro lugar: `BACKUP_DIR="/caminho/da/pasta" bun run backup`.
+Por padrão, grava em `Meu Drive/Backups CUPOLA/Planejamento Financeiro/`, no Google Drive para computador. O Google Drive para computador sincroniza a pasta sozinho. Para gravar em outro lugar: `BACKUP_DIR="/caminho/da/pasta" bun run backup`.
 
 **Frequência sugerida:** uma vez por dia enquanto os líderes estiverem lançando (até 10/11) e uma vez por semana depois. Antes de qualquer mudança grande, faça um backup.
 

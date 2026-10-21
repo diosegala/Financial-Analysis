@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Backup manual do banco do planejamento financeiro, pronto para guardar no Google Drive.
 #
-#   bash scripts/backup.sh                     # projeto real (precisa de `supabase login` e `supabase link`)
+#   bash scripts/backup.sh                     # projeto real, gravando no Meu Drive (precisa de `supabase login` e `supabase link`)
 #   SOURCE=local bash scripts/backup.sh        # banco local, para testes
 #   BACKUP_DIR="/outra/pasta" bash scripts/backup.sh
 #
@@ -13,7 +13,19 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SOURCE="${SOURCE:-linked}"
-DEST_ROOT="${BACKUP_DIR:-$HOME/Google Drive/Backups CUPOLA/Planejamento Financeiro}"
+# Sem BACKUP_DIR, grava no "Meu Drive" do Google Drive para computador (a raiz do Drive não aceita pastas).
+if [ -n "${BACKUP_DIR:-}" ]; then
+  DEST_ROOT="$BACKUP_DIR"
+else
+  DEST_ROOT=""
+  for drive in "$HOME/Google Drive/Meu Drive" "$HOME/Google Drive/My Drive"; do
+    if [ -d "$drive" ]; then DEST_ROOT="$drive/Backups CUPOLA/Planejamento Financeiro"; break; fi
+  done
+  if [ -z "$DEST_ROOT" ]; then
+    echo "Google Drive para computador não encontrado. Defina BACKUP_DIR com a pasta de destino." >&2
+    exit 1
+  fi
+fi
 OUT="$DEST_ROOT/$(date +%Y-%m-%d_%H%M)"
 FLAG="--$SOURCE"
 
