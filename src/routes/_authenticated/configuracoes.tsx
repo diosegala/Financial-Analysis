@@ -570,6 +570,14 @@ function CalcRulesTab() {
           emptyLabel: "Todos",
         },
         {
+          key: "exclude_revenue_type_ids",
+          label: "Exceto os tipos de receita",
+          type: "multi",
+          options: opts(types),
+          emptyLabel: "Nenhum",
+          hint: "Todos os tipos entram, menos estes. Um tipo criado depois já entra na regra sozinho.",
+        },
+        {
           key: "contract_type_ids",
           label: "Só os vínculos",
           type: "multi",

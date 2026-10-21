@@ -33,12 +33,12 @@ $$, 'Líder lança uma receita nova já com os meses');
 SELECT is((SELECT count(*)::INT FROM plan_values v JOIN plan_lines l ON l.id = v.line_id WHERE l.description = 'Contrato A'), 2,
   'Os dois meses foram gravados');
 SELECT lives_ok($$
-  SELECT launch_event(pg_temp.id('versao'), pg_temp.id('consultoria'), NULL, pg_temp.rt('Educação'), 'Workshop', 5,
-    20, 500, 100, 2000, pg_temp.acc('Receita de educação'), pg_temp.acc('Despesas de produtos'))
-$$, 'Líder lança um evento novo');
+  SELECT launch_event(pg_temp.id('versao'), pg_temp.id('consultoria'), NULL, 'Workshop', 5,
+    ('[{"account_id": "' || pg_temp.acc('Receita de educação') || '", "description": "Ingressos",
+        "revenue_type_id": "' || pg_temp.rt('Educação') || '", "values": [{"month": 5, "amount": 10000}]}]')::JSONB)
+$$, 'Líder lança um evento novo, já com um item');
 SELECT throws_ok($$
-  SELECT launch_event(pg_temp.id('versao'), pg_temp.id('agencia'), NULL, pg_temp.rt('Educação'), 'Evento alheio', 5,
-    1, 1, 0, 0, pg_temp.acc('Receita de educação'), pg_temp.acc('Despesas de produtos'))
+  SELECT launch_event(pg_temp.id('versao'), pg_temp.id('agencia'), NULL, 'Evento alheio', 5)
 $$, 'P0001', NULL, 'Líder não lança evento de outra unidade');
 
 -- ───────────── Líder não escreve direto nem edita ─────────────
@@ -55,8 +55,8 @@ UPDATE plan_lines SET description = 'Renomeada' WHERE description = 'Contrato A'
 SELECT is((SELECT count(*)::INT FROM plan_lines WHERE description = 'Contrato A'), 1, 'Líder não edita a linha');
 DELETE FROM plan_lines WHERE description = 'Contrato A';
 SELECT is((SELECT count(*)::INT FROM plan_lines WHERE description = 'Contrato A'), 1, 'Líder não exclui a linha');
-UPDATE events SET price = 1 WHERE name = 'Workshop';
-SELECT is((SELECT price FROM events WHERE name = 'Workshop'), 500::NUMERIC, 'Líder não edita o evento');
+UPDATE events SET name = 'Renomeado' WHERE name = 'Workshop';
+SELECT is((SELECT count(*)::INT FROM events WHERE name = 'Workshop'), 1, 'Líder não edita o evento');
 DELETE FROM events WHERE name = 'Workshop';
 SELECT is((SELECT count(*)::INT FROM events WHERE name = 'Workshop'), 1, 'Líder não exclui o evento');
 RESET ROLE;
@@ -65,15 +65,15 @@ RESET ROLE;
 SELECT pg_temp.login('fin');
 UPDATE plan_values SET amount = 6000 WHERE amount = 5000 AND month = 3;
 SELECT is((SELECT amount FROM plan_values WHERE amount = 6000), 6000::NUMERIC, 'Financeiro altera o valor lançado');
-UPDATE events SET price = 600 WHERE name = 'Workshop';
-SELECT is((SELECT price FROM events WHERE name = 'Workshop'), 600::NUMERIC, 'Financeiro edita o evento');
+UPDATE events SET name = 'Workshop 2' WHERE name = 'Workshop';
+SELECT is((SELECT count(*)::INT FROM events WHERE name = 'Workshop 2'), 1, 'Financeiro edita o evento');
 SELECT lives_ok($$
   SELECT launch_line(pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Salários CLT'), 'Folha extra', NULL, NULL, NULL)
 $$, 'Financeiro lança folha');
 DELETE FROM plan_lines WHERE description = 'Contrato A';
 SELECT is((SELECT count(*)::INT FROM plan_lines WHERE description = 'Contrato A'), 0, 'Financeiro exclui a linha');
-DELETE FROM events WHERE name = 'Workshop';
-SELECT is((SELECT count(*)::INT FROM events WHERE name = 'Workshop'), 0, 'Financeiro exclui o evento');
+DELETE FROM events WHERE name = 'Workshop 2';
+SELECT is((SELECT count(*)::INT FROM events WHERE name = 'Workshop 2'), 0, 'Financeiro exclui o evento');
 RESET ROLE;
 
 SELECT * FROM finish();

@@ -14,6 +14,7 @@ export interface NewLine {
   client_id?: string | null;
   product_id?: string | null;
   revenue_type_id?: string | null;
+  event_id?: string | null;
 }
 
 export type PlanLine = Tables<"plan_lines"> & {
@@ -21,17 +22,29 @@ export type PlanLine = Tables<"plan_lines"> & {
   values: Map<number, number>;
 };
 
-export function usePlanLines(versionId: string | null, unitId: string | null, kind: AccountKind) {
+/**
+ * Linhas de uma grade. Sem `eventId`, só as linhas avulsas (os itens de evento aparecem em Eventos);
+ * com `eventId`, só os itens daquele evento.
+ */
+export function usePlanLines(
+  versionId: string | null,
+  unitId: string | null,
+  kind: AccountKind,
+  eventId: string | null = null,
+) {
   return useQuery({
-    queryKey: ["plan_lines", versionId, unitId, kind],
+    queryKey: ["plan_lines", versionId, unitId, kind, eventId],
     enabled: !!versionId && !!unitId,
     queryFn: async (): Promise<PlanLine[]> => {
-      const { data, error } = await supabase
+      const base = supabase
         .from("plan_lines")
         .select("*, plan_values(month, amount), accounts!inner(kind)")
         .eq("version_id", versionId!)
         .eq("unit_id", unitId!)
-        .eq("accounts.kind", kind)
+        .eq("accounts.kind", kind);
+      const { data, error } = await (
+        eventId ? base.eq("event_id", eventId) : base.is("event_id", null)
+      )
         .order("sort_order")
         .order("created_at");
       if (error) throw error;
@@ -49,6 +62,7 @@ export function usePlanMutations() {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["plan_lines"] }),
       queryClient.invalidateQueries({ queryKey: ["dre"] }),
+      queryClient.invalidateQueries({ queryKey: ["event_items"] }),
     ]);
 
   function fail(error: { message: string } | null) {
@@ -88,6 +102,7 @@ export function usePlanMutations() {
       _product_id: orNull(line.product_id),
       _revenue_type_id: orNull(line.revenue_type_id),
       _values: values,
+      _event_id: orNull(line.event_id),
     });
     if (fail(error) || !data) return null;
     await refresh();

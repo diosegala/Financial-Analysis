@@ -174,6 +174,7 @@ export type Database = {
           base_kind: string
           contract_type_ids: string[] | null
           created_at: string
+          exclude_revenue_type_ids: string[] | null
           id: string
           name: string
           parameter_definition_id: string
@@ -188,6 +189,7 @@ export type Database = {
           base_kind: string
           contract_type_ids?: string[] | null
           created_at?: string
+          exclude_revenue_type_ids?: string[] | null
           id?: string
           name: string
           parameter_definition_id: string
@@ -202,6 +204,7 @@ export type Database = {
           base_kind?: string
           contract_type_ids?: string[] | null
           created_at?: string
+          exclude_revenue_type_ids?: string[] | null
           id?: string
           name?: string
           parameter_definition_id?: string
@@ -354,86 +357,44 @@ export type Database = {
       }
       events: {
         Row: {
-          cost_account_id: string
-          cost_per_participant: number
           created_at: string
           created_by: string | null
-          fixed_cost: number
           id: string
           month: number
           name: string
-          price: number
           product_id: string | null
-          quantity: number
-          revenue_account_id: string
-          revenue_type_id: string
           unit_id: string
           updated_at: string
           version_id: string
         }
         Insert: {
-          cost_account_id: string
-          cost_per_participant?: number
           created_at?: string
           created_by?: string | null
-          fixed_cost?: number
           id?: string
           month: number
           name: string
-          price?: number
           product_id?: string | null
-          quantity?: number
-          revenue_account_id: string
-          revenue_type_id: string
           unit_id: string
           updated_at?: string
           version_id: string
         }
         Update: {
-          cost_account_id?: string
-          cost_per_participant?: number
           created_at?: string
           created_by?: string | null
-          fixed_cost?: number
           id?: string
           month?: number
           name?: string
-          price?: number
           product_id?: string | null
-          quantity?: number
-          revenue_account_id?: string
-          revenue_type_id?: string
           unit_id?: string
           updated_at?: string
           version_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "events_cost_account_id_fkey"
-            columns: ["cost_account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "events_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_revenue_account_id_fkey"
-            columns: ["revenue_account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "events_revenue_type_id_fkey"
-            columns: ["revenue_type_id"]
-            isOneToOne: false
-            referencedRelation: "revenue_types"
             referencedColumns: ["id"]
           },
           {
@@ -646,6 +607,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          event_id: string | null
           id: string
           origin: string
           product_id: string | null
@@ -661,6 +623,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          event_id?: string | null
           id?: string
           origin?: string
           product_id?: string | null
@@ -676,6 +639,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          event_id?: string | null
           id?: string
           origin?: string
           product_id?: string | null
@@ -698,6 +662,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
@@ -1190,16 +1161,10 @@ export type Database = {
       }
       launch_event: {
         Args: {
-          _cost_account_id: string
-          _cost_per_participant: number
-          _fixed_cost: number
+          _lines?: Json
           _month: number
           _name: string
-          _price: number
           _product_id: string
-          _quantity: number
-          _revenue_account_id: string
-          _revenue_type_id: string
           _unit_id: string
           _version_id: string
         }
@@ -1210,6 +1175,7 @@ export type Database = {
           _account_id: string
           _client_id: string
           _description: string
+          _event_id?: string
           _product_id: string
           _revenue_type_id: string
           _unit_id: string
