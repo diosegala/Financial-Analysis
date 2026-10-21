@@ -20,6 +20,7 @@ import {
   type PriceModel,
 } from "@/lib/products";
 import { norm } from "@/lib/products-import";
+import type { PlanEvent } from "@/lib/events";
 import {
   adjustFrom,
   monthRange,
@@ -63,6 +64,8 @@ import {
 interface PlanGridProps {
   kind: AccountKind;
   emptyText: string;
+  /** Mostra os itens deste evento (em vez das linhas avulsas) e cria os novos dentro dele. */
+  event?: PlanEvent | null;
 }
 
 type Dialogs =
@@ -73,10 +76,10 @@ type Dialogs =
   | null;
 
 /** Spreadsheet grid of plan lines × 12 months for one account kind of the selected unit/version. */
-export function PlanGrid({ kind, emptyText }: PlanGridProps) {
+export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
   const { versionId, unitId, canEdit: unitEditable, lockReason } = usePlanning();
   const { data: user } = useCurrentUser();
-  const { data: lines, isLoading } = usePlanLines(versionId, unitId, kind);
+  const { data: lines, isLoading } = usePlanLines(versionId, unitId, kind, event?.id ?? null);
   const { data: accounts } = useAccounts();
   const { data: clients } = useClients();
   const { data: products } = useProducts();
@@ -93,7 +96,7 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
   const clientMap = byId(clients);
   const productMap = byId(products);
   const typeMap = byId(revenueTypes);
-  const grid = `grid-${kind}`;
+  const grid = `grid-${kind}-${event?.id ?? "avulso"}`;
   const rows = lines ?? [];
 
   function pasteBlock(rowIndex: number, month: number, block: string[][]) {
@@ -164,7 +167,10 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
                   line.description ||
                   [clientName, productName].filter(Boolean).join(" — ") ||
                   accountName;
-                const sub = [accountName, type?.name].filter(Boolean);
+                // O cliente (ou patrocinador) já está no título quando a linha não tem descrição.
+                const sub = [accountName, type?.name, line.description ? clientName : null].filter(
+                  Boolean,
+                );
                 return (
                   <tr key={line.id} className="border-b border-border last:border-0">
                     <td className="sticky left-0 z-10 bg-card px-3 py-1">
@@ -255,7 +261,7 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
       )}
 
       {dialog?.type === "line" && (
-        <LineDialog kind={kind} line={dialog.line} onClose={() => setDialog(null)} />
+        <LineDialog kind={kind} line={dialog.line} event={event} onClose={() => setDialog(null)} />
       )}
       {dialog?.type === "fill" && <FillDialog line={dialog.line} onClose={() => setDialog(null)} />}
       {dialog?.type === "adjust" && (
@@ -268,13 +274,55 @@ export function PlanGrid({ kind, emptyText }: PlanGridProps) {
   );
 }
 
+/** Doze campos, um por mês, para quem precisa de uma distribuição que não seja igual entre os meses. */
+function MonthlyEditor({
+  values,
+  total,
+  onChange,
+  onReset,
+}: {
+  values: string[];
+  total: number;
+  onChange: (index: number, text: string) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <div className="grid grid-cols-6 gap-2">
+        {MONTHS.map((m, i) => (
+          <label key={m} className="text-xs text-muted-foreground">
+            {m}
+            <Input
+              value={values[i] ?? ""}
+              onChange={(e) => onChange(i, e.target.value)}
+              aria-label={`Valor de ${m}`}
+              className="mt-0.5 h-8 px-2 text-right font-mono text-xs"
+            />
+          </label>
+        ))}
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span>
+          Total: <strong>{fmtBRL(total)}</strong>
+        </span>
+        <Button variant="ghost" size="sm" onClick={onReset}>
+          Voltar ao automático
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function LineDialog({
   kind,
   line,
+  event,
   onClose,
 }: {
   kind: AccountKind;
   line: PlanLine | null;
+  /** Quando preenchido, a linha é um item deste evento. */
+  event: PlanEvent | null;
   onClose: () => void;
 }) {
   const { versionId, unitId } = usePlanning();
@@ -285,6 +333,7 @@ function LineDialog({
   const { addLine, updateLine } = usePlanMutations();
   const queryClient = useQueryClient();
   const isRevenue = kind === "receita";
+  const inEvent = !!event;
 
   const options = (accounts ?? []).filter(
     (a) => a.kind === kind && a.active && (!a.unit_ids || a.unit_ids.includes(unitId!)),
@@ -306,26 +355,64 @@ function LineDialog({
   const [productId, setProductId] = useState<string | null>(line?.product_id ?? null);
   const [revenueTypeId, setRevenueTypeId] = useState<string | null>(line?.revenue_type_id ?? null);
   const [amount, setAmount] = useState("");
-  const [startMonth, setStartMonth] = useState<number | null>(1);
-  const [months, setMonths] = useState<string>("");
+  const [quantity, setQuantity] = useState("1");
+  const [startMonth, setStartMonth] = useState<number | null>(event?.month ?? 1);
+  const [months, setMonths] = useState<string>(inEvent ? "1" : "");
+  const [manual, setManual] = useState<string[] | null>(null);
   const [saving, setSaving] = useState(false);
 
   const product = productOptions.find((p) => p.id === productId);
   const type = (revenueTypes ?? []).find((t) => t.id === revenueTypeId);
   const model = (product?.price_model ?? "mensal") as PriceModel;
   const priceNum = amount.trim() === "" ? null : parseNum(amount);
+  const quantityNum = quantity.trim() === "" ? null : parseNum(quantity);
   const monthsNum = months.trim() === "" ? null : Number(months);
   const defaultMonths =
     product?.duration_months ?? type?.recurrence_months ?? type?.max_months ?? null;
 
-  // Prévia do que será lançado: preço e prazo do produto (ou os digitados), a partir do mês de início.
-  const plan =
-    !line && priceNum !== null && priceNum >= 0 && startMonth !== null
-      ? contractPlan(
-          { price: priceNum, price_model: model, duration_months: monthsNum ?? defaultMonths },
-          startMonth,
-        )
+  // Item de evento: quantidade × valor unitário, dividido em parcelas iguais. Linha comum: preço e prazo do
+  // produto (ou os digitados). Nos dois casos, a partir do mês de início.
+  const eventTotal =
+    priceNum !== null && quantityNum !== null && quantityNum >= 0
+      ? Math.round(priceNum * quantityNum * 100) / 100
       : null;
+  const plan =
+    !line && startMonth !== null
+      ? inEvent
+        ? eventTotal !== null && eventTotal >= 0
+          ? contractPlan(
+              { price: eventTotal, price_model: "total", duration_months: monthsNum ?? 1 },
+              startMonth,
+            )
+          : null
+        : priceNum !== null && priceNum >= 0
+          ? contractPlan(
+              { price: priceNum, price_model: model, duration_months: monthsNum ?? defaultMonths },
+              startMonth,
+            )
+          : null
+      : null;
+
+  // Ajuste mês a mês: sobrepõe a distribuição automática.
+  const manualParsed = manual
+    ? manual.map((t, i) => ({ month: i + 1, value: t.trim() === "" ? 0 : parseNum(t) }))
+    : null;
+  const manualInvalid = !!manualParsed?.some((m) => m.value === null);
+  const schedule = manualParsed
+    ? manualParsed
+        .filter((m) => m.value !== null && m.value !== 0)
+        .map((m) => ({ month: m.month, amount: m.value as number }))
+    : (plan?.schedule ?? []);
+  const scheduleTotal = Math.round(schedule.reduce((a, m) => a + m.amount, 0) * 100) / 100;
+
+  function openManual() {
+    setManual(
+      MONTHS.map((_, i) => {
+        const m = plan?.schedule.find((x) => x.month === i + 1);
+        return m ? inputOf(m.amount) : "";
+      }),
+    );
+  }
 
   function pickProduct(id: string | null) {
     setProductId(id);
@@ -367,7 +454,7 @@ function LineDialog({
       account_id: accountId,
       description: description.trim() || null,
       client_id: clientId,
-      product_id: isRevenue ? productId : null,
+      product_id: isRevenue ? (inEvent ? event.product_id : productId) : null,
       revenue_type_id: isRevenue ? revenueTypeId : null,
     };
     let ok: boolean;
@@ -376,8 +463,13 @@ function LineDialog({
     } else {
       ok =
         (await addLine(
-          { ...fields, version_id: versionId!, unit_id: unitId! },
-          plan?.schedule ?? [],
+          {
+            ...fields,
+            version_id: versionId!,
+            unit_id: unitId!,
+            event_id: event?.id ?? null,
+          },
+          schedule,
         )) !== null;
     }
     setSaving(false);
@@ -385,6 +477,7 @@ function LineDialog({
   }
 
   const needsType = isRevenue && !revenueTypeId;
+  const needsDescription = inEvent && description.trim() === "";
   const valueLabel =
     !isRevenue || model === "mensal"
       ? "Valor por mês"
@@ -392,121 +485,219 @@ function LineDialog({
         ? "Valor do contrato"
         : "Valor (cobrado uma vez)";
 
-  const detailFields = (
-    <div className="grid gap-3">
-      <Field label="Conta">
-        <OptionSelect
-          value={accountId}
-          onChange={setAccountId}
-          options={options.map((a) => ({ value: a.id, label: a.name }))}
-        />
-      </Field>
-      {isRevenue && (
-        <Field label="Tipo de receita" hint="Define a recorrência e a base da comissão.">
-          <OptionSelect
-            value={revenueTypeId}
-            onChange={setRevenueTypeId}
-            options={(revenueTypes ?? [])
-              .filter((t) => t.active)
-              .map((t) => ({ value: t.id, label: t.name }))}
-          />
-        </Field>
-      )}
-      <Field label="Descrição" hint="Opcional. Ex.: contrato, fornecedor ou observação.">
-        <Input value={description} onChange={(e) => setDescription(e.target.value)} />
-      </Field>
-    </div>
+  const accountField = (
+    <Field label={inEvent ? "Categoria" : "Conta"}>
+      <OptionSelect
+        value={accountId}
+        onChange={setAccountId}
+        options={options.map((a) => ({ value: a.id, label: a.name }))}
+      />
+    </Field>
   );
+  const typeField = isRevenue && (
+    <Field
+      label="Tipo de receita"
+      hint={
+        inEvent
+          ? "Ex.: Ingressos ou Patrocínio. Define a comissão e separa o resultado do evento por origem."
+          : "Define a recorrência e a base da comissão."
+      }
+    >
+      <OptionSelect
+        value={revenueTypeId}
+        onChange={setRevenueTypeId}
+        options={(revenueTypes ?? [])
+          .filter((t) => t.active)
+          .map((t) => ({ value: t.id, label: t.name }))}
+      />
+    </Field>
+  );
+  const descriptionField = (
+    <Field
+      label={inEvent ? "Item" : "Descrição"}
+      hint={
+        inEvent
+          ? "Ex.: Ingressos lote 1, Patrocínio Ouro, Local, Alimentação."
+          : "Opcional. Ex.: contrato, fornecedor ou observação."
+      }
+    >
+      <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+    </Field>
+  );
+  const clientField = isRevenue && (
+    <Field
+      label={inEvent ? "Patrocinador ou cliente" : "Cliente"}
+      hint="Escolha da lista ou digite o nome de um novo."
+    >
+      <Input
+        list="clients-list"
+        value={clientName}
+        onChange={(e) => setClientName(e.target.value)}
+        placeholder={inEvent ? "Nome do patrocinador ou cliente" : "Nome do cliente"}
+      />
+      <datalist id="clients-list">
+        {(clients ?? [])
+          .filter((c) => c.active)
+          .map((c) => (
+            <option key={c.id} value={c.name} />
+          ))}
+      </datalist>
+    </Field>
+  );
+
+  const title = line
+    ? "Editar linha"
+    : inEvent
+      ? isRevenue
+        ? "Novo item de receita"
+        : "Novo item de custo"
+      : "Nova linha";
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{line ? "Editar linha" : "Nova linha"}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
-          {isRevenue && (
+          {inEvent ? (
             <>
-              <Field
-                label="Produto"
-                hint={
-                  productOptions.length === 0
-                    ? "Nenhum produto cadastrado para esta unidade. O financeiro cadastra em Produtos."
-                    : "O preço e o prazo do produto são preenchidos sozinhos."
-                }
-              >
-                <OptionSelect
-                  value={productId}
-                  onChange={pickProduct}
-                  noneLabel="Sem produto (lançamento avulso)"
-                  options={productOptions.map((p) => ({
-                    value: p.id,
-                    label: `${p.name} — ${describePrice(p)}`,
-                  }))}
-                />
-              </Field>
-              <Field label="Cliente" hint="Escolha da lista ou digite o nome de um cliente novo.">
-                <Input
-                  list="clients-list"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Nome do cliente"
-                />
-                <datalist id="clients-list">
-                  {(clients ?? [])
-                    .filter((c) => c.active)
-                    .map((c) => (
-                      <option key={c.id} value={c.name} />
-                    ))}
-                </datalist>
-              </Field>
+              {descriptionField}
+              {accountField}
+              {typeField}
+              {clientField}
             </>
+          ) : (
+            isRevenue && (
+              <>
+                <Field
+                  label="Produto"
+                  hint={
+                    productOptions.length === 0
+                      ? "Nenhum produto cadastrado para esta unidade. Cadastre em Produtos."
+                      : "O preço e o prazo do produto são preenchidos sozinhos."
+                  }
+                >
+                  <OptionSelect
+                    value={productId}
+                    onChange={pickProduct}
+                    noneLabel="Sem produto (lançamento avulso)"
+                    options={productOptions.map((p) => ({
+                      value: p.id,
+                      label: `${p.name} — ${describePrice(p)}`,
+                    }))}
+                  />
+                </Field>
+                {clientField}
+              </>
+            )
           )}
 
           {!line && (
-            <div className="grid grid-cols-3 gap-3 rounded-md border border-border p-3">
-              <Field label="Início">
-                <MonthSelect value={startMonth} onChange={setStartMonth} />
-              </Field>
-              <Field label={valueLabel}>
-                <Input
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder={isRevenue ? "" : "opcional"}
-                  className="font-mono"
-                />
-              </Field>
-              {model !== "unico" && (
-                <Field label="Prazo (meses)">
-                  <Input
-                    value={months}
-                    onChange={(e) => setMonths(e.target.value.replace(/\D/g, ""))}
-                    placeholder={defaultMonths ? String(defaultMonths) : "até dez."}
-                    className="font-mono"
-                  />
-                </Field>
+            <div className="space-y-3 rounded-md border border-border p-3">
+              {inEvent ? (
+                <div className="grid grid-cols-4 gap-3">
+                  <Field label="Quantidade">
+                    <Input
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      className="font-mono"
+                    />
+                  </Field>
+                  <Field label="Valor unitário">
+                    <Input
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="font-mono"
+                    />
+                  </Field>
+                  <Field label="Início">
+                    <MonthSelect value={startMonth} onChange={setStartMonth} />
+                  </Field>
+                  <Field label="Parcelas">
+                    <Input
+                      value={months}
+                      onChange={(e) => setMonths(e.target.value.replace(/\D/g, ""))}
+                      placeholder="1"
+                      className="font-mono"
+                    />
+                  </Field>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="Início">
+                    <MonthSelect value={startMonth} onChange={setStartMonth} />
+                  </Field>
+                  <Field label={valueLabel}>
+                    <Input
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder={isRevenue ? "" : "opcional"}
+                      className="font-mono"
+                    />
+                  </Field>
+                  {model !== "unico" && (
+                    <Field label="Prazo (meses)">
+                      <Input
+                        value={months}
+                        onChange={(e) => setMonths(e.target.value.replace(/\D/g, ""))}
+                        placeholder={defaultMonths ? String(defaultMonths) : "até dez."}
+                        className="font-mono"
+                      />
+                    </Field>
+                  )}
+                </div>
               )}
-              {plan && priceNum !== null && (
-                <p className="col-span-3 text-sm text-muted-foreground">
-                  {describePlan(plan, [...MONTHS])}
+              {manual ? (
+                <MonthlyEditor
+                  values={manual}
+                  total={scheduleTotal}
+                  onChange={(i, t) => setManual((m) => m && m.map((v, k) => (k === i ? t : v)))}
+                  onReset={() => setManual(null)}
+                />
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">
+                    {plan
+                      ? describePlan(plan, [...MONTHS])
+                      : "Informe o valor para ver a distribuição."}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={openManual}>
+                    Ajustar mês a mês
+                  </Button>
+                </div>
+              )}
+              {manualInvalid && (
+                <p className="text-sm text-destructive">
+                  Há um valor inválido na distribuição por mês.
                 </p>
               )}
             </div>
           )}
 
-          {isRevenue ? (
-            <details open={needsType || undefined} className="rounded-md border border-border">
-              <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
-                Mais detalhes{type ? ` · ${type.name}` : ""}
-              </summary>
-              <div className="border-t border-border p-3">{detailFields}</div>
-            </details>
-          ) : (
-            detailFields
-          )}
+          {!inEvent &&
+            (isRevenue ? (
+              <details open={needsType || undefined} className="rounded-md border border-border">
+                <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+                  Mais detalhes{type ? ` · ${type.name}` : ""}
+                </summary>
+                <div className="grid gap-3 border-t border-border p-3">
+                  {accountField}
+                  {typeField}
+                  {descriptionField}
+                </div>
+              </details>
+            ) : (
+              <div className="grid gap-3">
+                {accountField}
+                {descriptionField}
+              </div>
+            ))}
           {needsType && (
             <p className="text-sm text-destructive">
-              Escolha o tipo de receita em “Mais detalhes”, ou selecione um produto que já tenha um.
+              {inEvent
+                ? "Escolha o tipo de receita."
+                : "Escolha o tipo de receita em “Mais detalhes”, ou selecione um produto que já tenha um."}
             </p>
           )}
         </div>
@@ -514,7 +705,10 @@ function LineDialog({
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={save} disabled={saving || !accountId || needsType}>
+          <Button
+            onClick={save}
+            disabled={saving || !accountId || needsType || needsDescription || manualInvalid}
+          >
             {saving ? "Salvando…" : "Salvar"}
           </Button>
         </DialogFooter>
