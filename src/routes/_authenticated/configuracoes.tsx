@@ -473,7 +473,7 @@ function ParameterDefinitionsTab() {
     <CrudTable
       table="parameter_definitions"
       rows={defs ?? []}
-      description="Os valores de cada parâmetro são informados na página Parâmetros. Para percentuais, mínimo e máximo são frações (0,1 = 10%)."
+      description="Prefira a página Parâmetros → Novo parâmetro, que cadastra o parâmetro e o cálculo dele de uma vez. Aqui, mínimo e máximo de percentuais são frações (0,1 = 10%)."
       fields={[
         { key: "label", label: "Nome", type: "text", required: true },
         {
@@ -531,7 +531,7 @@ function CalcRulesTab() {
     <CrudTable
       table="calc_rules"
       rows={rules ?? []}
-      description="Cada regra gera um valor na linha da DRE escolhida: base × parâmetro. Ex.: Comissão comercial = receita (exceto parceiros) × comissão comercial."
+      description="Cada regra gera um valor na linha da DRE escolhida: base × parâmetro. Ex.: Comissão comercial = receita (exceto parceiros) × comissão comercial. Para criar ou editar um parâmetro com o cálculo dele, use a página Parâmetros."
       fields={[
         { key: "name", label: "Nome", type: "text", required: true },
         {

@@ -1,11 +1,16 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Pencil, Plus, Settings2, Trash2 } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
 import {
+  byId,
+  useAccounts,
+  useCalcRules,
   useContractTypes,
+  useDreLines,
   useParameterDefinitions,
   useParameterValues,
   useProducts,
@@ -15,12 +20,15 @@ import {
   type ParameterDefinition,
   type ParameterValue,
 } from "@/lib/catalog";
-import { fmtBRL, parseNum } from "@/lib/format";
+import { fmtBRL, fmtInput, parseNum } from "@/lib/format";
+import { SCOPE_COLUMN, SCOPE_LABELS, describeRule, type Scope } from "@/lib/parameters";
 import { PageHeader } from "@/components/page-header";
+import { ParameterDialog } from "@/components/parameter-dialog";
 import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export const Route = createFileRoute("/_authenticated/parametros")({
   head: pageHead(
@@ -29,20 +37,6 @@ export const Route = createFileRoute("/_authenticated/parametros")({
   ),
   component: ParametrosPage,
 });
-
-type Scope = "unit" | "product" | "contract_type" | "revenue_type";
-const SCOPE_LABELS: Record<Scope, string> = {
-  unit: "Unidade",
-  product: "Produto",
-  contract_type: "Vínculo",
-  revenue_type: "Tipo de receita",
-};
-const SCOPE_COLUMN = {
-  unit: "unit_id",
-  product: "product_id",
-  contract_type: "contract_type_id",
-  revenue_type: "revenue_type_id",
-} as const;
 
 function useScopeOptions() {
   const { data: units } = useUnits();
@@ -68,28 +62,49 @@ function ParametrosPage() {
   const { data: user, isLoading: loadingUser } = useCurrentUser();
   const { data: definitions } = useParameterDefinitions();
   const { data: values } = useParameterValues();
+  const [creating, setCreating] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
 
+  // Só o financeiro cria e edita parâmetros (o banco também recusa os demais perfis).
   if (!loadingUser && user && !user.isFinanceiro) return <Navigate to="/inicio" />;
+
+  const shown = (definitions ?? []).filter((d) => d.active || showInactive);
+  const hasInactive = (definitions ?? []).some((d) => !d.active);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Parâmetros"
         subtitle="Cada valor vale a partir do mês escolhido. O valor mais específico prevalece: um valor por produto e unidade vence o valor por unidade, que vence o geral."
+        actions={
+          <div className="flex items-center gap-3">
+            {hasInactive && (
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Checkbox checked={showInactive} onCheckedChange={(c) => setShowInactive(!!c)} />
+                Mostrar desativados
+              </label>
+            )}
+            <Button size="sm" className="gap-1.5" onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" /> Novo parâmetro
+            </Button>
+          </div>
+        }
       />
-      {(definitions ?? [])
-        .filter((d) => d.active)
-        .map((def) => (
-          <ParameterSection
-            key={def.id}
-            def={def}
-            values={(values ?? []).filter((v) => v.definition_id === def.id)}
-          />
-        ))}
-      <p className="text-xs text-muted-foreground">
-        Para criar novos parâmetros ou mudar como entram no cálculo, use Configurações → Regras de
-        cálculo.
-      </p>
+      {shown.map((def) => (
+        <ParameterSection
+          key={def.id}
+          def={def}
+          values={(values ?? []).filter((v) => v.definition_id === def.id)}
+        />
+      ))}
+      {creating && (
+        <ParameterDialog
+          def={null}
+          values={[]}
+          onClose={() => setCreating(false)}
+          onSaved={() => {}}
+        />
+      )}
     </div>
   );
 }
@@ -97,9 +112,19 @@ function ParametrosPage() {
 function ParameterSection({ def, values }: { def: ParameterDefinition; values: ParameterValue[] }) {
   const { year } = usePlanning();
   const { data: user } = useCurrentUser();
-  const { insert, remove } = useTableMutations("parameter_values");
+  const { insert, update, remove } = useTableMutations("parameter_values");
+  const queryClient = useQueryClient();
+  // Mudou um valor: a DRE em cache deixa de valer e precisa ser recalculada.
+  const refreshDre = () => queryClient.invalidateQueries({ queryKey: ["dre"] });
   const scopeOptions = useScopeOptions();
+  const { data: rules } = useCalcRules();
+  const { data: dreLines } = useDreLines();
+  const { data: revenueTypes } = useRevenueTypes();
+  const { data: contractTypes } = useContractTypes();
+  const { data: accounts } = useAccounts();
   const scopes = def.allowed_scopes.filter((s): s is Scope => s !== "global");
+  const [editingDef, setEditingDef] = useState(false);
+  const [editingValue, setEditingValue] = useState<ParameterValue | null>(null);
   const [scopeIds, setScopeIds] = useState<Partial<Record<Scope, string | null>>>({});
   const [value, setValue] = useState("");
   const [month, setMonth] = useState<number | null>(1);
@@ -107,6 +132,14 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
   const [note, setNote] = useState("");
   const nameOf = (s: Scope, id: string) =>
     scopeOptions[s].find((o) => o.value === id)?.label ?? "?";
+
+  const lookups = {
+    dreLine: (id: string) => byId(dreLines).get(id)?.name,
+    revenueType: (id: string) => byId(revenueTypes).get(id)?.name,
+    contractType: (id: string) => byId(contractTypes).get(id)?.name,
+    account: (id: string) => byId(accounts).get(id)?.name,
+  };
+  const myRules = (rules ?? []).filter((r) => r.parameter_definition_id === def.id);
 
   const parsed = value.trim() === "" ? null : parseNum(value);
   const stored = parsed === null ? null : def.value_type === "percent" ? parsed / 100 : parsed;
@@ -118,25 +151,46 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
   const valid =
     stored !== null && !outOfRange && month !== null && yearNum >= 2000 && yearNum <= 2100;
 
-  async function add() {
-    if (!valid) return;
-    const ok = await insert(
-      {
-        definition_id: def.id,
-        value: stored!,
-        valid_from: `${yearNum}-${String(month).padStart(2, "0")}-01`,
-        unit_id: scopeIds.unit ?? null,
-        product_id: scopeIds.product ?? null,
-        contract_type_id: scopeIds.contract_type ?? null,
-        revenue_type_id: scopeIds.revenue_type ?? null,
-        note: note.trim() || null,
-        created_by: user?.id ?? null,
-      },
-      `${def.label}: valor registrado.`,
+  function reset() {
+    setEditingValue(null);
+    setScopeIds({});
+    setValue("");
+    setNote("");
+  }
+
+  function startEdit(v: ParameterValue) {
+    setEditingValue(v);
+    setValue(fmtInput(def.value_type === "percent" ? Number(v.value) * 100 : Number(v.value), 6));
+    setMonth(Number(v.valid_from.slice(5, 7)));
+    setValidYear(v.valid_from.slice(0, 4));
+    setNote(v.note ?? "");
+    setScopeIds(
+      Object.fromEntries(
+        (Object.keys(SCOPE_COLUMN) as Scope[]).map((s) => [s, v[SCOPE_COLUMN[s]]]),
+      ) as Partial<Record<Scope, string | null>>,
     );
+  }
+
+  async function save() {
+    if (!valid) return;
+    const fields = {
+      value: stored!,
+      valid_from: `${yearNum}-${String(month).padStart(2, "0")}-01`,
+      unit_id: scopeIds.unit ?? null,
+      product_id: scopeIds.product ?? null,
+      contract_type_id: scopeIds.contract_type ?? null,
+      revenue_type_id: scopeIds.revenue_type ?? null,
+      note: note.trim() || null,
+    };
+    const ok = editingValue
+      ? await update(editingValue.id, fields, `${def.label}: valor alterado.`)
+      : await insert(
+          { definition_id: def.id, ...fields, created_by: user?.id ?? null },
+          `${def.label}: valor registrado.`,
+        );
     if (ok) {
-      setValue("");
-      setNote("");
+      reset();
+      await refreshDre();
     }
   }
 
@@ -153,64 +207,99 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
   const sorted = [...values].sort((a, b) => (a.valid_from < b.valid_from ? 1 : -1));
 
   return (
-    <section className="space-y-3 rounded-md border border-border bg-card p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h2 className="font-semibold">{def.label}</h2>
+    <section
+      className={`space-y-3 rounded-md border border-border bg-card p-4 ${def.active ? "" : "opacity-70"}`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="font-semibold">
+            {def.label} {!def.active && <Badge variant="outline">desativado</Badge>}
+          </h2>
           {def.description && <p className="text-sm text-muted-foreground">{def.description}</p>}
+          <p className="text-xs text-muted-foreground">
+            {myRules.length === 0
+              ? "Não entra no cálculo da DRE."
+              : `Cálculo: ${myRules.map((r) => describeRule(r, lookups)).join(" · ")}`}
+          </p>
         </div>
-        {values.length === 0 && (
-          <Badge variant="destructive">Sem valor: entra como zero no cálculo</Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {values.length === 0 && def.active && (
+            <Badge variant="destructive">Sem valor: entra como zero no cálculo</Badge>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setEditingDef(true)}
+          >
+            <Settings2 className="h-4 w-4" /> Editar parâmetro
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
-        {scopes.map((s) => (
-          <Field key={s} label={SCOPE_LABELS[s]}>
-            <OptionSelect
-              className="w-44"
-              value={scopeIds[s] ?? null}
-              onChange={(v) => setScopeIds((prev) => ({ ...prev, [s]: v }))}
-              noneLabel="Todos"
-              options={scopeOptions[s]}
-            />
-          </Field>
-        ))}
-        <Field label={def.value_type === "percent" ? "Valor (%)" : "Valor (R$)"}>
-          <Input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="w-28 font-mono"
-          />
-        </Field>
-        <Field label="A partir de">
-          <div className="flex gap-1">
-            <MonthSelect className="w-32" value={month} onChange={setMonth} />
-            <Input
-              value={validYear}
-              onChange={(e) => setValidYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
-              className="w-20 font-mono"
-            />
+      {def.active && (
+        <>
+          <div className="flex flex-wrap items-end gap-2">
+            {scopes.map((s) => (
+              <Field key={s} label={SCOPE_LABELS[s]}>
+                <OptionSelect
+                  className="w-44"
+                  value={scopeIds[s] ?? null}
+                  onChange={(v) => setScopeIds((prev) => ({ ...prev, [s]: v }))}
+                  noneLabel="Todos"
+                  options={scopeOptions[s]}
+                />
+              </Field>
+            ))}
+            <Field label={def.value_type === "percent" ? "Valor (%)" : "Valor (R$)"}>
+              <Input
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                className="w-28 font-mono"
+                aria-label={`Valor de ${def.label}`}
+              />
+            </Field>
+            <Field label="A partir de">
+              <div className="flex gap-1">
+                <MonthSelect className="w-32" value={month} onChange={setMonth} />
+                <Input
+                  value={validYear}
+                  onChange={(e) => setValidYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  className="w-20 font-mono"
+                />
+              </div>
+            </Field>
+            <Field label="Observação">
+              <Input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="w-48"
+                placeholder="opcional"
+              />
+            </Field>
+            <Button size="sm" className="gap-1.5" onClick={save} disabled={!valid}>
+              {editingValue ? (
+                "Salvar alteração"
+              ) : (
+                <>
+                  <Plus className="h-4 w-4" /> Adicionar vigência
+                </>
+              )}
+            </Button>
+            {editingValue && (
+              <Button size="sm" variant="ghost" onClick={reset}>
+                Cancelar
+              </Button>
+            )}
           </div>
-        </Field>
-        <Field label="Observação">
-          <Input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-48"
-            placeholder="opcional"
-          />
-        </Field>
-        <Button size="sm" className="gap-1.5" onClick={add} disabled={!valid}>
-          <Plus className="h-4 w-4" /> Adicionar vigência
-        </Button>
-      </div>
-      {outOfRange && (
-        <p className="text-sm text-destructive">
-          Valor fora do intervalo permitido
-          {def.min_value !== null && ` (mín. ${fmtValue(def, Number(def.min_value))})`}
-          {def.max_value !== null && ` (máx. ${fmtValue(def, Number(def.max_value))})`}.
-        </p>
+          {outOfRange && (
+            <p className="text-sm text-destructive">
+              Valor fora do intervalo permitido
+              {def.min_value !== null && ` (mín. ${fmtValue(def, Number(def.min_value))})`}
+              {def.max_value !== null && ` (máx. ${fmtValue(def, Number(def.max_value))})`}.
+            </p>
+          )}
+        </>
       )}
 
       {sorted.length > 0 && (
@@ -227,7 +316,10 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
           </thead>
           <tbody>
             {sorted.map((v) => (
-              <tr key={v.id} className="border-b border-border last:border-0">
+              <tr
+                key={v.id}
+                className={`border-b border-border last:border-0 ${editingValue?.id === v.id ? "bg-accent" : ""}`}
+              >
                 <td className="py-1.5">{scopeText(v)}</td>
                 <td className="py-1.5 text-right font-mono tabular-nums">
                   {fmtValue(def, Number(v.value))}
@@ -242,13 +334,26 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
                 <td className="py-1.5 text-muted-foreground">
                   {new Date(v.created_at).toLocaleDateString("pt-BR")}
                 </td>
-                <td className="py-1.5 text-right">
+                <td className="whitespace-nowrap py-1.5 text-right">
+                  {def.active && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      aria-label="Editar valor"
+                      onClick={() => startEdit(v)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
                     aria-label="Excluir valor"
-                    onClick={() => remove(v.id, "Valor excluído.")}
+                    onClick={async () => {
+                      if (await remove(v.id, "Valor excluído.")) await refreshDre();
+                    }}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -257,6 +362,15 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
             ))}
           </tbody>
         </table>
+      )}
+
+      {editingDef && (
+        <ParameterDialog
+          def={def}
+          values={values}
+          onClose={() => setEditingDef(false)}
+          onSaved={() => {}}
+        />
       )}
     </section>
   );
