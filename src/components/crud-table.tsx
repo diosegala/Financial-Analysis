@@ -35,6 +35,8 @@ export type FieldDef = Base &
     | { type: "boolean" }
     | { type: "select"; options: Option[]; required?: boolean; noneLabel?: string }
     | { type: "multi"; options: Option[]; emptyLabel?: string }
+    /** Lista de palavras separadas por vírgula, guardada como array de texto. */
+    | { type: "tags" }
   );
 
 type Row = { id: string } & Record<string, unknown>;
@@ -67,6 +69,10 @@ function display(field: FieldDef, value: unknown): React.ReactNode {
       if (ids.length === 0)
         return <span className="text-muted-foreground">{field.emptyLabel ?? "—"}</span>;
       return ids.map((id) => field.options.find((o) => o.value === id)?.label ?? id).join(", ");
+    }
+    case "tags": {
+      const tags = value as string[];
+      return tags.length ? tags.join(", ") : <span className="text-muted-foreground">—</span>;
     }
     default:
       return String(value);
@@ -230,6 +236,7 @@ function RowDialog({
         if (f.type === "number")
           return [f.key, v === null || v === undefined ? "" : fmtInput(Number(v), 6)];
         if (f.type === "multi") return [f.key, (v as string[] | null) ?? []];
+        if (f.type === "tags") return [f.key, ((v as string[] | null) ?? []).join(", ")];
         if (f.type === "boolean") return [f.key, v ?? false];
         if (f.type === "select") return [f.key, v === null || v === undefined ? null : String(v)];
         return [f.key, v ?? null];
@@ -268,7 +275,13 @@ function RowDialog({
       else if (f.type === "text")
         out[f.key] = v === null || String(v).trim() === "" ? null : String(v).trim();
       else if (f.type === "multi") out[f.key] = (v as string[]).length ? v : null;
-      else out[f.key] = v;
+      else if (f.type === "tags") {
+        const tags = String(v ?? "")
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean);
+        out[f.key] = tags.length ? tags : null;
+      } else out[f.key] = v;
     }
     setSaving(true);
     const ok = await onSave(out);
@@ -296,6 +309,13 @@ function RowDialog({
                   value={String(draft[f.key] ?? "")}
                   onChange={(e) => set(f.key, e.target.value)}
                   className="font-mono"
+                />
+              )}
+              {f.type === "tags" && (
+                <Input
+                  value={String(draft[f.key] ?? "")}
+                  onChange={(e) => set(f.key, e.target.value)}
+                  placeholder="palavra, outra palavra"
                 />
               )}
               {f.type === "boolean" && (

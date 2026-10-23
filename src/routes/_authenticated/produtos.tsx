@@ -320,7 +320,7 @@ function ProductDialog({
 
   const accountOptions = (k: "receita" | "despesa") =>
     (accounts ?? [])
-      .filter((a) => a.active && a.kind === k)
+      .filter((a) => a.active && a.treatment === "lancavel" && a.kind === k)
       .map((a) => ({ value: a.id, label: a.name }));
 
   async function save() {

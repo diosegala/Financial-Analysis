@@ -214,3 +214,221 @@ describe("defaultDreLine", () => {
     expect(defaultDreLine(existing, "folha")).toBeNull();
   });
 });
+
+import {
+  enrichCategory,
+  guessExtraColumns,
+  isBeforeYear,
+  matchKeyword,
+  parseInclude,
+  resolveUnit,
+  splitPeriod,
+  suggestGroup,
+  suggestTreatment,
+  type UnitInfo,
+} from "./accounts-import";
+
+describe("splitPeriod", () => {
+  it("separa o ano do nome", () => {
+    expect(splitPeriod("CUPOLA Summit Ingressos - 2027")).toEqual({
+      baseName: "CUPOLA Summit Ingressos",
+      period: "2027",
+      startYear: 2027,
+      endYear: 2027,
+    });
+  });
+  it("aceita período de dois anos, com ano curto ou longo", () => {
+    expect(splitPeriod("Insider Aluguel - 2026/2027")).toMatchObject({
+      baseName: "Insider Aluguel",
+      period: "2026/2027",
+      startYear: 2026,
+      endYear: 2027,
+    });
+    expect(splitPeriod("Insider Aluguel – 2026/27")).toMatchObject({
+      period: "2026/2027",
+      endYear: 2027,
+    });
+  });
+  it("aceita o ano sem traço, mas só com 20xx no fim", () => {
+    expect(splitPeriod("Summit Patrocínio 2026")).toMatchObject({
+      baseName: "Summit Patrocínio",
+      period: "2026",
+    });
+    expect(splitPeriod("Plano 1999")).toMatchObject({ period: null });
+  });
+  it("nome sem ano fica como está", () => {
+    expect(splitPeriod("Aluguel e condomínio")).toEqual({
+      baseName: "Aluguel e condomínio",
+      period: null,
+      startYear: null,
+      endYear: null,
+    });
+    expect(splitPeriod("2027")).toMatchObject({ period: null, baseName: "2027" });
+  });
+  it("duas edições da mesma categoria têm a mesma base", () => {
+    expect(splitPeriod("Summit Ingressos - 2026").baseName).toBe(
+      splitPeriod("Summit Ingressos - 2027").baseName,
+    );
+  });
+});
+
+describe("isBeforeYear", () => {
+  it("descarta o que termina antes do ano mínimo", () => {
+    expect(isBeforeYear(splitPeriod("X - 2025"), 2026)).toBe(true);
+    expect(isBeforeYear(splitPeriod("X - 2025/2026"), 2026)).toBe(false);
+    expect(isBeforeYear(splitPeriod("X - 2026"), 2026)).toBe(false);
+    expect(isBeforeYear(splitPeriod("X sem ano"), 2026)).toBe(false);
+  });
+});
+
+describe("matchKeyword", () => {
+  it("vale como palavra inteira, sem acento nem maiúscula, com plural simples", () => {
+    expect(matchKeyword("ISS sobre serviços", "iss")).toBe(true);
+    expect(matchKeyword("Mission statement", "iss")).toBe(false);
+    expect(matchKeyword("Transferências entre contas", "Transferência")).toBe(true);
+    expect(matchKeyword("Adiantamento de clientes - 2027", "Adiantamento de cliente")).toBe(true);
+    expect(matchKeyword("Simples Nacional", "simples")).toBe(true);
+    expect(matchKeyword("Despesa", "")).toBe(false);
+  });
+});
+
+describe("regras de tratamento e grupo", () => {
+  const treatment = [
+    { keyword: "INSS", treatment: "calculada" },
+    { keyword: "Transferência", treatment: "fora_dre" },
+    { keyword: "INSS patronal", treatment: "fora_dre" },
+  ];
+  it("sugere o tratamento, preferindo a palavra mais específica", () => {
+    expect(suggestTreatment("INSS sobre folha", treatment)).toEqual({
+      treatment: "calculada",
+      keyword: "INSS",
+    });
+    expect(suggestTreatment("INSS patronal 2027", treatment)).toEqual({
+      treatment: "fora_dre",
+      keyword: "INSS patronal",
+    });
+    expect(suggestTreatment("Aluguel", treatment)).toBeNull();
+  });
+  it("sugere o grupo", () => {
+    const groups = [
+      { keyword: "Summit", group_name: "Summit" },
+      { keyword: "Insider Aluguel", group_name: "Insider Aluguel" },
+    ];
+    expect(suggestGroup("CUPOLA Summit Ingressos - 2027", groups)).toBe("Summit");
+    expect(suggestGroup("Insider Aluguel - 2026/2027", groups)).toBe("Insider Aluguel");
+    expect(suggestGroup("Marketing", groups)).toBeNull();
+  });
+});
+
+describe("resolveUnit", () => {
+  const units: UnitInfo[] = [
+    { id: "u-cons", name: "Consultoria", omie_department_code: "D-10", name_keywords: null },
+    { id: "u-edu", name: "Educação", omie_department_code: null, name_keywords: ["Summit"] },
+    { id: "u-ag", name: "Agência", omie_department_code: null, name_keywords: null },
+  ];
+  it("o departamento do Omie vence (pelo código ou pelo nome da unidade)", () => {
+    expect(resolveUnit("D-10", "Qualquer coisa", units)).toMatchObject({
+      unitId: "u-cons",
+      source: "departamento",
+    });
+    expect(resolveUnit("educacao", "Qualquer coisa", units)).toMatchObject({
+      unitId: "u-edu",
+      source: "departamento",
+    });
+  });
+  it("departamento que não corresponde a nenhuma unidade é apontado", () => {
+    expect(resolveUnit("Marte", "Summit", units)).toMatchObject({
+      unitId: null,
+      unknownDepartment: true,
+    });
+  });
+  it("sem departamento, usa o nome da categoria (nome ou palavra da unidade)", () => {
+    expect(resolveUnit(undefined, "Consultoria Receita Fixa - 2027", units)).toMatchObject({
+      unitId: "u-cons",
+      source: "nome",
+    });
+    expect(resolveUnit("", "CUPOLA Summit Ingressos - 2027", units)).toMatchObject({
+      unitId: "u-edu",
+      source: "nome",
+    });
+  });
+  it("nome que combina com mais de uma unidade não escolhe nenhuma", () => {
+    expect(resolveUnit(undefined, "Summit com Consultoria", units)).toMatchObject({
+      unitId: null,
+      ambiguous: true,
+    });
+  });
+  it("sem pista nenhuma, fica para todas as unidades", () => {
+    expect(resolveUnit(undefined, "Material de escritório", units)).toMatchObject({
+      unitId: null,
+      ambiguous: false,
+      source: null,
+    });
+  });
+});
+
+describe("parseInclude e colunas extras", () => {
+  it("lê sim e não", () => {
+    expect(parseInclude("Sim")).toBe(true);
+    expect(parseInclude("NÃO")).toBe(false);
+    expect(parseInclude("")).toBeNull();
+    expect(parseInclude("talvez")).toBeNull();
+  });
+  it("acha as colunas pelo cabeçalho", () => {
+    const rows = parseTable(
+      tsv(
+        ["Categoria", "Tipo", "Departamento", "Grupo", "Importar?"],
+        ["X - 2027", "Receita", "Educação", "Summit", "sim"],
+      ),
+    );
+    expect(guessExtraColumns(rows, true, [0, 1])).toEqual({ department: 2, group: 3, include: 4 });
+    expect(guessExtraColumns(rows, false, [])).toEqual({});
+  });
+});
+
+describe("enrichCategory", () => {
+  const ctx = {
+    minYear: 2026,
+    treatmentRules: [{ keyword: "ISS", treatment: "calculada" }],
+    groupRules: [{ keyword: "Summit", group_name: "Summit" }],
+    units: [
+      { id: "u-edu", name: "Educação", omie_department_code: null, name_keywords: ["Summit"] },
+    ] as UnitInfo[],
+  };
+  it("junta período, grupo, unidade e tratamento", () => {
+    const e = enrichCategory({ name: "CUPOLA Summit Ingressos - 2027" }, ctx);
+    expect(e).toMatchObject({
+      baseName: "CUPOLA Summit Ingressos",
+      period: "2027",
+      group: "Summit",
+      treatment: "lancavel",
+      excluded: null,
+    });
+    expect(e.unit).toMatchObject({ unitId: "u-edu", source: "nome" });
+  });
+  it("marca o que não entra: período anterior e marcada com não", () => {
+    expect(enrichCategory({ name: "Algo - 2025" }, ctx).excluded).toBe("periodo_anterior");
+    expect(enrichCategory({ name: "Algo - 2027", includeFlag: false }, ctx).excluded).toBe(
+      "marcada_nao",
+    );
+    // a marcação manual vence o período
+    expect(enrichCategory({ name: "Algo - 2025", includeFlag: false }, ctx).excluded).toBe(
+      "marcada_nao",
+    );
+    // "sim" não anula o período anterior: o ano mínimo é uma regra de negócio
+    expect(enrichCategory({ name: "Algo - 2025", includeFlag: true }, ctx).excluded).toBe(
+      "periodo_anterior",
+    );
+  });
+  it("sugere tratamento calculada e a palavra que decidiu", () => {
+    expect(enrichCategory({ name: "ISS sobre serviços" }, ctx)).toMatchObject({
+      treatment: "calculada",
+      treatmentKeyword: "ISS",
+    });
+  });
+  it("a coluna de grupo da planilha vence a regra", () => {
+    expect(
+      enrichCategory({ name: "CUPOLA Summit Ingressos - 2027", groupHint: "Eventos" }, ctx).group,
+    ).toBe("Eventos");
+  });
+});

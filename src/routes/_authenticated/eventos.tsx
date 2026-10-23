@@ -332,7 +332,7 @@ function EventDialog({
       ((p.active && (!p.unit_id || p.unit_id === unitId)) || p.id === event?.product_id),
   );
   const allowed = (accounts ?? []).filter(
-    (a) => a.active && (!a.unit_ids || a.unit_ids.includes(unitId!)),
+    (a) => a.active && a.treatment === "lancavel" && (!a.unit_ids || a.unit_ids.includes(unitId!)),
   );
   const revenueAccounts = allowed.filter((a) => a.kind === "receita");
   const costAccounts = allowed.filter((a) => a.kind === "despesa");

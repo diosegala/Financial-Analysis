@@ -34,46 +34,109 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_group_rules: {
+        Row: {
+          created_at: string
+          group_name: string
+          id: string
+          keyword: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          group_name: string
+          id?: string
+          keyword: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          group_name?: string
+          id?: string
+          keyword?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      account_treatment_rules: {
+        Row: {
+          created_at: string
+          id: string
+          keyword: string
+          note: string | null
+          treatment: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          keyword: string
+          note?: string | null
+          treatment: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          keyword?: string
+          note?: string | null
+          treatment?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       accounts: {
         Row: {
           active: boolean
+          base_name: string | null
           code: string | null
           created_at: string
-          dre_line_id: string
+          dre_line_id: string | null
           generates_tax_credit: boolean
+          group_name: string | null
           id: string
           kind: string
           name: string
           omie_category_code: string | null
+          period: string | null
           sort_order: number
+          treatment: string
           unit_ids: string[] | null
           updated_at: string
         }
         Insert: {
           active?: boolean
+          base_name?: string | null
           code?: string | null
           created_at?: string
-          dre_line_id: string
+          dre_line_id?: string | null
           generates_tax_credit?: boolean
+          group_name?: string | null
           id?: string
           kind: string
           name: string
           omie_category_code?: string | null
+          period?: string | null
           sort_order?: number
+          treatment?: string
           unit_ids?: string[] | null
           updated_at?: string
         }
         Update: {
           active?: boolean
+          base_name?: string | null
           code?: string | null
           created_at?: string
-          dre_line_id?: string
+          dre_line_id?: string | null
           generates_tax_credit?: boolean
+          group_name?: string | null
           id?: string
           kind?: string
           name?: string
           omie_category_code?: string | null
+          period?: string | null
           sort_order?: number
+          treatment?: string
           unit_ids?: string[] | null
           updated_at?: string
         }
@@ -1019,6 +1082,7 @@ export type Database = {
           id: string
           kind: string
           name: string
+          name_keywords: string[] | null
           omie_department_code: string | null
           sort_order: number
           updated_at: string
@@ -1029,6 +1093,7 @@ export type Database = {
           id?: string
           kind?: string
           name: string
+          name_keywords?: string[] | null
           omie_department_code?: string | null
           sort_order?: number
           updated_at?: string
@@ -1039,6 +1104,7 @@ export type Database = {
           id?: string
           kind?: string
           name?: string
+          name_keywords?: string[] | null
           omie_department_code?: string | null
           sort_order?: number
           updated_at?: string
@@ -1095,6 +1161,7 @@ export type Database = {
     }
     Functions: {
       account_kind: { Args: { _account_id: string }; Returns: string }
+      accounts_in_use: { Args: never; Returns: string[] }
       assert_editable: {
         Args: { _month: number; _unit_id: string; _version_id: string }
         Returns: undefined
