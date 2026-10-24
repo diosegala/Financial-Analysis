@@ -997,6 +997,42 @@ export type Database = {
         }
         Relationships: []
       }
+      revenue_targets: {
+        Row: {
+          amount: number
+          month: number
+          scenario_id: string
+          unit_id: string
+        }
+        Insert: {
+          amount: number
+          month: number
+          scenario_id: string
+          unit_id: string
+        }
+        Update: {
+          amount?: number
+          month?: number
+          scenario_id?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_targets_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_targets_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revenue_types: {
         Row: {
           active: boolean
@@ -1065,6 +1101,71 @@ export type Database = {
           },
         ]
       }
+      scenario_targets: {
+        Row: {
+          computed_at: string | null
+          created_at: string
+          feasible: boolean | null
+          financial_revenue: number | null
+          financial_variable_pct: number
+          fixed_costs: number | null
+          id: string
+          published_at: string | null
+          required_revenue: number | null
+          scenario_id: string
+          target_amount: number | null
+          target_kind: string
+          target_margin: number | null
+          target_value: number
+          updated_at: string
+          variable_pct: number | null
+        }
+        Insert: {
+          computed_at?: string | null
+          created_at?: string
+          feasible?: boolean | null
+          financial_revenue?: number | null
+          financial_variable_pct?: number
+          fixed_costs?: number | null
+          id?: string
+          published_at?: string | null
+          required_revenue?: number | null
+          scenario_id: string
+          target_amount?: number | null
+          target_kind?: string
+          target_margin?: number | null
+          target_value?: number
+          updated_at?: string
+          variable_pct?: number | null
+        }
+        Update: {
+          computed_at?: string | null
+          created_at?: string
+          feasible?: boolean | null
+          financial_revenue?: number | null
+          financial_variable_pct?: number
+          fixed_costs?: number | null
+          id?: string
+          published_at?: string | null
+          required_revenue?: number | null
+          scenario_id?: string
+          target_amount?: number | null
+          target_kind?: string
+          target_margin?: number | null
+          target_value?: number
+          updated_at?: string
+          variable_pct?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scenario_targets_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: true
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scenarios: {
         Row: {
           applies_to_payroll: boolean
@@ -1108,6 +1209,84 @@ export type Database = {
             columns: ["version_id"]
             isOneToOne: false
             referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      target_month_weights: {
+        Row: {
+          id: string
+          month: number
+          scenario_id: string
+          unit_id: string | null
+          weight: number
+        }
+        Insert: {
+          id?: string
+          month: number
+          scenario_id: string
+          unit_id?: string | null
+          weight: number
+        }
+        Update: {
+          id?: string
+          month?: number
+          scenario_id?: string
+          unit_id?: string | null
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "target_month_weights_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "target_month_weights_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      target_unit_shares: {
+        Row: {
+          id: string
+          scenario_id: string
+          share: number
+          unit_id: string
+          variable_pct_override: number | null
+        }
+        Insert: {
+          id?: string
+          scenario_id: string
+          share: number
+          unit_id: string
+          variable_pct_override?: number | null
+        }
+        Update: {
+          id?: string
+          scenario_id?: string
+          share?: number
+          unit_id?: string
+          variable_pct_override?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "target_unit_shares_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "target_unit_shares_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -1265,6 +1444,33 @@ export type Database = {
         Args: { _unit_id: string; _user_id: string }
         Returns: boolean
       }
+      compute_targets: {
+        Args: { _scenario_id: string }
+        Returns: {
+          computed_at: string | null
+          created_at: string
+          feasible: boolean | null
+          financial_revenue: number | null
+          financial_variable_pct: number
+          fixed_costs: number | null
+          id: string
+          published_at: string | null
+          required_revenue: number | null
+          scenario_id: string
+          target_amount: number | null
+          target_kind: string
+          target_margin: number | null
+          target_value: number
+          updated_at: string
+          variable_pct: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "scenario_targets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       copy_version: {
         Args: {
           _kind?: string
@@ -1403,6 +1609,42 @@ export type Database = {
           unit_id: string
         }[]
       }
+      plan_split: {
+        Args: { _scenario_id: string; _version_id: string }
+        Returns: {
+          amount: number
+          bucket: string
+          month: number
+          unit_id: string
+        }[]
+      }
+      publish_targets: {
+        Args: { _publish?: boolean; _scenario_id: string }
+        Returns: {
+          computed_at: string | null
+          created_at: string
+          feasible: boolean | null
+          financial_revenue: number | null
+          financial_variable_pct: number
+          fixed_costs: number | null
+          id: string
+          published_at: string | null
+          required_revenue: number | null
+          scenario_id: string
+          target_amount: number | null
+          target_kind: string
+          target_margin: number | null
+          target_value: number
+          updated_at: string
+          variable_pct: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "scenario_targets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       seed_person_line: {
         Args: { _person_id: string; _reset?: boolean }
         Returns: string
@@ -1420,6 +1662,26 @@ export type Database = {
         }
         Returns: undefined
       }
+      target_gap: {
+        Args: { _scenario_id: string }
+        Returns: {
+          expenses: number
+          gap: number
+          payroll: number
+          result: number
+          revenue: number
+          target_amount: number
+          variable_costs: number
+        }[]
+      }
+      target_weights: {
+        Args: { _scenario_id: string; _unit_id: string }
+        Returns: {
+          month: number
+          weight: number
+        }[]
+      }
+      targets_published: { Args: { _scenario_id: string }; Returns: boolean }
       tax_bracket: {
         Args: { _base: number; _ref: string; _table: string }
         Returns: {
@@ -1429,6 +1691,15 @@ export type Database = {
         }[]
       }
       tax_constant: { Args: { _key: string; _ref: string }; Returns: number }
+      variable_rate_parts: {
+        Args: { _ref: string; _unit_id: string }
+        Returns: {
+          included: boolean
+          rate: number
+          rule_id: string
+          rule_name: string
+        }[]
+      }
     }
     Enums: {
       app_role: "financeiro" | "vp" | "ceo" | "lider"
