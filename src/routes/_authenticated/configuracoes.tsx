@@ -12,7 +12,9 @@ import {
   useAccounts,
   useAllScenarios,
   useCalcRules,
+  useOmieCategoryAllocations,
   useOmieDepartmentUnits,
+  useOmieKeywordUnits,
   usePayrollBrackets,
   usePayrollConstants,
   useClients,
@@ -674,24 +676,71 @@ function ParameterDefinitionsTab() {
 
 function OmieTab() {
   const { data: rows } = useOmieDepartmentUnits();
+  const { data: keywords } = useOmieKeywordUnits();
+  const { data: allocations } = useOmieCategoryAllocations();
   const { data: units } = useUnits();
+  const unitField = {
+    key: "unit_id",
+    label: "Unidade",
+    type: "select",
+    required: true,
+    options: opts(units),
+  } as const;
   return (
-    <CrudTable
-      table="omie_department_units"
-      rows={rows ?? []}
-      description="Que unidade do app cada departamento do Omie representa. O nome é o mesmo nas três empresas; um departamento filho (Receitas Fixas Agência) herda a unidade do pai (Agência). A leitura do Omie roda com python3 scripts/omie-sync.py (somente leitura)."
-      fields={[
-        { key: "department_name", label: "Departamento no Omie", type: "text", required: true },
-        {
-          key: "unit_id",
-          label: "Unidade",
-          type: "select",
-          required: true,
-          options: opts(units),
-        },
-      ]}
-      defaults={{}}
-    />
+    <div className="space-y-8">
+      <p className="text-sm text-muted-foreground">
+        O realizado do Omie chega por categoria e quase nunca traz departamento. A unidade de cada
+        despesa vem, nesta ordem, do departamento do título, do rateio da categoria, da palavra no
+        nome da categoria, ou fica “a ratear”. A leitura roda com python3 scripts/omie-sync.py
+        (somente leitura).
+      </p>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Palavras no nome da categoria</h2>
+        <CrudTable
+          table="omie_keyword_units"
+          rows={keywords ?? []}
+          description="Se o nome da categoria contém a palavra (inteira ou frase, sem diferenciar acento), a despesa é da unidade. Vale a maior prioridade; empatando, a palavra mais longa. Ex.: “Financeiro Essencial” (treinamento, prioridade 20) vence “Financeiro” (a unidade)."
+          fields={[
+            { key: "keyword", label: "Palavra", type: "text", required: true },
+            unitField,
+            { key: "priority", label: "Prioridade", type: "number", integer: true, required: true },
+          ]}
+          defaults={{ priority: 0 }}
+        />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Rateio por categoria</h2>
+        <CrudTable
+          table="omie_category_allocations"
+          rows={allocations ?? []}
+          description="Divide uma categoria entre unidades, por exemplo Marketing e Publicidade: 0,4 Agência, 0,3 Consultoria, 0,3 Educação. As partes são ajustadas para somar 100%. Vale mais que as palavras. Também se faz direto na página Realizado Omie, em “Ratear”."
+          fields={[
+            {
+              key: "category_name",
+              label: "Categoria do Omie (nome exato)",
+              type: "text",
+              required: true,
+            },
+            unitField,
+            { key: "share", label: "Parte (0 a 1)", type: "number", required: true },
+          ]}
+          defaults={{}}
+        />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Departamentos do Omie</h2>
+        <CrudTable
+          table="omie_department_units"
+          rows={rows ?? []}
+          description="Que unidade do app cada departamento do Omie representa. O nome é o mesmo nas três empresas; um departamento filho (Receitas Fixas Agência) herda a unidade do pai (Agência). Vale mais que o rateio e as palavras."
+          fields={[
+            { key: "department_name", label: "Departamento no Omie", type: "text", required: true },
+            unitField,
+          ]}
+          defaults={{}}
+        />
+      </div>
+    </div>
   );
 }
 
