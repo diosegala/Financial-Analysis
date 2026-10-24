@@ -66,6 +66,7 @@ export function usePlanMutations() {
       queryClient.invalidateQueries({ queryKey: ["dre"] }),
       queryClient.invalidateQueries({ queryKey: ["event_items"] }),
       queryClient.invalidateQueries({ queryKey: ["people"] }),
+      queryClient.invalidateQueries({ queryKey: ["payroll_detail"] }),
     ]);
 
   function fail(error: { message: string } | null) {

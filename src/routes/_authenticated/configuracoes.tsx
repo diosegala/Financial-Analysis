@@ -12,6 +12,8 @@ import {
   useAccounts,
   useAllScenarios,
   useCalcRules,
+  usePayrollBrackets,
+  usePayrollConstants,
   useClients,
   useContractTypes,
   useDreLines,
@@ -74,6 +76,7 @@ function ConfiguracoesPage() {
           <TabsTrigger value="clientes">Clientes</TabsTrigger>
           <TabsTrigger value="parametros">Parâmetros</TabsTrigger>
           <TabsTrigger value="regras">Regras de cálculo</TabsTrigger>
+          <TabsTrigger value="tabelas-folha">Tabelas da folha</TabsTrigger>
         </TabsList>
         <TabsContent value="versoes">
           <VersionsTab />
@@ -107,6 +110,9 @@ function ConfiguracoesPage() {
         </TabsContent>
         <TabsContent value="regras">
           <CalcRulesTab />
+        </TabsContent>
+        <TabsContent value="tabelas-folha">
+          <PayrollTablesTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -661,6 +667,56 @@ function ParameterDefinitionsTab() {
   );
 }
 
+function PayrollTablesTab() {
+  const { data: brackets } = usePayrollBrackets();
+  const { data: constants } = usePayrollConstants();
+  return (
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Faixas de INSS e IRRF</h2>
+        <CrudTable
+          table="payroll_tax_brackets"
+          rows={brackets ?? []}
+          description="Tabelas do INSS e do IRRF do empregado (valem para qualquer vínculo; o que muda por vínculo são os encargos patronais, em Parâmetros). Cada conjunto de faixas vale a partir da data de vigência; no ano seguinte, cadastre o novo conjunto com a nova data. Alíquotas em fração: 0,075 = 7,5%. Deixe o limite superior vazio na última faixa do IRRF."
+          fields={[
+            {
+              key: "table_key",
+              label: "Tabela",
+              type: "select",
+              required: true,
+              options: [
+                { value: "inss", label: "INSS" },
+                { value: "irrf", label: "IRRF" },
+              ],
+            },
+            { key: "valid_from", label: "Vigência (AAAA-MM-DD)", type: "text", required: true },
+            { key: "lower_bound", label: "De (R$)", type: "number", required: true },
+            { key: "upper_bound", label: "Até (R$)", type: "number" },
+            { key: "rate", label: "Alíquota", type: "number", required: true },
+            { key: "deduction", label: "Parcela a deduzir (R$)", type: "number", required: true },
+          ]}
+          defaults={{ table_key: "inss", deduction: 0 }}
+        />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Constantes do IRRF</h2>
+        <CrudTable
+          table="payroll_tax_constants"
+          rows={constants ?? []}
+          description="Dedução por dependente, desconto simplificado e os valores da redução da Lei 15.270. Para mudar um valor, cadastre uma nova linha com a nova vigência: a mais recente até a data do cálculo vale."
+          fields={[
+            { key: "key", label: "Chave", type: "text", required: true, hideInTable: true },
+            { key: "label", label: "Descrição", type: "text", required: true },
+            { key: "valid_from", label: "Vigência (AAAA-MM-DD)", type: "text", required: true },
+            { key: "value", label: "Valor", type: "number", required: true },
+          ]}
+          defaults={{}}
+        />
+      </div>
+    </div>
+  );
+}
+
 function CalcRulesTab() {
   const { data: rules } = useCalcRules();
   const { data: lines } = useDreLines();
@@ -702,6 +758,18 @@ function CalcRulesTab() {
             { value: "salario", label: "Remuneração das pessoas" },
             { value: "headcount", label: "Pessoas ativas no mês" },
           ],
+        },
+        {
+          key: "payroll_group",
+          label: "Na visão da folha",
+          type: "select",
+          noneLabel: "Não se aplica",
+          options: [
+            { value: "encargo", label: "Encargo patronal" },
+            { value: "provisao", label: "Provisão" },
+            { value: "beneficio", label: "Benefício" },
+          ],
+          hint: "Só para bases de remuneração e pessoas ativas: define onde o valor aparece no detalhe por colaborador.",
         },
         {
           key: "revenue_type_ids",

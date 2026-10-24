@@ -61,6 +61,7 @@ export function usePeopleMutations() {
       queryClient.invalidateQueries({ queryKey: ["people"] }),
       queryClient.invalidateQueries({ queryKey: ["plan_lines"] }),
       queryClient.invalidateQueries({ queryKey: ["dre"] }),
+      queryClient.invalidateQueries({ queryKey: ["payroll_detail"] }),
     ]);
   }
   async function run(p: PromiseLike<{ error: { message: string } | null }>) {
@@ -99,4 +100,42 @@ export function usePeopleMutations() {
       return data as { created: number; updated: number };
     },
   };
+}
+
+export type PayrollGroup =
+  "bruto" | "retencao" | "liquido" | "encargo" | "provisao" | "beneficio" | "custo_total";
+
+export interface PayrollDetailRow {
+  person_id: string;
+  month: number;
+  grupo: PayrollGroup;
+  item: string;
+  amount: number;
+}
+
+/** Bruto, retenções, líquido, encargos, provisões, benefícios e custo total por pessoa e mês. */
+export function usePayrollDetail(
+  versionId: string | null,
+  scenarioId: string | null,
+  unitId: string | null,
+) {
+  return useQuery({
+    queryKey: ["payroll_detail", versionId, scenarioId, unitId],
+    enabled: !!versionId && !!unitId,
+    queryFn: async (): Promise<PayrollDetailRow[]> => {
+      const { data, error } = await supabase.rpc("payroll_detail", {
+        _version_id: versionId!,
+        ...(scenarioId ? { _scenario_id: scenarioId } : {}),
+        _unit_ids: [unitId!],
+      });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        person_id: r.person_id,
+        month: r.month,
+        grupo: r.grupo as PayrollGroup,
+        item: r.item,
+        amount: Number(r.amount),
+      }));
+    },
+  });
 }
