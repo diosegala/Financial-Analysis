@@ -241,6 +241,7 @@ export type Database = {
           id: string
           name: string
           parameter_definition_id: string
+          payroll_group: string | null
           revenue_type_ids: string[] | null
           sort_order: number
           target_dre_line_id: string
@@ -256,6 +257,7 @@ export type Database = {
           id?: string
           name: string
           parameter_definition_id: string
+          payroll_group?: string | null
           revenue_type_ids?: string[] | null
           sort_order?: number
           target_dre_line_id: string
@@ -271,6 +273,7 @@ export type Database = {
           id?: string
           name?: string
           parameter_definition_id?: string
+          payroll_group?: string | null
           revenue_type_ids?: string[] | null
           sort_order?: number
           target_dre_line_id?: string
@@ -601,6 +604,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payroll_tax_brackets: {
+        Row: {
+          created_at: string
+          deduction: number
+          id: string
+          lower_bound: number
+          rate: number
+          table_key: string
+          updated_at: string
+          upper_bound: number | null
+          valid_from: string
+        }
+        Insert: {
+          created_at?: string
+          deduction?: number
+          id?: string
+          lower_bound: number
+          rate: number
+          table_key: string
+          updated_at?: string
+          upper_bound?: number | null
+          valid_from: string
+        }
+        Update: {
+          created_at?: string
+          deduction?: number
+          id?: string
+          lower_bound?: number
+          rate?: number
+          table_key?: string
+          updated_at?: string
+          upper_bound?: number | null
+          valid_from?: string
+        }
+        Relationships: []
+      }
+      payroll_tax_constants: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          label: string
+          updated_at: string
+          valid_from: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          label: string
+          updated_at?: string
+          valid_from: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          label?: string
+          updated_at?: string
+          valid_from?: string
+          value?: number
+        }
+        Relationships: []
       }
       people: {
         Row: {
@@ -1252,6 +1321,19 @@ export type Database = {
         Args: { _overwrite?: boolean; _rows: Json; _version_id: string }
         Returns: Json
       }
+      inss_empregado: {
+        Args: { _gross: number; _ref: string }
+        Returns: number
+      }
+      irrf: {
+        Args: {
+          _dependents: number
+          _gross: number
+          _inss: number
+          _ref: string
+        }
+        Returns: number
+      }
       launch_event: {
         Args: {
           _lines?: Json
@@ -1288,6 +1370,21 @@ export type Database = {
         }
         Returns: number
       }
+      payroll_detail: {
+        Args: {
+          _scenario_id?: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          amount: number
+          grupo: string
+          item: string
+          month: number
+          person_id: string
+          unit_id: string
+        }[]
+      }
       plan_base_rows: {
         Args: {
           _scenario_id: string
@@ -1323,6 +1420,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      tax_bracket: {
+        Args: { _base: number; _ref: string; _table: string }
+        Returns: {
+          ceiling: number
+          deduction: number
+          rate: number
+        }[]
+      }
+      tax_constant: { Args: { _key: string; _ref: string }; Returns: number }
     }
     Enums: {
       app_role: "financeiro" | "vp" | "ceo" | "lider"

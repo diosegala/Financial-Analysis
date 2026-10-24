@@ -12,6 +12,8 @@ import { parseDate } from "@/lib/people-import";
 import { PageHeader } from "@/components/page-header";
 import { AdjustDialog, FillDialog, PlanGrid } from "@/components/plan-grid";
 import { PeopleImportDialog } from "@/components/people-import";
+import { PayrollDetail } from "@/components/payroll-detail";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MoneyCell } from "@/components/money-cell";
 import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
@@ -114,126 +116,139 @@ function FolhaPage() {
         }
       />
 
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
-      ) : (
-        <div className="overflow-x-auto rounded-md border border-border bg-card">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/50 text-left">
-                <th className="sticky left-0 z-10 min-w-56 bg-muted px-3 py-2 font-medium">
-                  Pessoa
-                </th>
-                {MONTHS.map((m) => (
-                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
-                    {m}
-                  </th>
-                ))}
-                <th className="px-3 py-2 text-right font-medium">Total</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((item, r) => {
-                const { person: p, line } = item;
-                const total = [...line.values.values()].reduce((a, v) => a + v, 0);
-                return (
-                  <tr key={line.id} className="border-b border-border">
-                    <td className="sticky left-0 z-10 bg-card px-3 py-1">
-                      <div className="font-medium">{p.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {[p.role_title, ctMap.get(p.contract_type_id)?.name]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </div>
-                    </td>
-                    {MONTHS.map((_, i) => (
-                      <td key={i} className="border-l border-border/50 p-0">
-                        <MoneyCell
-                          value={line.values.get(i + 1) ?? 0}
-                          disabled={!canEdit}
-                          pos={{ grid: "grid-folha-pessoas", row: r, col: i }}
-                          onCommit={(v) => setValues(line.id, [{ month: i + 1, amount: v }])}
-                          onPasteBlock={(block) => pasteBlock(r, i + 1, block)}
-                        />
-                      </td>
+      <Tabs defaultValue="remuneracao">
+        <TabsList>
+          <TabsTrigger value="remuneracao">Remuneração</TabsTrigger>
+          <TabsTrigger value="detalhe">Salário líquido e encargos</TabsTrigger>
+        </TabsList>
+        <TabsContent value="remuneracao" className="space-y-6">
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-border bg-card">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50 text-left">
+                    <th className="sticky left-0 z-10 min-w-56 bg-muted px-3 py-2 font-medium">
+                      Pessoa
+                    </th>
+                    {MONTHS.map((m) => (
+                      <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
+                        {m}
+                      </th>
                     ))}
-                    <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
-                      {fmtBRL(total)}
-                    </td>
-                    <td className="px-1">
-                      {canEdit && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              aria-label="Ações"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => setDialog({ type: "person", person: p })}
-                            >
-                              Editar pessoa
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setDialog({ type: "fill", item })}>
-                              Preencher meses…
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setDialog({ type: "adjust", item })}>
-                              Reajustar a partir de um mês…
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => setDialog({ type: "delete", person: p })}
-                            >
-                              Excluir
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </td>
+                    <th className="px-3 py-2 text-right font-medium">Total</th>
+                    <th className="w-10" />
                   </tr>
-                );
-              })}
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={15} className="px-3 py-8 text-center text-muted-foreground">
-                    Nenhuma pessoa cadastrada nesta unidade.
-                  </td>
-                </tr>
-              ) : (
-                <tr className="border-t border-border bg-muted/30 font-semibold">
-                  <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">
-                    Total ({rows.length} pessoa{rows.length === 1 ? "" : "s"})
-                  </td>
-                  {monthTotals.map((t, i) => (
-                    <td key={i} className="px-2 py-1.5 text-right font-mono tabular-nums">
-                      {fmtBRL(t)}
-                    </td>
-                  ))}
-                  <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                    {fmtBRL(monthTotals.reduce((a, t) => a + t, 0))}
-                  </td>
-                  <td />
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {rows.map((item, r) => {
+                    const { person: p, line } = item;
+                    const total = [...line.values.values()].reduce((a, v) => a + v, 0);
+                    return (
+                      <tr key={line.id} className="border-b border-border">
+                        <td className="sticky left-0 z-10 bg-card px-3 py-1">
+                          <div className="font-medium">{p.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {[p.role_title, ctMap.get(p.contract_type_id)?.name]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </td>
+                        {MONTHS.map((_, i) => (
+                          <td key={i} className="border-l border-border/50 p-0">
+                            <MoneyCell
+                              value={line.values.get(i + 1) ?? 0}
+                              disabled={!canEdit}
+                              pos={{ grid: "grid-folha-pessoas", row: r, col: i }}
+                              onCommit={(v) => setValues(line.id, [{ month: i + 1, amount: v }])}
+                              onPasteBlock={(block) => pasteBlock(r, i + 1, block)}
+                            />
+                          </td>
+                        ))}
+                        <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
+                          {fmtBRL(total)}
+                        </td>
+                        <td className="px-1">
+                          {canEdit && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  aria-label="Ações"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => setDialog({ type: "person", person: p })}
+                                >
+                                  Editar pessoa
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setDialog({ type: "fill", item })}>
+                                  Preencher meses…
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => setDialog({ type: "adjust", item })}
+                                >
+                                  Reajustar a partir de um mês…
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => setDialog({ type: "delete", person: p })}
+                                >
+                                  Excluir
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={15} className="px-3 py-8 text-center text-muted-foreground">
+                        Nenhuma pessoa cadastrada nesta unidade.
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr className="border-t border-border bg-muted/30 font-semibold">
+                      <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">
+                        Total ({rows.length} pessoa{rows.length === 1 ? "" : "s"})
+                      </td>
+                      {monthTotals.map((t, i) => (
+                        <td key={i} className="px-2 py-1.5 text-right font-mono tabular-nums">
+                          {fmtBRL(t)}
+                        </td>
+                      ))}
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {fmtBRL(monthTotals.reduce((a, t) => a + t, 0))}
+                      </td>
+                      <td />
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold">Outros lançamentos de folha</h2>
-        <PlanGrid
-          kind="folha"
-          emptyText="Rescisões, bônus ou benefícios específicos entram aqui."
-        />
-      </div>
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold">Outros lançamentos de folha</h2>
+            <PlanGrid
+              kind="folha"
+              emptyText="Rescisões, bônus ou benefícios específicos entram aqui."
+            />
+          </div>
+        </TabsContent>
+        <TabsContent value="detalhe">
+          <PayrollDetail people={rows} />
+        </TabsContent>
+      </Tabs>
 
       {dialog?.type === "person" && (
         <PersonDialog person={dialog.person} onClose={() => setDialog(null)} />

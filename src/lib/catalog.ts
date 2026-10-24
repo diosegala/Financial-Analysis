@@ -53,6 +53,9 @@ export const useParameterDefinitions = () =>
 export const useParameterValues = () => useTable("parameter_values", ["valid_from"]);
 export const useAccountTreatmentRules = () => useTable("account_treatment_rules", ["keyword"]);
 export const useAccountGroupRules = () => useTable("account_group_rules", ["keyword"]);
+export const usePayrollBrackets = () =>
+  useTable("payroll_tax_brackets", ["valid_from", "lower_bound"]);
+export const usePayrollConstants = () => useTable("payroll_tax_constants", ["key", "valid_from"]);
 export const useCalcRules = () => useTable("calc_rules", ["sort_order", "name"]);
 
 export function useScenarios(versionId: string | null) {
