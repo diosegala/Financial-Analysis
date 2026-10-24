@@ -20,6 +20,7 @@ import { Route as AuthenticatedDreRouteImport } from './routes/_authenticated/dr
 import { Route as AuthenticatedEventosRouteImport } from './routes/_authenticated/eventos'
 import { Route as AuthenticatedFolhaRouteImport } from './routes/_authenticated/folha'
 import { Route as AuthenticatedInicioRouteImport } from './routes/_authenticated/inicio'
+import { Route as AuthenticatedMetasRouteImport } from './routes/_authenticated/metas'
 import { Route as AuthenticatedParametrosRouteImport } from './routes/_authenticated/parametros'
 import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticated/produtos'
 import { Route as AuthenticatedReceitasRouteImport } from './routes/_authenticated/receitas'
@@ -80,6 +81,11 @@ const AuthenticatedInicioRoute = AuthenticatedInicioRouteImport.update({
   path: '/inicio',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMetasRoute = AuthenticatedMetasRouteImport.update({
+  id: '/metas',
+  path: '/metas',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedParametrosRoute = AuthenticatedParametrosRouteImport.update({
   id: '/parametros',
   path: '/parametros',
@@ -112,6 +118,7 @@ export interface FileRoutesByFullPath {
   '/eventos': typeof AuthenticatedEventosRoute
   '/folha': typeof AuthenticatedFolhaRoute
   '/inicio': typeof AuthenticatedInicioRoute
+  '/metas': typeof AuthenticatedMetasRoute
   '/parametros': typeof AuthenticatedParametrosRoute
   '/produtos': typeof AuthenticatedProdutosRoute
   '/receitas': typeof AuthenticatedReceitasRoute
@@ -128,6 +135,7 @@ export interface FileRoutesByTo {
   '/eventos': typeof AuthenticatedEventosRoute
   '/folha': typeof AuthenticatedFolhaRoute
   '/inicio': typeof AuthenticatedInicioRoute
+  '/metas': typeof AuthenticatedMetasRoute
   '/parametros': typeof AuthenticatedParametrosRoute
   '/produtos': typeof AuthenticatedProdutosRoute
   '/receitas': typeof AuthenticatedReceitasRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   '/_authenticated/eventos': typeof AuthenticatedEventosRoute
   '/_authenticated/folha': typeof AuthenticatedFolhaRoute
   '/_authenticated/inicio': typeof AuthenticatedInicioRoute
+  '/_authenticated/metas': typeof AuthenticatedMetasRoute
   '/_authenticated/parametros': typeof AuthenticatedParametrosRoute
   '/_authenticated/produtos': typeof AuthenticatedProdutosRoute
   '/_authenticated/receitas': typeof AuthenticatedReceitasRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/eventos'
     | '/folha'
     | '/inicio'
+    | '/metas'
     | '/parametros'
     | '/produtos'
     | '/receitas'
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/eventos'
     | '/folha'
     | '/inicio'
+    | '/metas'
     | '/parametros'
     | '/produtos'
     | '/receitas'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/_authenticated/eventos'
     | '/_authenticated/folha'
     | '/_authenticated/inicio'
+    | '/_authenticated/metas'
     | '/_authenticated/parametros'
     | '/_authenticated/produtos'
     | '/_authenticated/receitas'
@@ -288,6 +300,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInicioRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/metas': {
+      id: '/_authenticated/metas'
+      path: '/metas'
+      fullPath: '/metas'
+      preLoaderRoute: typeof AuthenticatedMetasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/parametros': {
       id: '/_authenticated/parametros'
       path: '/parametros'
@@ -328,6 +347,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedEventosRoute: typeof AuthenticatedEventosRoute
   AuthenticatedFolhaRoute: typeof AuthenticatedFolhaRoute
   AuthenticatedInicioRoute: typeof AuthenticatedInicioRoute
+  AuthenticatedMetasRoute: typeof AuthenticatedMetasRoute
   AuthenticatedParametrosRoute: typeof AuthenticatedParametrosRoute
   AuthenticatedProdutosRoute: typeof AuthenticatedProdutosRoute
   AuthenticatedReceitasRoute: typeof AuthenticatedReceitasRoute
@@ -343,6 +363,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEventosRoute: AuthenticatedEventosRoute,
   AuthenticatedFolhaRoute: AuthenticatedFolhaRoute,
   AuthenticatedInicioRoute: AuthenticatedInicioRoute,
+  AuthenticatedMetasRoute: AuthenticatedMetasRoute,
   AuthenticatedParametrosRoute: AuthenticatedParametrosRoute,
   AuthenticatedProdutosRoute: AuthenticatedProdutosRoute,
   AuthenticatedReceitasRoute: AuthenticatedReceitasRoute,
