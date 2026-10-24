@@ -330,6 +330,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          role_keywords: string[] | null
           sort_order: number
           updated_at: string
         }
@@ -339,6 +340,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          role_keywords?: string[] | null
           sort_order?: number
           updated_at?: string
         }
@@ -348,6 +350,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          role_keywords?: string[] | null
           sort_order?: number
           updated_at?: string
         }
@@ -604,7 +607,10 @@ export type Database = {
           base_salary: number
           contract_type_id: string
           created_at: string
+          dependents: number
           end_month: number | null
+          external_id: string | null
+          hire_date: string | null
           id: string
           name: string
           role_title: string | null
@@ -617,7 +623,10 @@ export type Database = {
           base_salary?: number
           contract_type_id: string
           created_at?: string
+          dependents?: number
           end_month?: number | null
+          external_id?: string | null
+          hire_date?: string | null
           id?: string
           name: string
           role_title?: string | null
@@ -630,7 +639,10 @@ export type Database = {
           base_salary?: number
           contract_type_id?: string
           created_at?: string
+          dependents?: number
           end_month?: number | null
+          external_id?: string | null
+          hire_date?: string | null
           id?: string
           name?: string
           role_title?: string | null
@@ -673,6 +685,7 @@ export type Database = {
           event_id: string | null
           id: string
           origin: string
+          person_id: string | null
           product_id: string | null
           revenue_type_id: string | null
           sort_order: number
@@ -689,6 +702,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           origin?: string
+          person_id?: string | null
           product_id?: string | null
           revenue_type_id?: string | null
           sort_order?: number
@@ -705,6 +719,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           origin?: string
+          person_id?: string | null
           product_id?: string | null
           revenue_type_id?: string | null
           sort_order?: number
@@ -732,6 +747,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
             referencedColumns: ["id"]
           },
           {
@@ -1226,6 +1248,10 @@ export type Database = {
         Args: { _unit_id: string; _user_id: string }
         Returns: boolean
       }
+      import_people: {
+        Args: { _overwrite?: boolean; _rows: Json; _version_id: string }
+        Returns: Json
+      }
       launch_event: {
         Args: {
           _lines?: Json
@@ -1279,6 +1305,10 @@ export type Database = {
           row_kind: string
           unit_id: string
         }[]
+      }
+      seed_person_line: {
+        Args: { _person_id: string; _reset?: boolean }
+        Returns: string
       }
       set_official_scenario: {
         Args: { _scenario_id: string }

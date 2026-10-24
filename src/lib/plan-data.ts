@@ -41,7 +41,9 @@ export function usePlanLines(
         .select("*, plan_values(month, amount), accounts!inner(kind)")
         .eq("version_id", versionId!)
         .eq("unit_id", unitId!)
-        .eq("accounts.kind", kind);
+        .eq("accounts.kind", kind)
+        // A remuneração das pessoas tem grade própria, na Folha.
+        .is("person_id", null);
       const { data, error } = await (
         eventId ? base.eq("event_id", eventId) : base.is("event_id", null)
       )
@@ -63,6 +65,7 @@ export function usePlanMutations() {
       queryClient.invalidateQueries({ queryKey: ["plan_lines"] }),
       queryClient.invalidateQueries({ queryKey: ["dre"] }),
       queryClient.invalidateQueries({ queryKey: ["event_items"] }),
+      queryClient.invalidateQueries({ queryKey: ["people"] }),
     ]);
 
   function fail(error: { message: string } | null) {

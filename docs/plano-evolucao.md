@@ -117,7 +117,7 @@ Produtos com preço e prazo (PR #3, 19/10): ao lançar um produto na previsão, 
 - Adicionar, renomear e excluir linha, com confirmação e registro na auditoria.
 - Navegação pelo teclado, **colar uma faixa do Excel**, "repetir até dezembro", "reajustar X% a partir do mês".
 - Tipo de receita recorrente preenche os meses sozinho. Variável avisa quando passa do máximo de meses.
-- Folha: entrada e saída de pessoas. Encargos, provisões e benefícios calculados por vínculo, a partir dos parâmetros.
+- Folha: a remuneração de cada pessoa é uma linha editável mês a mês (como em receitas), com importação da planilha pelo ID (sem nome nem CPF). Encargos, provisões e benefícios calculados por vínculo, a partir dos parâmetros.
 - Eventos: vagas × preço gera a receita. Custo por participante e custo fixo geram a despesa de produto.
 - A unidade, a versão e o cenário escolhidos ficam **na URL**: o link pode ser compartilhado e sobrevive ao recarregar a página.
 

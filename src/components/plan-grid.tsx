@@ -721,7 +721,7 @@ function LineDialog({
   );
 }
 
-function FillDialog({ line, onClose }: { line: PlanLine; onClose: () => void }) {
+export function FillDialog({ line, onClose }: { line: PlanLine; onClose: () => void }) {
   const { setValues } = usePlanMutations();
   const [amount, setAmount] = useState("");
   const [from, setFrom] = useState<number | null>(1);
@@ -776,7 +776,7 @@ function FillDialog({ line, onClose }: { line: PlanLine; onClose: () => void }) 
   );
 }
 
-function AdjustDialog({ line, onClose }: { line: PlanLine; onClose: () => void }) {
+export function AdjustDialog({ line, onClose }: { line: PlanLine; onClose: () => void }) {
   const { setValues } = usePlanMutations();
   const [pct, setPct] = useState("");
   const [from, setFrom] = useState<number | null>(1);
