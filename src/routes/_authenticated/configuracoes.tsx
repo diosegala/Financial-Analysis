@@ -576,6 +576,12 @@ function ContractTypesTab() {
             (accounts ?? []).filter((a) => a.kind === "folha" && a.treatment === "lancavel"),
           ),
         },
+        {
+          key: "role_keywords",
+          label: "Palavras no cargo",
+          type: "tags",
+          hint: "Separe por vírgula. Na importação da folha, cargos com estas palavras sugerem este vínculo. Ex.: estagio, estagiario.",
+        },
         active,
         order,
       ]}

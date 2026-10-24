@@ -57,11 +57,11 @@ INSERT INTO plan_values (line_id, month, amount)
 SELECT id, 1, CASE description WHEN 'a' THEN 10000 WHEN 'b' THEN 2000 WHEN 'c' THEN 1000 WHEN 'd' THEN 3000 ELSE 999 END FROM l;
 
 -- Uma pessoa CLT: 5.000, reajuste para 6.000 a partir de julho.
-WITH p AS (
-  INSERT INTO people (version_id, unit_id, name, contract_type_id, base_salary)
-  VALUES (pg_temp.id('versao'), pg_temp.id('consultoria'), 'Ana', pg_temp.ct('CLT'), 5000) RETURNING id
-)
-INSERT INTO salary_changes (person_id, month, new_salary) SELECT id, 7, 6000 FROM p;
+INSERT INTO people (version_id, unit_id, name, contract_type_id, base_salary)
+VALUES (pg_temp.id('versao'), pg_temp.id('consultoria'), 'Ana', pg_temp.ct('CLT'), 5000);
+-- Cadastrar a pessoa já criou a linha de remuneração; o reajuste de julho é feito nos meses da linha.
+UPDATE plan_values SET amount = 6000
+WHERE month >= 7 AND line_id = (SELECT l.id FROM plan_lines l JOIN people p ON p.id = l.person_id WHERE p.name = 'Ana');
 
 CREATE FUNCTION pg_temp.dre(_scenario TEXT, _code TEXT, _month INT, _units UUID[] DEFAULT NULL) RETURNS NUMERIC
 LANGUAGE sql AS $$

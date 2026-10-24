@@ -1,14 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, Upload } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
 import { byId, useContractTypes } from "@/lib/catalog";
-import { salaryFor, usePeople, usePeopleMutations, type Person } from "@/lib/payroll";
-import { MONTHS, MONTHS_FULL, fmtBRL, fmtInput, parseNum } from "@/lib/format";
+import { usePersonLines, usePeopleMutations, type Person, type PersonLine } from "@/lib/payroll";
+import { usePlanMutations } from "@/lib/plan-data";
+import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
+import { parseDate } from "@/lib/people-import";
 import { PageHeader } from "@/components/page-header";
-import { PlanGrid } from "@/components/plan-grid";
+import { AdjustDialog, FillDialog, PlanGrid } from "@/components/plan-grid";
+import { PeopleImportDialog } from "@/components/people-import";
+import { MoneyCell } from "@/components/money-cell";
 import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,26 +44,43 @@ import {
 export const Route = createFileRoute("/_authenticated/folha")({
   head: pageHead(
     "Folha",
-    "Pessoas da unidade, remuneração, reajustes e outros lançamentos de folha.",
+    "Pessoas da unidade com a remuneração mês a mês, importação da planilha e outros lançamentos de folha.",
   ),
   component: FolhaPage,
 });
 
 type Dialogs =
   | { type: "person"; person: Person | null }
-  | { type: "raises"; person: Person }
+  | { type: "fill"; item: PersonLine }
+  | { type: "adjust"; item: PersonLine }
   | { type: "delete"; person: Person }
+  | { type: "import" }
   | null;
 
 function FolhaPage() {
   const { unit, version, versionId, unitId, canEdit: unitEditable, lockReason } = usePlanning();
   const { data: user } = useCurrentUser();
-  const { data: people, isLoading } = usePeople(versionId, unitId);
+  const { data: items, isLoading } = usePersonLines(versionId, unitId);
   const { data: contractTypes } = useContractTypes();
+  const { setValues } = usePlanMutations();
   const [dialog, setDialog] = useState<Dialogs>(null);
   const canEdit = unitEditable && !!user?.isFinanceiro;
   const ctMap = byId(contractTypes);
-  const rows = people ?? [];
+  const rows = items ?? [];
+  const monthTotals = MONTHS.map((_, i) =>
+    rows.reduce((a, r) => a + (r.line.values.get(i + 1) ?? 0), 0),
+  );
+
+  function pasteBlock(rowIndex: number, month: number, block: string[][]) {
+    block.forEach((cells, r) => {
+      const item = rows[rowIndex + r];
+      if (!item) return;
+      const values = cells
+        .map((text, c) => ({ month: month + c, amount: parseNum(text) }))
+        .filter((v): v is { month: number; amount: number } => v.month <= 12 && v.amount !== null);
+      void setValues(item.line.id, values);
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -67,18 +88,28 @@ function FolhaPage() {
         title="Folha"
         subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"} · ${
           canEdit
-            ? "Encargos, provisões e benefícios por pessoa são calculados pelos parâmetros."
+            ? "A remuneração de cada pessoa é editável mês a mês. Encargos, provisões e benefícios são calculados pelos parâmetros."
             : (lockReason ?? "Somente o financeiro edita a folha.")
         }`}
         actions={
           canEdit && (
-            <Button
-              size="sm"
-              className="gap-1.5"
-              onClick={() => setDialog({ type: "person", person: null })}
-            >
-              <Plus className="h-4 w-4" /> Adicionar pessoa
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setDialog({ type: "import" })}
+              >
+                <Upload className="h-4 w-4" /> Importar planilha
+              </Button>
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setDialog({ type: "person", person: null })}
+              >
+                <Plus className="h-4 w-4" /> Adicionar pessoa
+              </Button>
+            </div>
           )
         }
       />
@@ -94,7 +125,7 @@ function FolhaPage() {
                   Pessoa
                 </th>
                 {MONTHS.map((m) => (
-                  <th key={m} className="min-w-20 px-2 py-2 text-right font-medium">
+                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
                     {m}
                   </th>
                 ))}
@@ -103,35 +134,32 @@ function FolhaPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((p) => {
-                const monthly = MONTHS.map((_, i) => salaryFor(p, i + 1));
-                const raises = [...p.salary_changes].sort((a, b) => a.month - b.month);
+              {rows.map((item, r) => {
+                const { person: p, line } = item;
+                const total = [...line.values.values()].reduce((a, v) => a + v, 0);
                 return (
-                  <tr key={p.id} className="border-b border-border">
-                    <td className="sticky left-0 z-10 bg-card px-3 py-1.5">
+                  <tr key={line.id} className="border-b border-border">
+                    <td className="sticky left-0 z-10 bg-card px-3 py-1">
                       <div className="font-medium">{p.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {[
-                          p.role_title,
-                          ctMap.get(p.contract_type_id)?.name,
-                          p.start_month ? `entra em ${MONTHS[p.start_month - 1]}` : null,
-                          p.end_month ? `sai em ${MONTHS[p.end_month - 1]}` : null,
-                          raises.length ? `${raises.length} reajuste(s)` : null,
-                        ]
+                        {[p.role_title, ctMap.get(p.contract_type_id)?.name]
                           .filter(Boolean)
                           .join(" · ")}
                       </div>
                     </td>
-                    {monthly.map((v, i) => (
-                      <td
-                        key={i}
-                        className="px-2 py-1.5 text-right font-mono tabular-nums text-muted-foreground"
-                      >
-                        {v ? fmtBRL(v) : "—"}
+                    {MONTHS.map((_, i) => (
+                      <td key={i} className="border-l border-border/50 p-0">
+                        <MoneyCell
+                          value={line.values.get(i + 1) ?? 0}
+                          disabled={!canEdit}
+                          pos={{ grid: "grid-folha-pessoas", row: r, col: i }}
+                          onCommit={(v) => setValues(line.id, [{ month: i + 1, amount: v }])}
+                          onPasteBlock={(block) => pasteBlock(r, i + 1, block)}
+                        />
                       </td>
                     ))}
-                    <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                      {fmtBRL(monthly.reduce((a, v) => a + v, 0))}
+                    <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
+                      {fmtBRL(total)}
                     </td>
                     <td className="px-1">
                       {canEdit && (
@@ -152,10 +180,11 @@ function FolhaPage() {
                             >
                               Editar pessoa
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setDialog({ type: "raises", person: p })}
-                            >
-                              Reajustes…
+                            <DropdownMenuItem onClick={() => setDialog({ type: "fill", item })}>
+                              Preencher meses…
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setDialog({ type: "adjust", item })}>
+                              Reajustar a partir de um mês…
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -171,11 +200,26 @@ function FolhaPage() {
                   </tr>
                 );
               })}
-              {rows.length === 0 && (
+              {rows.length === 0 ? (
                 <tr>
                   <td colSpan={15} className="px-3 py-8 text-center text-muted-foreground">
                     Nenhuma pessoa cadastrada nesta unidade.
                   </td>
+                </tr>
+              ) : (
+                <tr className="border-t border-border bg-muted/30 font-semibold">
+                  <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">
+                    Total ({rows.length} pessoa{rows.length === 1 ? "" : "s"})
+                  </td>
+                  {monthTotals.map((t, i) => (
+                    <td key={i} className="px-2 py-1.5 text-right font-mono tabular-nums">
+                      {fmtBRL(t)}
+                    </td>
+                  ))}
+                  <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                    {fmtBRL(monthTotals.reduce((a, t) => a + t, 0))}
+                  </td>
+                  <td />
                 </tr>
               )}
             </tbody>
@@ -194,15 +238,16 @@ function FolhaPage() {
       {dialog?.type === "person" && (
         <PersonDialog person={dialog.person} onClose={() => setDialog(null)} />
       )}
-      {dialog?.type === "raises" && (
-        <RaisesDialog
-          person={rows.find((p) => p.id === dialog.person.id) ?? dialog.person}
-          onClose={() => setDialog(null)}
-        />
+      {dialog?.type === "fill" && (
+        <FillDialog line={dialog.item.line} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.type === "adjust" && (
+        <AdjustDialog line={dialog.item.line} onClose={() => setDialog(null)} />
       )}
       {dialog?.type === "delete" && (
         <DeletePersonDialog person={dialog.person} onClose={() => setDialog(null)} />
       )}
+      {dialog?.type === "import" && <PeopleImportDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }
@@ -211,34 +256,48 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
   const { versionId, unitId } = usePlanning();
   const { data: contractTypes } = useContractTypes();
   const { addPerson, updatePerson } = usePeopleMutations();
+  const [externalId, setExternalId] = useState(person?.external_id ?? "");
   const [name, setName] = useState(person?.name ?? "");
   const [roleTitle, setRoleTitle] = useState(person?.role_title ?? "");
   const [contractTypeId, setContractTypeId] = useState<string | null>(
-    person?.contract_type_id ?? contractTypes?.[0]?.id ?? null,
+    person?.contract_type_id ?? contractTypes?.find((c) => c.active)?.id ?? null,
   );
-  const [salary, setSalary] = useState(person ? fmtInput(Number(person.base_salary)) : "");
-  const [start, setStart] = useState<number | null>(person?.start_month ?? null);
-  const [end, setEnd] = useState<number | null>(person?.end_month ?? null);
+  const [hire, setHire] = useState(person?.hire_date ?? "");
+  const [dependents, setDependents] = useState(String(person?.dependents ?? 0));
+  const [salary, setSalary] = useState("");
+  const [start, setStart] = useState<number | null>(null);
+  const [end, setEnd] = useState<number | null>(null);
   const salaryValue = parseNum(salary);
+  const dependentsValue = Number(dependents);
+  const label = name.trim() || (externalId.trim() ? `ID ${externalId.trim()}` : "");
   const valid =
-    name.trim() !== "" &&
+    label !== "" &&
     contractTypeId &&
-    salaryValue !== null &&
-    (!start || !end || start <= end);
+    (hire === "" || parseDate(hire) !== null) &&
+    Number.isInteger(dependentsValue) &&
+    dependentsValue >= 0 &&
+    (!!person || (salaryValue !== null && (!start || !end || start <= end)));
 
   async function save() {
     if (!valid) return;
     const fields = {
-      name: name.trim(),
+      name: label,
+      external_id: externalId.trim() || null,
       role_title: roleTitle.trim() || null,
       contract_type_id: contractTypeId!,
-      base_salary: salaryValue!,
-      start_month: start,
-      end_month: end,
+      hire_date: hire === "" ? null : parseDate(hire),
+      dependents: dependentsValue,
     };
     const ok = person
       ? await updatePerson(person.id, fields)
-      : await addPerson({ ...fields, version_id: versionId!, unit_id: unitId! });
+      : await addPerson({
+          ...fields,
+          version_id: versionId!,
+          unit_id: unitId!,
+          base_salary: salaryValue!,
+          start_month: start,
+          end_month: end,
+        });
     if (ok) onClose();
   }
 
@@ -249,7 +308,10 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
           <DialogTitle>{person ? "Editar pessoa" : "Nova pessoa"}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Nome">
+          <Field label="ID" hint="O mesmo da planilha da folha.">
+            <Input value={externalId} onChange={(e) => setExternalId(e.target.value)} />
+          </Field>
+          <Field label="Nome" hint="Opcional: sem nome, a pessoa aparece pelo ID.">
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field label="Cargo">
@@ -268,122 +330,54 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
                 .map((c) => ({ value: c.id, label: c.name }))}
             />
           </Field>
-          <Field label="Remuneração mensal" hint="Salário, pró-labore ou bolsa.">
+          <Field label="Data de admissão" hint="dd/mm/aaaa. Opcional.">
             <Input
-              value={salary}
-              onChange={(e) => setSalary(e.target.value)}
+              value={hire}
+              onChange={(e) => setHire(e.target.value)}
+              placeholder="01/03/2024"
+            />
+          </Field>
+          <Field label="Dependentes" hint="Entram no cálculo do IRRF.">
+            <Input
+              value={dependents}
+              onChange={(e) => setDependents(e.target.value)}
               className="font-mono"
             />
           </Field>
-          <Field label="Entrada">
-            <MonthSelect value={start} onChange={setStart} noneLabel="Já está no início do ano" />
-          </Field>
-          <Field label="Saída">
-            <MonthSelect value={end} onChange={setEnd} noneLabel="Fica até o fim do ano" />
-          </Field>
+          {!person && (
+            <>
+              <Field
+                label="Remuneração mensal"
+                hint="Salário, pró-labore ou bolsa. Preenche os meses; depois edite na grade."
+              >
+                <Input
+                  value={salary}
+                  onChange={(e) => setSalary(e.target.value)}
+                  className="font-mono"
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Entrada">
+                  <MonthSelect value={start} onChange={setStart} noneLabel="Início do ano" />
+                </Field>
+                <Field label="Saída">
+                  <MonthSelect value={end} onChange={setEnd} noneLabel="Fim do ano" />
+                </Field>
+              </div>
+            </>
+          )}
         </div>
+        {person && (
+          <p className="text-xs text-muted-foreground">
+            A remuneração de cada mês se edita direto na grade da Folha.
+          </p>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
           <Button onClick={save} disabled={!valid}>
             Salvar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function RaisesDialog({ person, onClose }: { person: Person; onClose: () => void }) {
-  const { setSalaryChange, deleteSalaryChange } = usePeopleMutations();
-  const [month, setMonth] = useState<number | null>(1);
-  const [mode, setMode] = useState<"valor" | "pct">("pct");
-  const [input, setInput] = useState("");
-  const parsed = parseNum(input);
-  const current = month ? salaryFor({ ...person, start_month: null, end_month: null }, month) : 0;
-  const newSalary =
-    parsed === null || input.trim() === ""
-      ? null
-      : mode === "pct"
-        ? Math.round(current * (1 + parsed / 100) * 100) / 100
-        : parsed;
-  const raises = [...person.salary_changes].sort((a, b) => a.month - b.month);
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Reajustes de {person.name}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <ul className="divide-y divide-border rounded-md border border-border text-sm">
-            <li className="flex justify-between px-3 py-1.5 text-muted-foreground">
-              <span>Base</span>
-              <span className="font-mono">{fmtBRL(Number(person.base_salary))}</span>
-            </li>
-            {raises.map((r) => (
-              <li key={r.id} className="flex items-center justify-between px-3 py-1.5">
-                <span>A partir de {MONTHS_FULL[r.month - 1]}</span>
-                <span className="flex items-center gap-2 font-mono">
-                  {fmtBRL(Number(r.new_salary))}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs"
-                    onClick={() => deleteSalaryChange(r.id)}
-                  >
-                    remover
-                  </Button>
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="A partir de">
-              <MonthSelect value={month} onChange={setMonth} />
-            </Field>
-            <Field label="Tipo">
-              <OptionSelect
-                value={mode}
-                onChange={(v) => setMode((v as "valor" | "pct") ?? "pct")}
-                options={[
-                  { value: "pct", label: "Percentual" },
-                  { value: "valor", label: "Novo valor" },
-                ]}
-              />
-            </Field>
-            <Field label={mode === "pct" ? "Reajuste (%)" : "Novo valor"}>
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                className="font-mono"
-              />
-            </Field>
-          </div>
-          {newSalary !== null && month && (
-            <p className="text-sm text-muted-foreground">
-              De {fmtBRL(current)} para <strong>{fmtBRL(newSalary)}</strong> a partir de{" "}
-              {MONTHS_FULL[month - 1]}.
-            </p>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Fechar
-          </Button>
-          <Button
-            disabled={newSalary === null || !month}
-            onClick={async () => {
-              if (
-                newSalary !== null &&
-                month &&
-                (await setSalaryChange(person.id, month, newSalary))
-              )
-                setInput("");
-            }}
-          >
-            Adicionar reajuste
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -399,8 +393,8 @@ function DeletePersonDialog({ person, onClose }: { person: Person; onClose: () =
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir {person.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Para planejar um desligamento, prefira informar o mês de saída. A exclusão remove a
-            pessoa e os reajustes desta versão.
+            Para planejar um desligamento, zere os meses seguintes na grade. A exclusão remove a
+            pessoa e a linha de remuneração desta versão.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

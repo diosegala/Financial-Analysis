@@ -3,70 +3,100 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { friendlyError } from "./catalog";
+import type { PlanLine } from "./plan-data";
+import type { ImportedPerson } from "./people-import";
 
-export type SalaryChange = Tables<"salary_changes">;
-export type Person = Tables<"people"> & { salary_changes: SalaryChange[] };
+export type Person = Tables<"people">;
 
-/**
- * Remuneração no mês: 0 fora do período (entrada/saída); senão o último reajuste até o mês,
- * ou o salário base. Mesma regra de plan_base_rows no banco.
- */
-export function salaryFor(
-  person: Pick<Person, "base_salary" | "start_month" | "end_month" | "salary_changes">,
-  month: number,
-): number {
-  if (month < (person.start_month ?? 1) || month > (person.end_month ?? 12)) return 0;
-  const change = person.salary_changes
-    .filter((c) => c.month <= month)
-    .sort((a, b) => b.month - a.month)[0];
-  return Number(change?.new_salary ?? person.base_salary);
+/** A pessoa e a linha do plano com a remuneração mês a mês (a linha é a fonte da verdade). */
+export interface PersonLine {
+  person: Person;
+  line: PlanLine;
 }
 
-export function usePeople(versionId: string | null, unitId: string | null) {
+/** Pessoas da unidade, cada uma com a sua linha de remuneração. */
+export function usePersonLines(versionId: string | null, unitId: string | null) {
   return useQuery({
     queryKey: ["people", versionId, unitId],
     enabled: !!versionId && !!unitId,
-    queryFn: async (): Promise<Person[]> => {
+    queryFn: async (): Promise<PersonLine[]> => {
       const { data, error } = await supabase
-        .from("people")
-        .select("*, salary_changes(*)")
+        .from("plan_lines")
+        .select("*, plan_values(month, amount), people!inner(*)")
         .eq("version_id", versionId!)
         .eq("unit_id", unitId!)
-        .order("name");
+        .not("person_id", "is", null);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? [])
+        .map(({ plan_values, people, ...line }) => ({
+          person: people,
+          line: { ...line, values: new Map(plan_values.map((v) => [v.month, Number(v.amount)])) },
+        }))
+        .sort((a, b) => a.person.name.localeCompare(b.person.name, "pt-BR", { numeric: true }));
+    },
+  });
+}
+
+/** IDs das pessoas já cadastradas na versão (todas as unidades), para a importação saber quem já existe. */
+export function useExternalIds(versionId: string | null) {
+  return useQuery({
+    queryKey: ["people", "external_ids", versionId],
+    enabled: !!versionId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("people")
+        .select("external_id")
+        .eq("version_id", versionId!)
+        .not("external_id", "is", null);
+      if (error) throw error;
+      return new Set((data ?? []).map((p) => p.external_id!));
     },
   });
 }
 
 export function usePeopleMutations() {
   const queryClient = useQueryClient();
+  async function refresh() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["people"] }),
+      queryClient.invalidateQueries({ queryKey: ["plan_lines"] }),
+      queryClient.invalidateQueries({ queryKey: ["dre"] }),
+    ]);
+  }
   async function run(p: PromiseLike<{ error: { message: string } | null }>) {
     const { error } = await p;
     if (error) {
       toast.error(friendlyError(error.message));
       return false;
     }
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["people"] }),
-      queryClient.invalidateQueries({ queryKey: ["dre"] }),
-    ]);
+    await refresh();
     return true;
   }
   return {
+    // Cadastrar a pessoa já cria a linha de remuneração, com os meses do salário informado.
     addPerson: (row: TablesInsert<"people">) => run(supabase.from("people").insert(row)),
     updatePerson: (id: string, patch: TablesUpdate<"people">) =>
       run(supabase.from("people").update(patch).eq("id", id)),
     deletePerson: (id: string) => run(supabase.from("people").delete().eq("id", id)),
-    setSalaryChange: (personId: string, month: number, newSalary: number) =>
-      run(
-        supabase
-          .from("salary_changes")
-          .upsert(
-            { person_id: personId, month, new_salary: newSalary },
-            { onConflict: "person_id,month" },
-          ),
-      ),
-    deleteSalaryChange: (id: string) => run(supabase.from("salary_changes").delete().eq("id", id)),
+    importPeople: async (versionId: string, rows: ImportedPerson[], overwrite: boolean) => {
+      const { data, error } = await supabase.rpc("import_people", {
+        _version_id: versionId,
+        _rows: rows.map(({ line: _line, ...row }) => ({
+          external_id: row.external_id,
+          unit_id: row.unit_id,
+          role_title: row.role_title,
+          contract_type_id: row.contract_type_id,
+          hire_date: row.hire_date,
+          salary: row.salary,
+        })),
+        _overwrite: overwrite,
+      });
+      if (error) {
+        toast.error(friendlyError(error.message));
+        return null;
+      }
+      await refresh();
+      return data as { created: number; updated: number };
+    },
   };
 }
