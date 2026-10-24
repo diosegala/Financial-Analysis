@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { pageHead } from "@/lib/head";
 import { useCurrentUser } from "@/lib/auth";
 import {
+  useAccountGroupRules,
+  useAccountTreatmentRules,
   useAccounts,
   useAllScenarios,
   useCalcRules,
@@ -19,6 +21,7 @@ import {
   useVersions,
 } from "@/lib/catalog";
 import { MONTHS_FULL } from "@/lib/format";
+import { norm } from "@/lib/products-import";
 import { VERSION_STATUS_LABELS } from "@/lib/submissions";
 import { PageHeader } from "@/components/page-header";
 import { AccountsImport } from "@/components/accounts-import";
@@ -65,6 +68,7 @@ function ConfiguracoesPage() {
           <TabsTrigger value="unidades">Unidades</TabsTrigger>
           <TabsTrigger value="dre">Estrutura da DRE</TabsTrigger>
           <TabsTrigger value="contas">Plano de contas</TabsTrigger>
+          <TabsTrigger value="importacao">Regras da importação</TabsTrigger>
           <TabsTrigger value="tipos">Tipos de receita</TabsTrigger>
           <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
           <TabsTrigger value="clientes">Clientes</TabsTrigger>
@@ -85,6 +89,9 @@ function ConfiguracoesPage() {
         </TabsContent>
         <TabsContent value="contas">
           <AccountsTab />
+        </TabsContent>
+        <TabsContent value="importacao">
+          <ImportRulesTab />
         </TabsContent>
         <TabsContent value="tipos">
           <RevenueTypesTab />
@@ -266,6 +273,12 @@ function UnitsTab() {
           ],
         },
         { key: "omie_department_code", label: "Departamento no Omie", type: "text" },
+        {
+          key: "name_keywords",
+          label: "Palavras no nome da categoria",
+          type: "tags",
+          hint: "Separe por vírgula. Na importação do plano de contas, ajudam a achar a unidade quando o departamento do Omie vem vazio. Ex.: Summit, Insider.",
+        },
         active,
         order,
       ]}
@@ -337,6 +350,17 @@ function AccountsTab() {
   const { data: accounts } = useAccounts();
   const { data: lines } = useDreLines();
   const { data: units } = useUnits();
+  const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [treatmentFilter, setTreatmentFilter] = useState<string | null>(null);
+  const all = accounts ?? [];
+  const groups = [...new Set(all.map((a) => a.group_name).filter((g): g is string => !!g))].sort();
+  const rows = all.filter(
+    (a) =>
+      (!search || norm(a.name).includes(norm(search))) &&
+      (!groupFilter || a.group_name === groupFilter) &&
+      (!treatmentFilter || a.treatment === treatmentFilter),
+  );
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card p-3">
@@ -346,13 +370,69 @@ function AccountsTab() {
         </p>
         <AccountsImport />
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          className="w-64"
+          placeholder="Buscar conta pelo nome"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          aria-label="Buscar conta"
+        />
+        <OptionSelect
+          className="w-48"
+          value={groupFilter}
+          onChange={setGroupFilter}
+          noneLabel="Todos os grupos"
+          options={groups.map((g) => ({ value: g, label: g }))}
+        />
+        <OptionSelect
+          className="w-52"
+          value={treatmentFilter}
+          onChange={setTreatmentFilter}
+          noneLabel="Todos os tratamentos"
+          options={[
+            { value: "lancavel", label: "Lançável" },
+            { value: "calculada", label: "Calculada pelo app" },
+            { value: "fora_dre", label: "Fora da DRE" },
+          ]}
+        />
+        <span className="text-sm text-muted-foreground">
+          {rows.length} de {all.length} contas
+        </span>
+      </div>
       <CrudTable
         table="accounts"
-        rows={accounts ?? []}
+        rows={rows}
         description="Cada conta aparece numa grade (Receitas, Despesas ou Folha) e soma numa linha da DRE."
         fields={[
           { key: "name", label: "Nome", type: "text", required: true },
           { key: "code", label: "Código", type: "text", hideInTable: true },
+          {
+            key: "group_name",
+            label: "Grupo",
+            type: "text",
+            hint: "Ex.: Summit. Junta as edições de um mesmo evento.",
+          },
+          { key: "period", label: "Período", type: "text", hint: "Ex.: 2027 ou 2026/2027." },
+          {
+            key: "base_name",
+            label: "Nome sem o período",
+            type: "text",
+            hideInTable: true,
+            hint: "Chave do comparativo entre edições.",
+          },
+          {
+            key: "treatment",
+            label: "Tratamento",
+            type: "select",
+            required: true,
+            hint: "Lançável aparece nas grades. Calculada pelo app (impostos, INSS…) e fora da DRE não se lançam.",
+            options: [
+              { value: "lancavel", label: "Lançável" },
+              { value: "calculada", label: "Calculada pelo app" },
+              { value: "fora_dre", label: "Fora da DRE" },
+            ],
+          },
           {
             key: "kind",
             label: "Grade",
@@ -368,8 +448,11 @@ function AccountsTab() {
             key: "dre_line_id",
             label: "Linha da DRE",
             type: "select",
-            required: true,
-            options: opts((lines ?? []).filter((l) => l.kind === "lancada")),
+            noneLabel: "Nenhuma (fora da DRE)",
+            hint: "Obrigatória, exceto para contas fora da DRE.",
+            options: opts(
+              (lines ?? []).filter((l) => l.kind === "lancada" || l.kind === "calculada"),
+            ),
           },
           {
             key: "unit_ids",
@@ -388,8 +471,58 @@ function AccountsTab() {
           active,
           order,
         ]}
-        defaults={{ kind: "despesa", active: true, sort_order: 0, generates_tax_credit: false }}
+        defaults={{
+          kind: "despesa",
+          treatment: "lancavel",
+          active: true,
+          sort_order: 0,
+          generates_tax_credit: false,
+        }}
       />
+    </div>
+  );
+}
+
+function ImportRulesTab() {
+  const { data: treatmentRules } = useAccountTreatmentRules();
+  const { data: groupRules } = useAccountGroupRules();
+  return (
+    <div className="space-y-6">
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Contas que o app calcula ou que ficam fora da DRE</h2>
+        <CrudTable
+          table="account_treatment_rules"
+          rows={treatmentRules ?? []}
+          description="Na importação, a categoria cujo nome tem uma destas palavras vem sugerida como calculada pelo app (impostos, INSS, FGTS…) ou fora da DRE (transferências, dividendos…). Vale como palavra inteira, sem diferenciar acento nem maiúscula. Tudo pode ser corrigido linha a linha na conferência."
+          fields={[
+            { key: "keyword", label: "Palavra ou frase", type: "text", required: true },
+            {
+              key: "treatment",
+              label: "Tratamento",
+              type: "select",
+              required: true,
+              options: [
+                { value: "calculada", label: "Calculada pelo app" },
+                { value: "fora_dre", label: "Fora da DRE" },
+              ],
+            },
+            { key: "note", label: "Observação", type: "text" },
+          ]}
+          defaults={{ treatment: "calculada" }}
+        />
+      </section>
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Grupos das categorias</h2>
+        <CrudTable
+          table="account_group_rules"
+          rows={groupRules ?? []}
+          description="Na importação, a categoria cujo nome tem a palavra entra no grupo (ex.: Summit). O grupo junta as edições de um mesmo evento para o comparativo."
+          fields={[
+            { key: "keyword", label: "Palavra ou frase", type: "text", required: true },
+            { key: "group_name", label: "Grupo", type: "text", required: true },
+          ]}
+        />
+      </section>
     </div>
   );
 }
@@ -439,7 +572,9 @@ function ContractTypesTab() {
           label: "Conta da remuneração",
           type: "select",
           required: true,
-          options: opts((accounts ?? []).filter((a) => a.kind === "folha")),
+          options: opts(
+            (accounts ?? []).filter((a) => a.kind === "folha" && a.treatment === "lancavel"),
+          ),
         },
         active,
         order,

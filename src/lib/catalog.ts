@@ -51,6 +51,8 @@ export const useClients = () => useTable("clients", ["name"]);
 export const useParameterDefinitions = () =>
   useTable("parameter_definitions", ["sort_order", "label"]);
 export const useParameterValues = () => useTable("parameter_values", ["valid_from"]);
+export const useAccountTreatmentRules = () => useTable("account_treatment_rules", ["keyword"]);
+export const useAccountGroupRules = () => useTable("account_group_rules", ["keyword"]);
 export const useCalcRules = () => useTable("calc_rules", ["sort_order", "name"]);
 
 export function useScenarios(versionId: string | null) {
@@ -99,6 +101,9 @@ export function friendlyError(message: string): string {
   if (message.includes("duplicate key")) return "Já existe um registro com esse nome.";
   if (message.includes("violates foreign key"))
     return "Este registro está em uso e não pode ser excluído. Desative-o.";
+  if (message.includes("accounts_dre_line_required"))
+    return "Escolha a linha da DRE. Só as contas fora da DRE ficam sem linha.";
+  if (message.includes("não pode ser lançada")) return message;
   if (message.includes("row-level security")) return "Você não tem permissão para esta alteração.";
   return message;
 }

@@ -336,7 +336,11 @@ function LineDialog({
   const inEvent = !!event;
 
   const options = (accounts ?? []).filter(
-    (a) => a.kind === kind && a.active && (!a.unit_ids || a.unit_ids.includes(unitId!)),
+    (a) =>
+      a.kind === kind &&
+      a.active &&
+      a.treatment === "lancavel" &&
+      (!a.unit_ids || a.unit_ids.includes(unitId!)),
   );
   // Só serviços entram aqui; eventos e treinamentos são lançados em Eventos.
   const productOptions = (products ?? []).filter(
