@@ -61,6 +61,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+export const REVENUE_ORIGINS = [
+  { value: "carteira", label: "Carteira atual" },
+  { value: "renovacao", label: "Renovação" },
+  { value: "nova", label: "Venda nova" },
+];
+
 interface PlanGridProps {
   kind: AccountKind;
   emptyText: string;
@@ -168,9 +174,12 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
                   [clientName, productName].filter(Boolean).join(" — ") ||
                   accountName;
                 // O cliente (ou patrocinador) já está no título quando a linha não tem descrição.
-                const sub = [accountName, type?.name, line.description ? clientName : null].filter(
-                  Boolean,
-                );
+                const sub = [
+                  accountName,
+                  type?.name,
+                  REVENUE_ORIGINS.find((o) => o.value === line.revenue_origin)?.label,
+                  line.description ? clientName : null,
+                ].filter(Boolean);
                 return (
                   <tr key={line.id} className="border-b border-border last:border-0">
                     <td className="sticky left-0 z-10 bg-card px-3 py-1">
@@ -358,6 +367,10 @@ function LineDialog({
   );
   const [productId, setProductId] = useState<string | null>(line?.product_id ?? null);
   const [revenueTypeId, setRevenueTypeId] = useState<string | null>(line?.revenue_type_id ?? null);
+  // Itens de evento são vendas novas; as demais linhas de receita escolhem a origem.
+  const [revenueOrigin, setRevenueOrigin] = useState<string | null>(
+    line?.revenue_origin ?? (inEvent ? "nova" : null),
+  );
   const [amount, setAmount] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [startMonth, setStartMonth] = useState<number | null>(event?.month ?? 1);
@@ -460,6 +473,7 @@ function LineDialog({
       client_id: clientId,
       product_id: isRevenue ? (inEvent ? event.product_id : productId) : null,
       revenue_type_id: isRevenue ? revenueTypeId : null,
+      revenue_origin: isRevenue ? revenueOrigin : null,
     };
     let ok: boolean;
     if (line) {
@@ -481,6 +495,7 @@ function LineDialog({
   }
 
   const needsType = isRevenue && !revenueTypeId;
+  const needsOrigin = isRevenue && !revenueOrigin;
   const needsDescription = inEvent && description.trim() === "";
   const valueLabel =
     !isRevenue || model === "mensal"
@@ -590,6 +605,16 @@ function LineDialog({
                       value: p.id,
                       label: `${p.name} — ${describePrice(p)}`,
                     }))}
+                  />
+                </Field>
+                <Field
+                  label="Origem da receita"
+                  hint="Carteira: contratos que já existem. Renovação: contratos recorrentes que vencem e renovam. Nova: venda ainda a fazer. A meta menos carteira e renovações é o saldo a vender."
+                >
+                  <OptionSelect
+                    value={revenueOrigin}
+                    onChange={setRevenueOrigin}
+                    options={REVENUE_ORIGINS}
                   />
                 </Field>
                 {clientField}
@@ -711,7 +736,9 @@ function LineDialog({
           </Button>
           <Button
             onClick={save}
-            disabled={saving || !accountId || needsType || needsDescription || manualInvalid}
+            disabled={
+              saving || !accountId || needsType || needsOrigin || needsDescription || manualInvalid
+            }
           >
             {saving ? "Salvando…" : "Salvar"}
           </Button>
