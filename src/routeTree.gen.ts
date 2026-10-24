@@ -23,6 +23,7 @@ import { Route as AuthenticatedInicioRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedMetasRouteImport } from './routes/_authenticated/metas'
 import { Route as AuthenticatedParametrosRouteImport } from './routes/_authenticated/parametros'
 import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticated/produtos'
+import { Route as AuthenticatedRealizadoRouteImport } from './routes/_authenticated/realizado'
 import { Route as AuthenticatedReceitasRouteImport } from './routes/_authenticated/receitas'
 import { Route as AuthenticatedUsuariosRouteImport } from './routes/_authenticated/usuarios'
 
@@ -96,6 +97,11 @@ const AuthenticatedProdutosRoute = AuthenticatedProdutosRouteImport.update({
   path: '/produtos',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRealizadoRoute = AuthenticatedRealizadoRouteImport.update({
+  id: '/realizado',
+  path: '/realizado',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedReceitasRoute = AuthenticatedReceitasRouteImport.update({
   id: '/receitas',
   path: '/receitas',
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/metas': typeof AuthenticatedMetasRoute
   '/parametros': typeof AuthenticatedParametrosRoute
   '/produtos': typeof AuthenticatedProdutosRoute
+  '/realizado': typeof AuthenticatedRealizadoRoute
   '/receitas': typeof AuthenticatedReceitasRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/metas': typeof AuthenticatedMetasRoute
   '/parametros': typeof AuthenticatedParametrosRoute
   '/produtos': typeof AuthenticatedProdutosRoute
+  '/realizado': typeof AuthenticatedRealizadoRoute
   '/receitas': typeof AuthenticatedReceitasRoute
   '/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/_authenticated/metas': typeof AuthenticatedMetasRoute
   '/_authenticated/parametros': typeof AuthenticatedParametrosRoute
   '/_authenticated/produtos': typeof AuthenticatedProdutosRoute
+  '/_authenticated/realizado': typeof AuthenticatedRealizadoRoute
   '/_authenticated/receitas': typeof AuthenticatedReceitasRoute
   '/_authenticated/usuarios': typeof AuthenticatedUsuariosRoute
 }
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/metas'
     | '/parametros'
     | '/produtos'
+    | '/realizado'
     | '/receitas'
     | '/usuarios'
   fileRoutesByTo: FileRoutesByTo
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/metas'
     | '/parametros'
     | '/produtos'
+    | '/realizado'
     | '/receitas'
     | '/usuarios'
   id:
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/_authenticated/metas'
     | '/_authenticated/parametros'
     | '/_authenticated/produtos'
+    | '/_authenticated/realizado'
     | '/_authenticated/receitas'
     | '/_authenticated/usuarios'
   fileRoutesById: FileRoutesById
@@ -321,6 +333,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProdutosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/realizado': {
+      id: '/_authenticated/realizado'
+      path: '/realizado'
+      fullPath: '/realizado'
+      preLoaderRoute: typeof AuthenticatedRealizadoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/receitas': {
       id: '/_authenticated/receitas'
       path: '/receitas'
@@ -350,6 +369,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMetasRoute: typeof AuthenticatedMetasRoute
   AuthenticatedParametrosRoute: typeof AuthenticatedParametrosRoute
   AuthenticatedProdutosRoute: typeof AuthenticatedProdutosRoute
+  AuthenticatedRealizadoRoute: typeof AuthenticatedRealizadoRoute
   AuthenticatedReceitasRoute: typeof AuthenticatedReceitasRoute
   AuthenticatedUsuariosRoute: typeof AuthenticatedUsuariosRoute
 }
@@ -366,6 +386,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMetasRoute: AuthenticatedMetasRoute,
   AuthenticatedParametrosRoute: AuthenticatedParametrosRoute,
   AuthenticatedProdutosRoute: AuthenticatedProdutosRoute,
+  AuthenticatedRealizadoRoute: AuthenticatedRealizadoRoute,
   AuthenticatedReceitasRoute: AuthenticatedReceitasRoute,
   AuthenticatedUsuariosRoute: AuthenticatedUsuariosRoute,
 }

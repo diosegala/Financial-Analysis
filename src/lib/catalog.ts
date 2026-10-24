@@ -56,6 +56,7 @@ export const useAccountGroupRules = () => useTable("account_group_rules", ["keyw
 export const usePayrollBrackets = () =>
   useTable("payroll_tax_brackets", ["valid_from", "lower_bound"]);
 export const usePayrollConstants = () => useTable("payroll_tax_constants", ["key", "valid_from"]);
+export const useOmieDepartmentUnits = () => useTable("omie_department_units", ["department_name"]);
 export const useCalcRules = () => useTable("calc_rules", ["sort_order", "name"]);
 
 export function useScenarios(versionId: string | null) {
