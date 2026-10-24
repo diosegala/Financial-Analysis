@@ -756,6 +756,7 @@ export type Database = {
           origin: string
           person_id: string | null
           product_id: string | null
+          revenue_origin: string | null
           revenue_type_id: string | null
           sort_order: number
           unit_id: string
@@ -773,6 +774,7 @@ export type Database = {
           origin?: string
           person_id?: string | null
           product_id?: string | null
+          revenue_origin?: string | null
           revenue_type_id?: string | null
           sort_order?: number
           unit_id: string
@@ -790,6 +792,7 @@ export type Database = {
           origin?: string
           person_id?: string | null
           product_id?: string | null
+          revenue_origin?: string | null
           revenue_type_id?: string | null
           sort_order?: number
           unit_id?: string
@@ -1558,6 +1561,7 @@ export type Database = {
           _description: string
           _event_id?: string
           _product_id: string
+          _revenue_origin?: string
           _revenue_type_id: string
           _unit_id: string
           _values?: Json
@@ -1672,6 +1676,22 @@ export type Database = {
           revenue: number
           target_amount: number
           variable_costs: number
+        }[]
+      }
+      target_vs_plan: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          carteira: number
+          month: number
+          nova: number
+          renovacao: number
+          sem_origem: number
+          target: number
+          unit_id: string
         }[]
       }
       target_weights: {

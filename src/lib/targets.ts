@@ -206,3 +206,48 @@ export function useTargetMutations() {
     },
   };
 }
+
+export interface MetaMonth {
+  target: number;
+  carteira: number;
+  renovacao: number;
+  nova: number;
+  semOrigem: number;
+}
+
+/** Meta × plano da unidade, por mês (índice 0 = janeiro). Sem meta visível, `target` fica em 0. */
+export function useTargetVsPlan(
+  versionId: string | null,
+  scenarioId: string | null,
+  unitId: string | null,
+) {
+  return useQuery({
+    queryKey: ["target_vs_plan", versionId, scenarioId, unitId],
+    enabled: !!versionId && !!scenarioId && !!unitId,
+    queryFn: async (): Promise<MetaMonth[]> => {
+      const { data, error } = await supabase.rpc("target_vs_plan", {
+        _version_id: versionId!,
+        _scenario_id: scenarioId!,
+        _unit_ids: [unitId!],
+      });
+      if (error) throw error;
+      const months: MetaMonth[] = Array.from({ length: 12 }, () => ({
+        target: 0,
+        carteira: 0,
+        renovacao: 0,
+        nova: 0,
+        semOrigem: 0,
+      }));
+      for (const r of data ?? []) {
+        months[r.month - 1] = {
+          target: Number(r.target),
+          carteira: Number(r.carteira),
+          renovacao: Number(r.renovacao),
+          nova: Number(r.nova),
+          semOrigem: Number(r.sem_origem),
+        };
+      }
+      return months;
+    },
+  });
+}

@@ -15,6 +15,7 @@ export interface NewLine {
   product_id?: string | null;
   revenue_type_id?: string | null;
   event_id?: string | null;
+  revenue_origin?: string | null;
 }
 
 export type PlanLine = Tables<"plan_lines"> & {
@@ -67,6 +68,7 @@ export function usePlanMutations() {
       queryClient.invalidateQueries({ queryKey: ["event_items"] }),
       queryClient.invalidateQueries({ queryKey: ["people"] }),
       queryClient.invalidateQueries({ queryKey: ["payroll_detail"] }),
+      queryClient.invalidateQueries({ queryKey: ["target_vs_plan"] }),
     ]);
 
   function fail(error: { message: string } | null) {
@@ -107,6 +109,7 @@ export function usePlanMutations() {
       _revenue_type_id: orNull(line.revenue_type_id),
       _values: values,
       _event_id: orNull(line.event_id),
+      _revenue_origin: orNull(line.revenue_origin),
     });
     if (fail(error) || !data) return null;
     await refresh();
