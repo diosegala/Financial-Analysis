@@ -58,6 +58,16 @@ describe("colunas", () => {
     );
     expect(guessColumns(rows, true)).toEqual({ code: 0, name: 1, type: null });
   });
+  it("não confunde a coluna de situação (só 'Ativo') com o tipo", () => {
+    const rows = parseTable(
+      tsv(
+        ["Situação", "Categoria", "Importar"],
+        ["Ativo", "Aluguel Essencial", "sim"],
+        ["Ativo", "Marketing", "não"],
+      ),
+    );
+    expect(guessColumns(rows, true)).toEqual({ code: null, name: 1, type: null });
+  });
   it("adivinha receita e despesa, mas não folha", () => {
     expect(guessKind("Receita")).toBe("receita");
     expect(guessKind("Entradas")).toBe("receita");

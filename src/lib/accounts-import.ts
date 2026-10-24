@@ -79,7 +79,9 @@ export function guessColumns(rows: string[][], hasHeader: boolean): ColumnGuess 
       return (
         values.length > 0 &&
         new Set(values.map(norm)).size <= 6 &&
-        values.filter(looksLikeCode).length === 0
+        values.filter(looksLikeCode).length === 0 &&
+        // uma coluna só com "Ativo" (situação) não é o tipo: precisa ter algum valor que diga receita ou despesa
+        values.some((v) => guessKind(v) !== null)
       );
     });
     type = candidate ?? null;
