@@ -57,6 +57,9 @@ export const usePayrollBrackets = () =>
   useTable("payroll_tax_brackets", ["valid_from", "lower_bound"]);
 export const usePayrollConstants = () => useTable("payroll_tax_constants", ["key", "valid_from"]);
 export const useOmieDepartmentUnits = () => useTable("omie_department_units", ["department_name"]);
+export const useOmieKeywordUnits = () => useTable("omie_keyword_units", ["keyword"]);
+export const useOmieCategoryAllocations = () =>
+  useTable("omie_category_allocations", ["category_name"]);
 export const useCalcRules = () => useTable("calc_rules", ["sort_order", "name"]);
 
 export function useScenarios(versionId: string | null) {

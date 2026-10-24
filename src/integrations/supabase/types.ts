@@ -561,6 +561,41 @@ export type Database = {
           },
         ]
       }
+      omie_category_allocations: {
+        Row: {
+          category_name: string
+          created_at: string
+          id: string
+          share: number
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          category_name: string
+          created_at?: string
+          id?: string
+          share: number
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          category_name?: string
+          created_at?: string
+          id?: string
+          share?: number
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_category_allocations_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       omie_companies: {
         Row: {
           active: boolean
@@ -645,6 +680,41 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "omie_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      omie_keyword_units: {
+        Row: {
+          created_at: string
+          id: string
+          keyword: string
+          priority: number
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          keyword: string
+          priority?: number
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          keyword?: string
+          priority?: number
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_keyword_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -1758,12 +1828,14 @@ export type Database = {
         }
         Returns: string
       }
+      norm_text: { Args: { _s: string }; Returns: string }
       omie_expense_summary: {
         Args: { _year: number }
         Returns: {
           category_name: string
           open: number[]
           paid: number[]
+          source: string
           unit_id: string
         }[]
       }

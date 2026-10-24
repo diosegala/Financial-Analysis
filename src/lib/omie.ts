@@ -5,8 +5,10 @@ import { norm } from "./products-import";
 
 export interface OmieExpense {
   categoryName: string;
-  /** Unidade do departamento do Omie; null quando o título não tem departamento (quase sempre). */
+  /** Unidade atribuída; null = sem unidade, a ratear. */
   unitId: string | null;
+  /** De onde veio a unidade: departamento do título, rateio da categoria, palavra no nome ou nenhuma. */
+  source: "departamento" | "rateio" | "palavra" | "sem";
   paid: number[];
   open: number[];
 }
@@ -22,12 +24,20 @@ export function useOmieExpenses(year: number | undefined) {
       return (data ?? []).map((r) => ({
         categoryName: r.category_name,
         unitId: r.unit_id,
+        source: r.source as OmieExpense["source"],
         paid: (r.paid ?? []).map(Number),
         open: (r.open ?? []).map(Number),
       }));
     },
   });
 }
+
+export const SOURCE_LABELS: Record<OmieExpense["source"], string> = {
+  departamento: "departamento do Omie",
+  rateio: "rateio",
+  palavra: "palavra no nome",
+  sem: "a ratear",
+};
 
 export interface MatchableAccount {
   id: string;

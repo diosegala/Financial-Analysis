@@ -26,9 +26,16 @@ depois.
 - **Contas a pagar**, sem os títulos cancelados, por **data de emissão** do título. Títulos pagos ficam em "Pago"; a vencer e
   atrasados, em "Em aberto" (já provisionados no Omie).
 - Cada título entra pela categoria do rateio, dividido pelo departamento quando houver.
-- **Quase nenhum título tem departamento** (em 2026, cerca de 2% do valor da PW e nada nas outras duas). Por isso a unidade é
-  escolhida ao planejar: em "Planejar", informe a unidade e a parte do realizado que pertence a ela.
-- Departamentos do Omie viram unidades do app em Configurações → Omie. Um departamento filho herda a unidade do pai.
+- **Quase nenhum título tem departamento** (em 2026, cerca de 2% do valor da PW e nada nas outras duas). Por isso a unidade de
+  cada despesa vem, nesta ordem, de:
+  1. o **departamento do título**, quando houver (Configurações → Omie → Departamentos; filho herda a unidade do pai);
+  2. o **rateio da categoria** (ex.: Marketing e Publicidade: 40% Agência, 30% Consultoria, 30% Educação), feito em "Ratear"
+     na página Realizado Omie ou em Configurações → Omie;
+  3. a **palavra no nome da categoria** (SAAS - Agência → Agência; Summit, Imersão, Insider… → Educação). Maior prioridade
+     vence; "Financeiro Essencial" (treinamento) vence "Financeiro" (a unidade);
+  4. senão, fica **"a ratear"**. Com os dados de 2026, 81% do valor lançável da PW se resolve pelas palavras; os custos
+     compartilhados (Marketing, Infraestrutura, Jurídico, Contabilidade, Táxi…) ficam para o rateio.
+- Em "Planejar", a unidade e a parte vêm dessa atribuição e podem ser trocadas.
 - Categoria do Omie e conta do app são ligadas pelo nome (sem o ano: "… - 2026" encontra "… - 2027"). Categorias de folha,
   encargos e impostos são calculadas pelo app e não viram linha.
 

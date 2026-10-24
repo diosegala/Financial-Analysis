@@ -4,9 +4,18 @@ import { toast } from "sonner";
 import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
-import { useAccounts, useUnits, byId } from "@/lib/catalog";
+import {
+  byId,
+  friendlyError,
+  useAccounts,
+  useOmieCategoryAllocations,
+  useUnits,
+} from "@/lib/catalog";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePlanMutations } from "@/lib/plan-data";
 import {
+  SOURCE_LABELS,
   matchAccount,
   planFromActuals,
   useOmieExpenses,
@@ -52,6 +61,7 @@ function RealizadoPage() {
   const [filter, setFilter] = useState<Filter>("lancaveis");
   const [search, setSearch] = useState("");
   const [planning, setPlanning] = useState<Row | null>(null);
+  const [splitting, setSplitting] = useState<string | null>(null);
   const unitMap = byId(units);
 
   const rows: Row[] = useMemo(
@@ -150,18 +160,19 @@ function RealizadoPage() {
                   <th className="px-3 py-2 text-right font-medium">Pago</th>
                   <th className="px-3 py-2 text-right font-medium">Em aberto</th>
                   <th className="px-3 py-2 text-right font-medium">Total</th>
-                  <th className="w-28" />
+                  <th className="w-40" />
                 </tr>
               </thead>
               <tbody>
                 {shown.map((r) => (
                   <tr
-                    key={`${r.categoryName}|${r.unitId}`}
+                    key={`${r.categoryName}|${r.unitId}|${r.source}`}
                     className="border-b border-border last:border-0"
                   >
                     <td className="px-3 py-1.5 font-medium">{r.categoryName}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">
-                      {r.unitId ? (unitMap.get(r.unitId)?.name ?? "—") : "Sem departamento"}
+                      {r.unitId ? (unitMap.get(r.unitId)?.name ?? "—") : "A ratear"}
+                      <span className="ml-1 text-xs">({SOURCE_LABELS[r.source]})</span>
                     </td>
                     <td className="px-3 py-1.5">
                       {r.match.status === "sem_conta" ? (
@@ -190,7 +201,15 @@ function RealizadoPage() {
                     <td className="px-3 py-1.5 text-right font-mono tabular-nums">
                       {fmtBRL(r.total)}
                     </td>
-                    <td className="px-2">
+                    <td className="space-x-1 whitespace-nowrap px-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Ratear ${r.categoryName}`}
+                        onClick={() => setSplitting(r.categoryName)}
+                      >
+                        Ratear
+                      </Button>
                       {r.match.status === "conta" && (
                         <Button
                           size="sm"
@@ -216,6 +235,7 @@ function RealizadoPage() {
           </div>
         </>
       )}
+      {splitting && <SplitDialog category={splitting} onClose={() => setSplitting(null)} />}
       {planning && year && (
         <PlanDialog row={planning} year={year} onClose={() => setPlanning(null)} />
       )}
@@ -343,6 +363,102 @@ function PlanDialog({ row, year, onClose }: { row: Row; year: number; onClose: (
           </Button>
           <Button onClick={save} disabled={!valid || saving}>
             Criar linha
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Divide uma categoria do Omie entre unidades (rateio). Vale mais que as palavras e menos que o departamento do título. */
+function SplitDialog({ category, onClose }: { category: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const { data: units } = useUnits();
+  const { data: allocations } = useOmieCategoryAllocations();
+  const mine = (allocations ?? []).filter((a) => norm(a.category_name) === norm(category));
+  const [text, setText] = useState<Record<string, string> | null>(null);
+  const values: Record<string, string> =
+    text ?? Object.fromEntries(mine.map((a) => [a.unit_id, fmtInput(Number(a.share) * 100, 2)]));
+  const parsed = (units ?? [])
+    .filter((u) => u.active)
+    .map((u) => ({ unit: u, share: parseNum(values[u.id] ?? "") }));
+  const invalid = parsed.some((p) => p.share === null || p.share < 0);
+  const total = parsed.reduce((a, p) => a + (p.share ?? 0), 0);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    const del =
+      mine.length > 0
+        ? await supabase
+            .from("omie_category_allocations")
+            .delete()
+            .in(
+              "id",
+              mine.map((a) => a.id),
+            )
+        : { error: null };
+    const rows = parsed
+      .filter((p) => (p.share ?? 0) > 0)
+      .map((p) => ({
+        category_name: category,
+        unit_id: p.unit.id,
+        share: (p.share as number) / 100,
+      }));
+    const ins =
+      !del.error && rows.length > 0
+        ? await supabase.from("omie_category_allocations").insert(rows)
+        : null;
+    setSaving(false);
+    const error = del.error ?? ins?.error;
+    if (error) {
+      toast.error(friendlyError(error.message));
+      return;
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["omie_category_allocations"] }),
+      queryClient.invalidateQueries({ queryKey: ["omie_expenses"] }),
+    ]);
+    toast.success(
+      rows.length
+        ? "Rateio salvo."
+        : "Rateio removido: volta a valer a palavra no nome ou “a ratear”.",
+    );
+    onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Ratear {category}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Quanto desta categoria pertence a cada unidade, em %. Se não somar 100, as partes são
+            ajustadas proporcionalmente. Deixe tudo em branco para remover o rateio.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {parsed.map(({ unit }) => (
+              <Field key={unit.id} label={unit.name}>
+                <Input
+                  value={values[unit.id] ?? ""}
+                  onChange={(e) => setText({ ...values, [unit.id]: e.target.value })}
+                  className="font-mono"
+                />
+              </Field>
+            ))}
+          </div>
+          <p className="text-sm">
+            Soma: <strong>{fmtInput(total, 2)}%</strong>
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={save} disabled={saving || invalid}>
+            Salvar rateio
           </Button>
         </DialogFooter>
       </DialogContent>
