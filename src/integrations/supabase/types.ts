@@ -482,6 +482,173 @@ export type Database = {
           },
         ]
       }
+      omie_actuals: {
+        Row: {
+          amount_open: number
+          amount_paid: number
+          category_code: string
+          company_id: string
+          department_code: string
+          month: number
+          synced_at: string
+          year: number
+        }
+        Insert: {
+          amount_open?: number
+          amount_paid?: number
+          category_code: string
+          company_id: string
+          department_code?: string
+          month: number
+          synced_at?: string
+          year: number
+        }
+        Update: {
+          amount_open?: number
+          amount_paid?: number
+          category_code?: string
+          company_id?: string
+          department_code?: string
+          month?: number
+          synced_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_actuals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "omie_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      omie_categories: {
+        Row: {
+          code: string
+          company_id: string
+          is_expense: boolean
+          is_revenue: boolean
+          is_total: boolean
+          name: string
+          parent_code: string | null
+        }
+        Insert: {
+          code: string
+          company_id: string
+          is_expense?: boolean
+          is_revenue?: boolean
+          is_total?: boolean
+          name: string
+          parent_code?: string | null
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          is_expense?: boolean
+          is_revenue?: boolean
+          is_total?: boolean
+          name?: string
+          parent_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_categories_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "omie_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      omie_companies: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      omie_department_units: {
+        Row: {
+          created_at: string
+          department_name: string
+          id: string
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department_name: string
+          id?: string
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department_name?: string
+          id?: string
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_department_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      omie_departments: {
+        Row: {
+          code: string
+          company_id: string
+          name: string
+          structure: string
+        }
+        Insert: {
+          code: string
+          company_id: string
+          name: string
+          structure: string
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          name?: string
+          structure?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_departments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "omie_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parameter_definitions: {
         Row: {
           active: boolean
@@ -1430,7 +1597,29 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      omie_department_unit: {
+        Row: {
+          company_id: string | null
+          department_code: string | null
+          unit_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_department_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "omie_departments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "omie_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       account_kind: { Args: { _account_id: string }; Returns: string }
@@ -1568,6 +1757,15 @@ export type Database = {
           _version_id: string
         }
         Returns: string
+      }
+      omie_expense_summary: {
+        Args: { _year: number }
+        Returns: {
+          category_name: string
+          open: number[]
+          paid: number[]
+          unit_id: string
+        }[]
       }
       param_value: {
         Args: {

@@ -12,6 +12,7 @@ import {
   useAccounts,
   useAllScenarios,
   useCalcRules,
+  useOmieDepartmentUnits,
   usePayrollBrackets,
   usePayrollConstants,
   useClients,
@@ -77,6 +78,7 @@ function ConfiguracoesPage() {
           <TabsTrigger value="parametros">Parâmetros</TabsTrigger>
           <TabsTrigger value="regras">Regras de cálculo</TabsTrigger>
           <TabsTrigger value="tabelas-folha">Tabelas da folha</TabsTrigger>
+          <TabsTrigger value="omie">Omie</TabsTrigger>
         </TabsList>
         <TabsContent value="versoes">
           <VersionsTab />
@@ -113,6 +115,9 @@ function ConfiguracoesPage() {
         </TabsContent>
         <TabsContent value="tabelas-folha">
           <PayrollTablesTab />
+        </TabsContent>
+        <TabsContent value="omie">
+          <OmieTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -663,6 +668,29 @@ function ParameterDefinitionsTab() {
         if (!draft["allowed_scopes"]) draft["allowed_scopes"] = ["global"];
         return true;
       }}
+    />
+  );
+}
+
+function OmieTab() {
+  const { data: rows } = useOmieDepartmentUnits();
+  const { data: units } = useUnits();
+  return (
+    <CrudTable
+      table="omie_department_units"
+      rows={rows ?? []}
+      description="Que unidade do app cada departamento do Omie representa. O nome é o mesmo nas três empresas; um departamento filho (Receitas Fixas Agência) herda a unidade do pai (Agência). A leitura do Omie roda com python3 scripts/omie-sync.py (somente leitura)."
+      fields={[
+        { key: "department_name", label: "Departamento no Omie", type: "text", required: true },
+        {
+          key: "unit_id",
+          label: "Unidade",
+          type: "select",
+          required: true,
+          options: opts(units),
+        },
+      ]}
+      defaults={{}}
     />
   );
 }
