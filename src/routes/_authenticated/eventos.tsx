@@ -19,6 +19,7 @@ import { describePrice } from "@/lib/products";
 import { MONTHS, fmtBRL, fmtPct } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { PlanGrid } from "@/components/plan-grid";
+import { ProductsLink } from "@/components/products-link";
 import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,11 +70,14 @@ function EventosPage() {
         title="Eventos e treinamentos"
         subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"}${canAdd ? "" : ` · ${lockReason}`}`}
         actions={
-          canAdd && (
-            <Button size="sm" className="gap-1.5" onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" /> Novo evento
-            </Button>
-          )
+          <div className="flex gap-2">
+            <ProductsLink />
+            {canAdd && (
+              <Button size="sm" className="gap-1.5" onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4" /> Novo evento
+              </Button>
+            )}
+          </div>
         }
       />
 

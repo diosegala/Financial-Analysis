@@ -44,27 +44,51 @@ import {
   History,
   LogOut,
   CalendarDays,
-  Package,
   Settings,
   Send,
 } from "lucide-react";
 
-const NAV = [
-  { to: "/inicio", label: "Início", icon: LayoutDashboard },
-  { to: "/produtos", label: "Produtos", icon: Package },
-  { to: "/receitas", label: "Receitas", icon: TrendingUp },
-  { to: "/eventos", label: "Eventos", icon: CalendarDays },
-  { to: "/folha", label: "Folha", icon: Users },
-  { to: "/despesas", label: "Despesas", icon: Receipt },
-  { to: "/dre", label: "DRE prevista", icon: FileBarChart },
-  { to: "/cenarios", label: "Cenários", icon: Layers },
-  { to: "/metas", label: "Metas", icon: Target, financeiro: true },
-  { to: "/realizado", label: "Realizado Omie", icon: Database, financeiro: true },
-  { to: "/parametros", label: "Parâmetros", icon: SlidersHorizontal, financeiro: true },
-  { to: "/configuracoes", label: "Configurações", icon: Settings, financeiro: true },
-  { to: "/usuarios", label: "Usuários", icon: UserCog, financeiro: true },
-  { to: "/auditoria", label: "Auditoria", icon: History, management: true },
-] as const;
+interface NavItem {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  /** Só o financeiro vê. */
+  financeiro?: boolean;
+  /** Financeiro, VP e CEO veem (o líder não). */
+  management?: boolean;
+}
+
+// Menu enxuto, por tarefa. O líder vê Início, Receitas, Despesas, Eventos e DRE; Produtos abre de Receitas e Eventos.
+const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+  { label: null, items: [{ to: "/inicio", label: "Início", icon: LayoutDashboard }] },
+  {
+    label: "Planejar",
+    items: [
+      { to: "/receitas", label: "Receitas", icon: TrendingUp },
+      { to: "/despesas", label: "Despesas", icon: Receipt },
+      { to: "/folha", label: "Folha", icon: Users, management: true },
+      { to: "/eventos", label: "Eventos", icon: CalendarDays },
+    ],
+  },
+  {
+    label: "Resultado",
+    items: [
+      { to: "/dre", label: "DRE prevista", icon: FileBarChart },
+      { to: "/metas", label: "Metas", icon: Target, financeiro: true },
+      { to: "/cenarios", label: "Cenários", icon: Layers, management: true },
+    ],
+  },
+  {
+    label: "Administração",
+    items: [
+      { to: "/realizado", label: "Realizado Omie", icon: Database, financeiro: true },
+      { to: "/parametros", label: "Parâmetros", icon: SlidersHorizontal, financeiro: true },
+      { to: "/configuracoes", label: "Configurações", icon: Settings, financeiro: true },
+      { to: "/usuarios", label: "Usuários", icon: UserCog, financeiro: true },
+      { to: "/auditoria", label: "Auditoria", icon: History, management: true },
+    ],
+  },
+];
 
 /** Why the user cannot enter values in this unit/version right now (null = can edit). */
 function lockReasonFor(
@@ -178,26 +202,37 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="mt-1 text-xs text-sidebar-foreground/60">Planejamento financeiro</div>
           </div>
           <nav className="flex-1 space-y-0.5 p-2">
-            {NAV.filter((item) => {
-              if ("financeiro" in item && item.financeiro) return user?.isFinanceiro;
-              if ("management" in item && item.management) return user?.isManagement;
-              return true;
-            }).map((item) => {
-              const active = pathname.startsWith(item.to);
+            {NAV_GROUPS.map((group) => {
+              const items = group.items.filter((item) =>
+                item.financeiro ? user?.isFinanceiro : item.management ? user?.isManagement : true,
+              );
+              if (items.length === 0) return null;
               return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  search={(prev: Record<string, unknown>) => prev}
-                  className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
-                  }`}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
+                <div key={group.label ?? "inicio"} className="pb-2">
+                  {group.label && (
+                    <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-sidebar-foreground/40">
+                      {group.label}
+                    </div>
+                  )}
+                  {items.map((item) => {
+                    const active = pathname.startsWith(item.to);
+                    return (
+                      <Link
+                        key={item.to}
+                        to={item.to}
+                        search={(prev: Record<string, unknown>) => prev}
+                        className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                          active
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
+                        }`}
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
               );
             })}
           </nav>
