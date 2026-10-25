@@ -13,6 +13,7 @@ import {
   type SubmissionStatus,
 } from "@/lib/submissions";
 import { PageHeader } from "@/components/page-header";
+import { LeaderGoal, SetupSteps } from "@/components/setup-steps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,11 +46,14 @@ function InicioPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Visão geral"
+        title="Início"
         subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"} (${
           VERSION_STATUS_LABELS[version?.status ?? ""] ?? "…"
         }) · Cenário ${scenario?.name ?? "…"}`}
       />
+      {user?.isFinanceiro && <SetupSteps />}
+      {user && !user.isManagement && <LeaderGoal />}
+      <h2 className="text-lg font-semibold">Resultado da unidade</h2>
       {isLoading || !values ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
       ) : (

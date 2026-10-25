@@ -69,51 +69,66 @@ function ConfiguracoesPage() {
       <Tabs defaultValue="versoes">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="versoes">Versões</TabsTrigger>
-          <TabsTrigger value="cenarios">Cenários</TabsTrigger>
           <TabsTrigger value="unidades">Unidades</TabsTrigger>
-          <TabsTrigger value="dre">Estrutura da DRE</TabsTrigger>
           <TabsTrigger value="contas">Plano de contas</TabsTrigger>
-          <TabsTrigger value="importacao">Regras da importação</TabsTrigger>
-          <TabsTrigger value="tipos">Tipos de receita</TabsTrigger>
           <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
+          <TabsTrigger value="tipos">Tipos de receita</TabsTrigger>
           <TabsTrigger value="clientes">Clientes</TabsTrigger>
-          <TabsTrigger value="parametros">Parâmetros</TabsTrigger>
-          <TabsTrigger value="regras">Regras de cálculo</TabsTrigger>
-          <TabsTrigger value="tabelas-folha">Tabelas da folha</TabsTrigger>
-          <TabsTrigger value="omie">Omie</TabsTrigger>
+          <TabsTrigger value="avancado">Avançado</TabsTrigger>
         </TabsList>
         <TabsContent value="versoes">
           <VersionsTab />
         </TabsContent>
-        <TabsContent value="cenarios">
-          <ScenariosTab />
-        </TabsContent>
         <TabsContent value="unidades">
           <UnitsTab />
-        </TabsContent>
-        <TabsContent value="dre">
-          <DreLinesTab />
         </TabsContent>
         <TabsContent value="contas">
           <AccountsTab />
         </TabsContent>
-        <TabsContent value="importacao">
-          <ImportRulesTab />
+        <TabsContent value="vinculos">
+          <ContractTypesTab />
         </TabsContent>
         <TabsContent value="tipos">
           <RevenueTypesTab />
         </TabsContent>
-        <TabsContent value="vinculos">
-          <ContractTypesTab />
-        </TabsContent>
         <TabsContent value="clientes">
           <ClientsTab />
         </TabsContent>
-        <TabsContent value="parametros">
-          <ParameterDefinitionsTab />
+        <TabsContent value="avancado">
+          <AdvancedTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+/** O que se mexe raramente: estrutura da DRE, cenários, regras de cálculo e da importação, tabelas da folha e Omie. */
+function AdvancedTab() {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Ajustes que mudam pouco. Impostos, comissões e encargos se cadastram na página Parâmetros.
+      </p>
+      <Tabs defaultValue="cenarios">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="cenarios">Cenários</TabsTrigger>
+          <TabsTrigger value="dre">Estrutura da DRE</TabsTrigger>
+          <TabsTrigger value="regras">Regras de cálculo</TabsTrigger>
+          <TabsTrigger value="importacao">Regras da importação</TabsTrigger>
+          <TabsTrigger value="tabelas-folha">Tabelas da folha</TabsTrigger>
+          <TabsTrigger value="omie">Omie</TabsTrigger>
+        </TabsList>
+        <TabsContent value="cenarios">
+          <ScenariosTab />
+        </TabsContent>
+        <TabsContent value="dre">
+          <DreLinesTab />
         </TabsContent>
         <TabsContent value="regras">
           <CalcRulesTab />
+        </TabsContent>
+        <TabsContent value="importacao">
+          <ImportRulesTab />
         </TabsContent>
         <TabsContent value="tabelas-folha">
           <PayrollTablesTab />
@@ -285,7 +300,6 @@ function UnitsTab() {
             { value: "apoio", label: "Apoio" },
           ],
         },
-        { key: "omie_department_code", label: "Departamento no Omie", type: "text" },
         {
           key: "name_keywords",
           label: "Palavras no nome da categoria",
@@ -480,7 +494,7 @@ function AccountsTab() {
             type: "boolean",
             hideInTable: true,
           },
-          { key: "omie_category_code", label: "Código no Omie", type: "text" },
+          { key: "omie_category_code", label: "Código no Omie", type: "text", hideInTable: true },
           active,
           order,
         ]}
@@ -617,59 +631,6 @@ function ClientsTab() {
         active,
       ]}
       defaults={{ active: true }}
-    />
-  );
-}
-
-function ParameterDefinitionsTab() {
-  const { data: defs } = useParameterDefinitions();
-  return (
-    <CrudTable
-      table="parameter_definitions"
-      rows={defs ?? []}
-      description="Prefira a página Parâmetros → Novo parâmetro, que cadastra o parâmetro e o cálculo dele de uma vez. Aqui, mínimo e máximo de percentuais são frações (0,1 = 10%)."
-      fields={[
-        { key: "label", label: "Nome", type: "text", required: true },
-        {
-          key: "key",
-          label: "Chave",
-          type: "text",
-          required: true,
-          hint: "Identificador único, sem espaços.",
-        },
-        { key: "description", label: "Descrição", type: "text", hideInTable: true },
-        {
-          key: "value_type",
-          label: "Tipo",
-          type: "select",
-          required: true,
-          options: [
-            { value: "percent", label: "Percentual" },
-            { value: "currency", label: "Valor (R$)" },
-          ],
-        },
-        {
-          key: "allowed_scopes",
-          label: "Escopos permitidos",
-          type: "multi",
-          options: [
-            { value: "global", label: "Geral" },
-            { value: "unit", label: "Unidade" },
-            { value: "product", label: "Produto" },
-            { value: "contract_type", label: "Vínculo" },
-            { value: "revenue_type", label: "Tipo de receita" },
-          ],
-        },
-        { key: "min_value", label: "Mínimo", type: "number", hideInTable: true },
-        { key: "max_value", label: "Máximo", type: "number", hideInTable: true },
-        active,
-        order,
-      ]}
-      defaults={{ value_type: "percent", allowed_scopes: ["global"], active: true, sort_order: 0 }}
-      beforeSave={(draft) => {
-        if (!draft["allowed_scopes"]) draft["allowed_scopes"] = ["global"];
-        return true;
-      }}
     />
   );
 }

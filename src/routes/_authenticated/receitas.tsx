@@ -4,6 +4,7 @@ import { usePlanning } from "@/lib/planning";
 import { PageHeader } from "@/components/page-header";
 import { PlanGrid } from "@/components/plan-grid";
 import { MetaPanel } from "@/components/meta-panel";
+import { ProductsLink } from "@/components/products-link";
 
 export const Route = createFileRoute("/_authenticated/receitas")({
   head: pageHead("Receitas", "Receitas por cliente, produto e mês."),
@@ -14,7 +15,11 @@ function ReceitasPage() {
   const { unit, version } = usePlanning();
   return (
     <div className="space-y-4">
-      <PageHeader title="Receitas" subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"}`} />
+      <PageHeader
+        title="Receitas"
+        subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"}`}
+        actions={<ProductsLink />}
+      />
       <MetaPanel />
       <PlanGrid kind="receita" emptyText="Nenhuma receita lançada. Adicione a primeira linha." />
       <p className="text-xs text-muted-foreground">
