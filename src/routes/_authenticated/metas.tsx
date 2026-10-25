@@ -16,6 +16,7 @@ import {
 } from "@/lib/targets";
 import { MONTHS, fmtBRL, fmtInput, fmtPct, parseNum } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
+import { TargetExplanation } from "@/components/target-explanation";
 import { Field, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -441,6 +442,7 @@ function MetasPage() {
                 value={target.target_margin == null ? "—" : fmtPct(Number(target.target_margin))}
               />
             </div>
+            <TargetExplanation target={target} />
             <div className="overflow-x-auto rounded-md border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-left">
