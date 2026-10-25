@@ -42,3 +42,12 @@ depois.
 ## Ainda não feito
 
 Receitas (contas a receber), a leitura pela data de competência do Omie, e a sincronização automática.
+
+## Carga inicial (feita uma vez pelo Dioner)
+
+- `bun scripts/load-categories.ts --despesas … --receitas … --review revisao.csv [--apply]`: contas a partir da planilha de
+  categorias (coluna "Importar"), com tratamento e linha da DRE pelo grupo do código do Omie. Simula sem `--apply`.
+- `bun scripts/load-people.ts --file folha.tsv [--apply]`: folha a partir da planilha de salários (só ID, sem nomes).
+- A **base de despesas de 2027** é gerada no app (Despesas → "Gerar base de 2027"), com reajuste geral: cada despesa de
+  2026 vira uma linha na conta e na unidade dela; sem unidade, vai para a unidade de `app_settings` (ADM); benefícios e
+  rescisões sem unidade são divididos pelas pessoas de cada unidade; categorias com o ano no nome só entram no ano delas.
