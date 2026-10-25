@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { splitPeriod } from "./accounts-import";
+import { friendlyError, useOmieCategoryAllocations } from "./catalog";
 import { norm } from "./products-import";
 
 export interface OmieExpense {
@@ -92,4 +94,42 @@ export function planFromActuals(
         Math.round((mode === "media" ? total / 12 : v) * share * (1 + adjustment) * 100) / 100,
     }))
     .filter((m) => m.amount !== 0);
+}
+
+/**
+ * Grava a unidade de uma categoria do Omie: uma unidade (100%) ou um rateio. A escolha do financeiro vence o
+ * departamento do título e a palavra no nome. Lista vazia remove a escolha.
+ */
+export function useCategoryUnitSaver() {
+  const queryClient = useQueryClient();
+  const { data: allocations } = useOmieCategoryAllocations();
+  return async (category: string, shares: { unit_id: string; share: number }[]) => {
+    const mine = (allocations ?? []).filter((a) => norm(a.category_name) === norm(category));
+    const del =
+      mine.length > 0
+        ? await supabase
+            .from("omie_category_allocations")
+            .delete()
+            .in(
+              "id",
+              mine.map((a) => a.id),
+            )
+        : { error: null };
+    const ins =
+      !del.error && shares.length > 0
+        ? await supabase
+            .from("omie_category_allocations")
+            .insert(shares.map((s) => ({ category_name: category, ...s })))
+        : null;
+    const error = del.error ?? ins?.error;
+    if (error) {
+      toast.error(friendlyError(error.message));
+      return false;
+    }
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["omie_category_allocations"] }),
+      queryClient.invalidateQueries({ queryKey: ["omie_expenses"] }),
+    ]);
+    return true;
+  };
 }

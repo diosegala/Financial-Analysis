@@ -1,4 +1,4 @@
--- Atribuição do realizado às unidades: departamento > rateio da categoria > palavra no nome > a ratear.
+-- Atribuição do realizado às unidades: escolha do financeiro (rateio) > departamento > palavra no nome > a ratear.
 BEGIN;
 SELECT plan(11);
 
@@ -57,12 +57,13 @@ SELECT is(pg_temp.v('Processos Administrativos e Financeiros da Locação', 'edu
 SELECT is(pg_temp.v('Infraestrutura', NULL, 'sem'), 70::NUMERIC, 'Sem palavra nem rateio: fica a ratear');
 SELECT is(pg_temp.v('Marketing e Publicidade', NULL, 'sem'), 1000::NUMERIC, 'Marketing a ratear antes do rateio');
 
--- Rateio: 40% Agência, 60% Consultoria (soma 100); o título com departamento continua no departamento
+-- Rateio: 40% Agência, 60% Consultoria (soma 100); vale também para o título lançado com departamento
 INSERT INTO omie_category_allocations (category_name, unit_id, share) VALUES
   ('Marketing e Publicidade', pg_temp.id('agencia'), 0.4), ('marketing e publicidade', pg_temp.id('consultoria'), 0.6);
-SELECT is(pg_temp.v('Marketing e Publicidade', 'agencia', 'rateio'), 400::NUMERIC, 'Rateio: 40% de 1.000 para a Agência');
-SELECT is(pg_temp.v('Marketing e Publicidade', 'consultoria', 'rateio'), 600::NUMERIC, 'Rateio: 60% para a Consultoria (nome sem diferenciar caixa)');
-SELECT is(pg_temp.v('Marketing e Publicidade', 'agencia', 'departamento'), 50::NUMERIC, 'Departamento do título vence o rateio');
+SELECT is(pg_temp.v('Marketing e Publicidade', 'agencia', 'rateio'), 420::NUMERIC, 'Rateio: 40% de 1.050 para a Agência');
+SELECT is(pg_temp.v('Marketing e Publicidade', 'consultoria', 'rateio'), 630::NUMERIC, 'Rateio: 60% para a Consultoria (nome sem diferenciar caixa)');
+SELECT is(pg_temp.v('Marketing e Publicidade', 'agencia', 'departamento'), NULL::NUMERIC,
+  'A escolha do financeiro vence o departamento do título (corrige título lançado no departamento errado)');
 
 SELECT pg_temp.login('lid');
 SELECT is((SELECT count(*)::INT FROM omie_expense_summary(2026) WHERE unit_id IS DISTINCT FROM pg_temp.id('educacao')), 0,

@@ -11,6 +11,7 @@ import {
   useClients,
   useProducts,
   useRevenueTypes,
+  useUnits,
 } from "@/lib/catalog";
 import {
   contractPlan,
@@ -80,6 +81,7 @@ type Dialogs =
   | { type: "fill"; line: PlanLine }
   | { type: "adjust"; line: PlanLine }
   | { type: "delete"; line: PlanLine }
+  | { type: "move"; line: PlanLine }
   | null;
 
 /** Spreadsheet grid of plan lines × 12 months for one account kind of the selected unit/version. */
@@ -231,6 +233,11 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
                             <DropdownMenuItem onClick={() => setDialog({ type: "adjust", line })}>
                               Reajustar a partir de um mês…
                             </DropdownMenuItem>
+                            {!event && (
+                              <DropdownMenuItem onClick={() => setDialog({ type: "move", line })}>
+                                Mudar de unidade…
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive"
@@ -280,6 +287,7 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
       {dialog?.type === "delete" && (
         <DeleteDialog line={dialog.line} onClose={() => setDialog(null)} />
       )}
+      {dialog?.type === "move" && <MoveDialog line={dialog.line} onClose={() => setDialog(null)} />}
     </div>
   );
 }
@@ -749,6 +757,56 @@ function LineDialog({
             }
           >
             {saving ? "Salvando…" : "Salvar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Leva a linha para outra unidade (ex.: despesa do Omie que veio na unidade errada). Só o financeiro. */
+function MoveDialog({ line, onClose }: { line: PlanLine; onClose: () => void }) {
+  const { data: units } = useUnits();
+  const { updateLine } = usePlanMutations();
+  const [unitId, setUnitId] = useState<string | null>(line.unit_id);
+  const [saving, setSaving] = useState(false);
+  const name = (units ?? []).find((u) => u.id === unitId)?.name;
+
+  async function save() {
+    if (!unitId || unitId === line.unit_id) return;
+    setSaving(true);
+    const ok = await updateLine(line.id, { unit_id: unitId });
+    setSaving(false);
+    if (ok) {
+      toast.success(`Linha levada para ${name}.`);
+      onClose();
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Mudar de unidade</DialogTitle>
+        </DialogHeader>
+        <Field
+          label="Unidade"
+          hint="A linha sai desta unidade e passa a contar na escolhida, com os mesmos valores."
+        >
+          <OptionSelect
+            value={unitId}
+            onChange={setUnitId}
+            options={(units ?? [])
+              .filter((u) => u.active)
+              .map((u) => ({ value: u.id, label: u.name }))}
+          />
+        </Field>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={save} disabled={saving || !unitId || unitId === line.unit_id}>
+            Mudar
           </Button>
         </DialogFooter>
       </DialogContent>

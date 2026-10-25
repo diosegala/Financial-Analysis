@@ -4,19 +4,12 @@ import { toast } from "sonner";
 import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
-import {
-  byId,
-  friendlyError,
-  useAccounts,
-  useOmieCategoryAllocations,
-  useUnits,
-} from "@/lib/catalog";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { byId, useAccounts, useOmieCategoryAllocations, useUnits } from "@/lib/catalog";
 import { usePlanMutations } from "@/lib/plan-data";
 import {
   SOURCE_LABELS,
   matchAccount,
+  useCategoryUnitSaver,
   planFromActuals,
   useOmieExpenses,
   type AccountMatch,
@@ -62,6 +55,7 @@ function RealizadoPage() {
   const [search, setSearch] = useState("");
   const [planning, setPlanning] = useState<Row | null>(null);
   const [splitting, setSplitting] = useState<string | null>(null);
+  const saveUnits = useCategoryUnitSaver();
   const unitMap = byId(units);
 
   const rows: Row[] = useMemo(
@@ -96,7 +90,7 @@ function RealizadoPage() {
     <div className="space-y-6">
       <PageHeader
         title={`Realizado ${year ?? ""} (Omie)`}
-        subtitle="Contas a pagar das três empresas, somadas por categoria, pela data de emissão. Somente leitura: o app nunca escreve no Omie. Use como base para planejar a versão aberta."
+        subtitle="Despesas das três empresas por categoria: pago pela data do pagamento efetivo, em aberto pelo vencimento. Somente leitura: o app nunca escreve no Omie. Escolha a unidade de cada categoria na coluna Unidade."
       />
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
@@ -171,8 +165,23 @@ function RealizadoPage() {
                   >
                     <td className="px-3 py-1.5 font-medium">{r.categoryName}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">
-                      {r.unitId ? (unitMap.get(r.unitId)?.name ?? "—") : "A ratear"}
-                      <span className="ml-1 text-xs">({SOURCE_LABELS[r.source]})</span>
+                      <div className="w-40">
+                        <OptionSelect
+                          value={r.unitId}
+                          onChange={async (v) => {
+                            if (!v || v === r.unitId) return;
+                            if (await saveUnits(r.categoryName, [{ unit_id: v, share: 1 }]))
+                              toast.success(
+                                `${r.categoryName} agora é de ${unitMap.get(v)?.name}. Para levar à base de ${version?.year}, use “Gerar de novo” em Despesas.`,
+                              );
+                          }}
+                          noneLabel="A ratear"
+                          options={(units ?? [])
+                            .filter((u) => u.active)
+                            .map((u) => ({ value: u.id, label: u.name }))}
+                        />
+                      </div>
+                      <span className="text-xs">({SOURCE_LABELS[r.source]})</span>
                     </td>
                     <td className="px-3 py-1.5">
                       {r.match.status === "sem_conta" ? (
@@ -205,10 +214,10 @@ function RealizadoPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        aria-label={`Ratear ${r.categoryName}`}
+                        aria-label={`Dividir ${r.categoryName}`}
                         onClick={() => setSplitting(r.categoryName)}
                       >
-                        Ratear
+                        Dividir
                       </Button>
                       {r.match.status === "conta" && (
                         <Button
@@ -372,9 +381,9 @@ function PlanDialog({ row, year, onClose }: { row: Row; year: number; onClose: (
 
 /** Divide uma categoria do Omie entre unidades (rateio). Vale mais que as palavras e menos que o departamento do título. */
 function SplitDialog({ category, onClose }: { category: string; onClose: () => void }) {
-  const queryClient = useQueryClient();
   const { data: units } = useUnits();
   const { data: allocations } = useOmieCategoryAllocations();
+  const saveUnits = useCategoryUnitSaver();
   const mine = (allocations ?? []).filter((a) => norm(a.category_name) === norm(category));
   const [text, setText] = useState<Record<string, string> | null>(null);
   const values: Record<string, string> =
@@ -388,37 +397,12 @@ function SplitDialog({ category, onClose }: { category: string; onClose: () => v
 
   async function save() {
     setSaving(true);
-    const del =
-      mine.length > 0
-        ? await supabase
-            .from("omie_category_allocations")
-            .delete()
-            .in(
-              "id",
-              mine.map((a) => a.id),
-            )
-        : { error: null };
     const rows = parsed
       .filter((p) => (p.share ?? 0) > 0)
-      .map((p) => ({
-        category_name: category,
-        unit_id: p.unit.id,
-        share: (p.share as number) / 100,
-      }));
-    const ins =
-      !del.error && rows.length > 0
-        ? await supabase.from("omie_category_allocations").insert(rows)
-        : null;
+      .map((p) => ({ unit_id: p.unit.id, share: (p.share as number) / 100 }));
+    const ok = await saveUnits(category, rows);
     setSaving(false);
-    const error = del.error ?? ins?.error;
-    if (error) {
-      toast.error(friendlyError(error.message));
-      return;
-    }
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["omie_category_allocations"] }),
-      queryClient.invalidateQueries({ queryKey: ["omie_expenses"] }),
-    ]);
+    if (!ok) return;
     toast.success(
       rows.length
         ? "Rateio salvo."
@@ -431,7 +415,7 @@ function SplitDialog({ category, onClose }: { category: string; onClose: () => v
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Ratear {category}</DialogTitle>
+          <DialogTitle>Dividir {category} entre unidades</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">

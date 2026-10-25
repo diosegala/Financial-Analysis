@@ -10,9 +10,10 @@ Uma empresa por arquivo, na pasta --env-dir (padrão ~/Documents/testes_financei
 omie_mktimob.env… Cada arquivo tem OMIE_APP_KEY e OMIE_APP_SECRET. As chaves nunca são impressas nem gravadas no
 banco, e só métodos Listar* são chamados: o Omie não recebe nenhuma escrita.
 
-Grava, por empresa: departamentos, categorias e as contas a pagar somadas por mês (data de emissão do título),
-categoria e departamento, separando pagas de em aberto. Títulos cancelados ficam de fora. Rodar de novo troca o
-que existe daquele ano para a empresa.
+Grava, por empresa: departamentos, categorias e as despesas por mês, categoria e departamento. "Pago" é o pagamento
+efetivo, pela data em que foi pago (títulos de contas a pagar e lançamentos feitos direto no extrato); "em aberto"
+são os títulos a vencer ou atrasados, pelo vencimento. Cancelados, baixas repetidas e transferências entre contas
+ficam de fora. Rodar de novo troca o que existe daquele ano para a empresa.
 """
 import argparse
 import collections
@@ -62,6 +63,28 @@ def q(v):
     return "NULL" if v is None else "'" + str(v).replace("'", "''") + "'"
 
 
+def payments(creds, years):
+    """Pagamentos efetivos (movimentos financeiros de saída), pela data de pagamento."""
+    out, page = [], 1
+    while True:
+        r = call(creds, "financas/mf", "ListarMovimentos", {
+            "nPagina": page, "nRegPorPagina": 500, "cNatureza": "P",
+            "dDtPagtoDe": f"01/01/{min(years)}", "dDtPagtoAte": f"31/12/{max(years)}"})
+        out += r.get("movimentos", [])
+        if page >= r.get("nTotPaginas", 1):
+            return out
+        page += 1
+
+
+def split(cats, deps, value):
+    """Reparte um valor pelas categorias do título (na proporção de cada uma) e pelos departamentos."""
+    base = sum(float(c.get("valor") or 0) for c in cats) or 1
+    for c in cats:
+        part = value * float(c.get("valor") or 0) / base if len(cats) > 1 else value
+        for dep in deps:
+            yield c.get("codigo_categoria") or c.get("cCodCateg") or "?", str(dep.get("cCodDep") or ""), part * float(dep.get("nPerDep", 100)) / 100
+
+
 def sync_company(path, years):
     creds = read_env(path)
     empresas = call(creds, "geral/empresas", "ListarEmpresas", {"pagina": 1, "registros_por_pagina": 5})
@@ -70,24 +93,44 @@ def sync_company(path, years):
     departments = pages(creds, "geral/departamentos", "ListarDepartamentos", "departamentos")
     categories = pages(creds, "geral/categorias", "ListarCategorias", "categoria_cadastro")
     payables = pages(creds, "financas/contapagar", "ListarContasPagar", "conta_pagar_cadastro", {"apenas_importado_api": "N"})
+    titles = {t.get("codigo_lancamento_omie"): t for t in payables}
+    no_dep = [{"cCodDep": "", "nPerDep": 100}]
 
     agg = collections.defaultdict(lambda: [0.0, 0.0])  # (ano, mês, categoria, departamento) → [pago, em aberto]
     status = collections.Counter()
+    # Pago: pela data do pagamento efetivo. Títulos de contas a pagar (com a categoria e o departamento do título) e
+    # lançamentos feitos direto no extrato. As baixas (BAXP) repetem os títulos e as transferências (TRAP) não são
+    # despesa: ficam de fora.
+    for m in payments(creds, years):
+        d, r = m.get("detalhes") or {}, m.get("resumo") or {}
+        paid_on, value = d.get("dDtPagamento") or "", float(r.get("nValPago") or 0)
+        if len(paid_on) != 10 or int(paid_on[6:]) not in years or not value:
+            continue
+        group, origin = d.get("cGrupo"), d.get("cOrigem")
+        if group == "CONTA_A_PAGAR":
+            t = titles.get(d.get("nCodTitulo")) or {}
+            cats = t.get("categorias") or [{"cCodCateg": d.get("cCodCateg"), "valor": value}]
+            deps = t.get("distribuicao") or no_dep
+            status["pago (título)"] += 1
+        elif group == "CONTA_CORRENTE_PAG" and origin not in ("BAXP", "TRAP"):
+            cats, deps = [{"cCodCateg": d.get("cCodCateg"), "valor": value}], no_dep
+            status["pago (direto no extrato)"] += 1
+        else:
+            continue
+        for cat, dep, part in split(cats, deps, value):
+            agg[(int(paid_on[6:]), int(paid_on[3:5]), cat, dep)][0] += part
+    # Em aberto: títulos a vencer ou atrasados, pelo vencimento.
     for t in payables:
-        status[t.get("status_titulo")] += 1
-        if t.get("status_titulo") == "CANCELADO":
+        st = t.get("status_titulo")
+        if st in ("PAGO", "CANCELADO"):
             continue
-        d = t.get("data_emissao") or ""
-        if len(d) != 10 or int(d[6:]) not in years:
+        due = t.get("data_vencimento") or ""
+        if len(due) != 10 or int(due[6:]) not in years:
             continue
-        year, month = int(d[6:]), int(d[3:5])
-        paid = t.get("status_titulo") == "PAGO"
+        status["em aberto"] += 1
         cats = t.get("categorias") or [{"codigo_categoria": t.get("codigo_categoria"), "valor": t.get("valor_documento", 0)}]
-        deps = t.get("distribuicao") or [{"cCodDep": "", "nPerDep": 100}]
-        for c in cats:
-            for dep in deps:
-                value = float(c.get("valor", 0)) * float(dep.get("nPerDep", 100)) / 100
-                agg[(year, month, c.get("codigo_categoria") or "?", str(dep.get("cCodDep") or ""))][0 if paid else 1] += value
+        for cat, dep, part in split(cats, t.get("distribuicao") or no_dep, float(t.get("valor_documento") or 0)):
+            agg[(int(due[6:]), int(due[3:5]), cat, dep)][1] += part
     return name, departments, categories, agg, status
 
 
