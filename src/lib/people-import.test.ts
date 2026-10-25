@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDate, parsePeople, type PeopleCatalog } from "./people-import";
+import { parseDate, parseNames, parsePeople, type PeopleCatalog } from "./people-import";
 
 const catalog: PeopleCatalog = {
   units: [
@@ -98,5 +98,30 @@ describe("parsePeople", () => {
     );
     expect(r.rows).toHaveLength(1);
     expect(r.errors.map((e) => e.line)).toEqual([1, 2, 3, 5]);
+  });
+});
+
+describe("parseNames", () => {
+  it("lê ID e nome, com cabeçalho, e aponta linhas incompletas e IDs repetidos", () => {
+    const r = parseNames(
+      tsv(
+        ["ID Colaborador", "Nome"],
+        ["1", "Ana Souza"],
+        ["2.0", "Bruno Lima"],
+        ["3", ""],
+        ["1", "Outra"],
+      ),
+    );
+    expect(r.rows).toEqual([
+      { line: 2, external_id: "1", name: "Ana Souza" },
+      { line: 3, external_id: "2", name: "Bruno Lima" },
+    ]);
+    expect(r.errors.map((e) => e.line)).toEqual([4, 5]);
+  });
+  it("aceita ponto e vírgula", () => {
+    expect(parseNames("7;Carla Dias").rows[0]).toMatchObject({
+      external_id: "7",
+      name: "Carla Dias",
+    });
   });
 });

@@ -3,7 +3,12 @@ import { toast } from "sonner";
 import { usePlanning } from "@/lib/planning";
 import { byId, useContractTypes, useUnits } from "@/lib/catalog";
 import { useExternalIds, usePeopleMutations } from "@/lib/payroll";
-import { PEOPLE_COLUMNS, parsePeople, type PeopleImportResult } from "@/lib/people-import";
+import {
+  PEOPLE_COLUMNS,
+  parseNames,
+  parsePeople,
+  type PeopleImportResult,
+} from "@/lib/people-import";
 import { fmtBRL } from "@/lib/format";
 import { OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
@@ -182,6 +187,93 @@ export function PeopleImportDialog({ onClose }: { onClose: () => void }) {
               : result?.errors.length
                 ? `Importar só as ${rows.length} válidas`
                 : "Importar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Cola ID e nome das pessoas para o app mostrar o nome no lugar do "ID 12". Os nomes vão direto do navegador para o
+ * banco do app; a planilha não precisa passar por mais ninguém.
+ */
+export function NamesImportDialog({ onClose }: { onClose: () => void }) {
+  const { versionId } = usePlanning();
+  const { data: existing } = useExternalIds(versionId);
+  const { importNames } = usePeopleMutations();
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<ReturnType<typeof parseNames> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const known = (result?.rows ?? []).filter((r) => existing?.has(r.external_id));
+  const unknown = (result?.rows ?? []).filter((r) => !existing?.has(r.external_id));
+
+  async function save() {
+    if (!versionId || known.length === 0) return;
+    setSaving(true);
+    const n = await importNames(versionId, known);
+    setSaving(false);
+    if (n === null) return;
+    toast.success(`${n} nome(s) gravado(s).`);
+    onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Nomes das pessoas</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Cole duas colunas da planilha: <strong>ID · Nome</strong>. O app casa pelo ID e passa a
+            mostrar o nome na Folha. Não precisa colar salário. A primeira linha pode ser o
+            cabeçalho. Colar de novo atualiza os nomes.
+          </p>
+          <Textarea
+            rows={8}
+            className="font-mono text-xs"
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              setResult(null);
+            }}
+            placeholder={"1\tAna Souza\n2\tBruno Lima"}
+          />
+          {result && (
+            <div className="space-y-2 text-sm">
+              <p>
+                <strong>{known.length}</strong> nome(s) prontos para gravar
+                {unknown.length > 0
+                  ? ` · ${unknown.length} ID(s) que não estão na folha desta versão: ${unknown.map((r) => r.external_id).join(", ")}`
+                  : ""}
+                .
+              </p>
+              {result.errors.length > 0 && (
+                <ul className="space-y-0.5 rounded-md border border-destructive/40 p-2 text-destructive">
+                  {result.errors.map((e, i) => (
+                    <li key={i}>
+                      Linha {e.line}: {e.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setResult(parseNames(text))}
+            disabled={text.trim() === ""}
+          >
+            Conferir
+          </Button>
+          <Button onClick={save} disabled={saving || known.length === 0}>
+            {saving ? "Gravando…" : "Gravar nomes"}
           </Button>
         </DialogFooter>
       </DialogContent>

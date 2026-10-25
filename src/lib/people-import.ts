@@ -156,3 +156,50 @@ export function parsePeople(text: string, catalog: PeopleCatalog): PeopleImportR
   }
   return { rows, errors, ignored };
 }
+
+export interface ImportedName {
+  line: number;
+  external_id: string;
+  name: string;
+}
+
+/**
+ * Lê ID e nome colados de uma planilha (tabulação, ponto e vírgula ou vírgula). Só os nomes: os salários não precisam
+ * vir junto. A primeira linha pode ser o cabeçalho; linhas sem ID ou sem nome são apontadas.
+ */
+export function parseNames(text: string): {
+  rows: ImportedName[];
+  errors: { line: number; message: string }[];
+} {
+  const lines = text
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((l, i) => ({ number: i + 1, raw: l }))
+    .filter((l) => l.raw.trim() !== "");
+  const first = lines[0]?.raw ?? "";
+  const delimiter = first.includes("\t") ? "\t" : first.includes(";") ? ";" : ",";
+  const cells = lines.map((l) => ({
+    number: l.number,
+    cells: l.raw.split(delimiter).map((c) => c.trim()),
+  }));
+  if (cells[0] && /id|codigo|matricula/.test(norm(cells[0].cells[0] ?? ""))) cells.shift();
+
+  const rows: ImportedName[] = [];
+  const errors: { line: number; message: string }[] = [];
+  const seen = new Set<string>();
+  for (const { number, cells: c } of cells) {
+    const id = cleanId(c[0] ?? "");
+    const name = (c[1] ?? "").trim();
+    if (!id || !name) {
+      errors.push({ line: number, message: "Falta o ID ou o nome." });
+      continue;
+    }
+    if (seen.has(id)) {
+      errors.push({ line: number, message: `ID ${id} aparece mais de uma vez.` });
+      continue;
+    }
+    seen.add(id);
+    rows.push({ line: number, external_id: id, name });
+  }
+  return { rows, errors };
+}
