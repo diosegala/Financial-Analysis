@@ -3,6 +3,7 @@ import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
 import { PageHeader } from "@/components/page-header";
 import { PlanGrid } from "@/components/plan-grid";
+import { ExpenseBasePanel } from "@/components/expense-base-panel";
 
 export const Route = createFileRoute("/_authenticated/despesas")({
   head: pageHead("Despesas", "Despesas da unidade por conta e mês."),
@@ -14,6 +15,7 @@ function DespesasPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Despesas" subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"}`} />
+      <ExpenseBasePanel />
       <PlanGrid kind="despesa" emptyText="Nenhuma despesa lançada. Adicione a primeira linha." />
     </div>
   );

@@ -55,8 +55,8 @@ export type AccountMatch =
   | { status: "sem_conta" };
 
 /**
- * Conta do app que corresponde a uma categoria do Omie. Nome igual vale; senão, o mesmo nome sem o período
- * ("CUPOLA Summit Ingressos - 2026" encontra "… - 2027"), preferindo a conta cujo período inclui o ano planejado.
+ * Conta do app que corresponde a uma categoria do Omie: a de mesmo nome sem o período cujo período inclui o ano planejado
+ * ("CUPOLA Summit Ingressos - 2026" encontra "… - 2027"); senão a de nome igual; senão a de mesmo nome-base.
  */
 export function matchAccount(
   categoryName: string,
@@ -64,14 +64,14 @@ export function matchAccount(
   planYear: number,
 ): AccountMatch {
   const live = accounts.filter((a) => a.active && a.kind !== "receita");
-  const exact = live.find((a) => norm(a.name) === norm(categoryName));
   const base = norm(splitPeriod(categoryName).baseName);
-  const candidates = exact
-    ? [exact]
-    : live.filter((a) => norm(a.base_name ?? splitPeriod(a.name).baseName) === base);
-  if (candidates.length === 0) return { status: "sem_conta" };
+  const sameBase = live.filter((a) => norm(a.base_name ?? splitPeriod(a.name).baseName) === base);
+  // Mesma ordem da geração da base no banco (account_for_category): a do ano planejado, a de nome igual, a de mesmo nome-base.
   const account =
-    candidates.find((a) => a.period?.split("/").includes(String(planYear))) ?? candidates[0]!;
+    sameBase.find((a) => a.period?.replace(/\s/g, "").split("/").includes(String(planYear))) ??
+    live.find((a) => norm(a.name) === norm(categoryName)) ??
+    sameBase[0];
+  if (!account) return { status: "sem_conta" };
   return account.treatment === "lancavel"
     ? { status: "conta", account }
     : { status: account.treatment as "calculada" | "fora_dre", account };

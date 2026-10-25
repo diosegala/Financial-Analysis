@@ -24,11 +24,10 @@ describe("matchAccount", () => {
     expect(matchAccount("marketing", accounts, 2027)).toMatchObject({ status: "conta" });
   });
   it("leva a categoria de 2026 para a conta de 2027 pelo nome sem o período", () => {
-    const m = matchAccount("CUPOLA Summit Custos - 2026", accounts, 2027);
-    // o nome igual vale primeiro: a conta de 2026 existe e é a do próprio ano
-    expect(m).toMatchObject({ status: "conta" });
-    const only = matchAccount("CUPOLA Summit Custos - 2025", accounts, 2027);
-    expect(only.status === "conta" && only.account.name).toBe("CUPOLA Summit Custos - 2027");
+    for (const name of ["CUPOLA Summit Custos - 2026", "CUPOLA Summit Custos - 2025"]) {
+      const m = matchAccount(name, accounts, 2027);
+      expect(m.status === "conta" && m.account.name).toBe("CUPOLA Summit Custos - 2027");
+    }
   });
   it("avisa quando a conta é calculada pelo app", () => {
     expect(matchAccount("INSS", accounts, 2027)).toMatchObject({ status: "calculada" });

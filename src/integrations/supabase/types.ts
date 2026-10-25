@@ -150,6 +150,27 @@ export type Database = {
           },
         ]
       }
+      app_settings: {
+        Row: {
+          key: string
+          label: string
+          updated_at: string
+          value: string | null
+        }
+        Insert: {
+          key: string
+          label: string
+          updated_at?: string
+          value?: string | null
+        }
+        Update: {
+          key?: string
+          label?: string
+          updated_at?: string
+          value?: string | null
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -1692,8 +1713,39 @@ export type Database = {
       }
     }
     Functions: {
+      account_for_category: {
+        Args: { _name: string; _plan_year: number }
+        Returns: {
+          active: boolean
+          base_name: string | null
+          code: string | null
+          created_at: string
+          dre_line_id: string | null
+          generates_tax_credit: boolean
+          group_name: string | null
+          id: string
+          kind: string
+          name: string
+          omie_category_code: string | null
+          period: string | null
+          sort_order: number
+          treatment: string
+          unit_ids: string[] | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "accounts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       account_kind: { Args: { _account_id: string }; Returns: string }
       accounts_in_use: { Args: never; Returns: string[] }
+      adjust_generated_lines: {
+        Args: { _pct: number; _version_id: string }
+        Returns: number
+      }
       assert_editable: {
         Args: { _month: number; _unit_id: string; _version_id: string }
         Returns: undefined
@@ -1704,6 +1756,11 @@ export type Database = {
       }
       can_write_unit: {
         Args: { _unit_id: string; _user_id: string }
+        Returns: boolean
+      }
+      category_base_name: { Args: { _name: string }; Returns: string }
+      category_in_year: {
+        Args: { _name: string; _year: number }
         Returns: boolean
       }
       compute_targets: {
@@ -1765,6 +1822,13 @@ export type Database = {
           dre_line_id: string
           month: number
           unit_id: string
+        }[]
+      }
+      generate_expense_base: {
+        Args: { _mode?: string; _pct?: number; _version_id: string }
+        Returns: {
+          lines: number
+          total: number
         }[]
       }
       has_any_role: {
@@ -1829,6 +1893,16 @@ export type Database = {
         Returns: string
       }
       norm_text: { Args: { _s: string }; Returns: string }
+      omie_expense_attribution: {
+        Args: { _year: number }
+        Returns: {
+          category_name: string
+          open: number[]
+          paid: number[]
+          source: string
+          unit_id: string
+        }[]
+      }
       omie_expense_summary: {
         Args: { _year: number }
         Returns: {
