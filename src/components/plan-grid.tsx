@@ -20,6 +20,7 @@ import {
   type PriceModel,
 } from "@/lib/products";
 import { norm } from "@/lib/products-import";
+import { matchKeyword } from "@/lib/accounts-import";
 import type { PlanEvent } from "@/lib/events";
 import {
   adjustFrom,
@@ -334,7 +335,7 @@ function LineDialog({
   event: PlanEvent | null;
   onClose: () => void;
 }) {
-  const { versionId, unitId } = usePlanning();
+  const { versionId, unitId, unit } = usePlanning();
   const { data: accounts } = useAccounts();
   const { data: clients } = useClients();
   const { data: products } = useProducts();
@@ -358,8 +359,14 @@ function LineDialog({
       ((p.active && (!p.unit_id || p.unit_id === unitId)) || p.id === line?.product_id),
   );
 
+  // Conta padrão de uma receita nova: a que tem o nome da unidade (ex.: "Receitas Fixas - Agência"), senão a primeira.
+  const unitAccount = isRevenue
+    ? options.find((a) =>
+        [unit?.name, ...(unit?.name_keywords ?? [])].some((k) => !!k && matchKeyword(a.name, k)),
+      )
+    : undefined;
   const [accountId, setAccountId] = useState<string | null>(
-    line?.account_id ?? options[0]?.id ?? null,
+    line?.account_id ?? unitAccount?.id ?? options[0]?.id ?? null,
   );
   const [description, setDescription] = useState(line?.description ?? "");
   const [clientName, setClientName] = useState(
@@ -494,7 +501,8 @@ function LineDialog({
     if (ok) onClose();
   }
 
-  const needsType = isRevenue && !revenueTypeId;
+  // Tipo de receita só é exigido nos itens de evento (Ingressos ou Patrocínio); na receita comum é opcional.
+  const needsType = isRevenue && inEvent && !revenueTypeId;
   const needsOrigin = isRevenue && !revenueOrigin;
   const needsDescription = inEvent && description.trim() === "";
   const valueLabel =
@@ -519,7 +527,7 @@ function LineDialog({
       hint={
         inEvent
           ? "Ex.: Ingressos ou Patrocínio. Define a comissão e separa o resultado do evento por origem."
-          : "Define a recorrência e a base da comissão."
+          : "Opcional. Define a recorrência e, para Parceiros, a comissão própria."
       }
     >
       <OptionSelect
@@ -537,7 +545,9 @@ function LineDialog({
       hint={
         inEvent
           ? "Ex.: Ingressos lote 1, Patrocínio Ouro, Local, Alimentação."
-          : "Opcional. Ex.: contrato, fornecedor ou observação."
+          : isRevenue
+            ? "O que é esta receita. Ex.: Carteira Consultoria, contrato Imobiliária X."
+            : "Opcional. Ex.: contrato, fornecedor ou observação."
       }
     >
       <Input value={description} onChange={(e) => setDescription(e.target.value)} />
@@ -589,24 +599,7 @@ function LineDialog({
           ) : (
             isRevenue && (
               <>
-                <Field
-                  label="Produto"
-                  hint={
-                    productOptions.length === 0
-                      ? "Nenhum produto cadastrado para esta unidade. Cadastre em Produtos."
-                      : "O preço e o prazo do produto são preenchidos sozinhos."
-                  }
-                >
-                  <OptionSelect
-                    value={productId}
-                    onChange={pickProduct}
-                    noneLabel="Sem produto (lançamento avulso)"
-                    options={productOptions.map((p) => ({
-                      value: p.id,
-                      label: `${p.name} — ${describePrice(p)}`,
-                    }))}
-                  />
-                </Field>
+                {descriptionField}
                 <Field
                   label="Origem da receita"
                   hint="Carteira: contratos que já existem. Renovação: contratos recorrentes que vencem e renovam. Nova: venda ainda a fazer. A meta menos carteira e renovações é o saldo a vender."
@@ -617,7 +610,6 @@ function LineDialog({
                     options={REVENUE_ORIGINS}
                   />
                 </Field>
-                {clientField}
               </>
             )
           )}
@@ -706,14 +698,36 @@ function LineDialog({
 
           {!inEvent &&
             (isRevenue ? (
-              <details open={needsType || undefined} className="rounded-md border border-border">
+              <details className="rounded-md border border-border">
                 <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
-                  Mais detalhes{type ? ` · ${type.name}` : ""}
+                  Mais detalhes (opcional): cliente, produto, conta e tipo
+                  <span className="ml-1 font-normal text-muted-foreground">
+                    · conta {options.find((a) => a.id === accountId)?.name ?? "—"}
+                    {type ? ` · ${type.name}` : ""}
+                  </span>
                 </summary>
                 <div className="grid gap-3 border-t border-border p-3">
+                  {clientField}
+                  <Field
+                    label="Produto"
+                    hint={
+                      productOptions.length === 0
+                        ? "Nenhum produto cadastrado para esta unidade."
+                        : "O preço e o prazo do produto são preenchidos sozinhos."
+                    }
+                  >
+                    <OptionSelect
+                      value={productId}
+                      onChange={pickProduct}
+                      noneLabel="Sem produto"
+                      options={productOptions.map((p) => ({
+                        value: p.id,
+                        label: `${p.name} — ${describePrice(p)}`,
+                      }))}
+                    />
+                  </Field>
                   {accountField}
                   {typeField}
-                  {descriptionField}
                 </div>
               </details>
             ) : (
@@ -722,13 +736,7 @@ function LineDialog({
                 {descriptionField}
               </div>
             ))}
-          {needsType && (
-            <p className="text-sm text-destructive">
-              {inEvent
-                ? "Escolha o tipo de receita."
-                : "Escolha o tipo de receita em “Mais detalhes”, ou selecione um produto que já tenha um."}
-            </p>
-          )}
+          {needsType && <p className="text-sm text-destructive">Escolha o tipo de receita.</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

@@ -1327,41 +1327,6 @@ export type Database = {
         }
         Relationships: []
       }
-      salary_changes: {
-        Row: {
-          created_at: string
-          id: string
-          month: number
-          new_salary: number
-          person_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          month: number
-          new_salary: number
-          person_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          month?: number
-          new_salary?: number
-          person_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "salary_changes_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "people"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       scenario_targets: {
         Row: {
           computed_at: string | null

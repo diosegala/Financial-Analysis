@@ -22,7 +22,6 @@ const TABLE_LABELS: Record<string, string> = {
   plan_lines: "Linhas de lançamento",
   plan_values: "Valores mensais",
   people: "Pessoas",
-  salary_changes: "Reajustes",
   events: "Eventos",
   parameter_values: "Valores de parâmetros",
   parameter_definitions: "Parâmetros",
