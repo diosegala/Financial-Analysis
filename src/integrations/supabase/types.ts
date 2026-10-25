@@ -1329,6 +1329,7 @@ export type Database = {
       }
       scenario_targets: {
         Row: {
+          breakdown: Json | null
           computed_at: string | null
           created_at: string
           feasible: boolean | null
@@ -1347,6 +1348,7 @@ export type Database = {
           variable_pct: number | null
         }
         Insert: {
+          breakdown?: Json | null
           computed_at?: string | null
           created_at?: string
           feasible?: boolean | null
@@ -1365,6 +1367,7 @@ export type Database = {
           variable_pct?: number | null
         }
         Update: {
+          breakdown?: Json | null
           computed_at?: string | null
           created_at?: string
           feasible?: boolean | null
@@ -1731,6 +1734,7 @@ export type Database = {
       compute_targets: {
         Args: { _scenario_id: string }
         Returns: {
+          breakdown: Json | null
           computed_at: string | null
           created_at: string
           feasible: boolean | null
@@ -1934,6 +1938,7 @@ export type Database = {
       publish_targets: {
         Args: { _publish?: boolean; _scenario_id: string }
         Returns: {
+          breakdown: Json | null
           computed_at: string | null
           created_at: string
           feasible: boolean | null

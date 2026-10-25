@@ -1,6 +1,6 @@
 -- Metas de cima para baixo: receita necessária, distribuição por unidade e mês, publicação e acesso.
 BEGIN;
-SELECT plan(20);
+SELECT plan(23);
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT ON ids TO authenticated;
@@ -61,6 +61,12 @@ SELECT is((SELECT round(target_margin, 4) FROM scenario_targets), round(100000 /
 SELECT is((SELECT round(amount, 2) FROM revenue_targets WHERE unit_id = pg_temp.id('consultoria') AND month = 1), 7788.78,
   'Meta de janeiro da Consultoria: 60% da receita, 1/12');
 SELECT is((SELECT round(sum(amount), 2) FROM revenue_targets), 155775.58, 'A distribuição soma a receita necessária');
+
+-- Detalhe guardado para a tela explicar o cálculo
+SELECT is((SELECT (breakdown ->> 'expenses')::NUMERIC FROM scenario_targets), 18000::NUMERIC, 'Detalhe: despesas que entram nos custos');
+SELECT is((SELECT jsonb_array_length(breakdown -> 'units') FROM scenario_targets), 2, 'Detalhe: uma entrada por unidade de negócio');
+SELECT is((SELECT round((u ->> 'variable_pct')::NUMERIC, 4) FROM scenario_targets, jsonb_array_elements(breakdown -> 'units') u
+           WHERE (u ->> 'unit_id')::UUID = pg_temp.id('consultoria')), 0.2425, 'Detalhe: alíquota variável da unidade');
 
 -- Pesos dos meses: janeiro 1 e fevereiro 3 (25% e 75%) só para a Consultoria
 INSERT INTO target_month_weights (scenario_id, unit_id, month, weight) VALUES
