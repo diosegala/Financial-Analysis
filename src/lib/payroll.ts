@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { friendlyError } from "./catalog";
 import type { PlanLine } from "./plan-data";
-import type { ImportedPerson } from "./people-import";
+import type { ImportedName, ImportedPerson } from "./people-import";
 
 export type Person = Tables<"people">;
 
@@ -79,6 +79,26 @@ export function usePeopleMutations() {
     updatePerson: (id: string, patch: TablesUpdate<"people">) =>
       run(supabase.from("people").update(patch).eq("id", id)),
     deletePerson: (id: string) => run(supabase.from("people").delete().eq("id", id)),
+    /** Troca o "ID 12" pelo nome da pessoa, casando pelo ID da planilha. Devolve quantas foram atualizadas. */
+    importNames: async (versionId: string, rows: ImportedName[]) => {
+      let updated = 0;
+      for (const r of rows) {
+        const { data, error } = await supabase
+          .from("people")
+          .update({ name: r.name })
+          .eq("version_id", versionId)
+          .eq("external_id", r.external_id)
+          .select("id");
+        if (error) {
+          toast.error(friendlyError(error.message));
+          await refresh();
+          return null;
+        }
+        updated += data?.length ?? 0;
+      }
+      await refresh();
+      return updated;
+    },
     importPeople: async (versionId: string, rows: ImportedPerson[], overwrite: boolean) => {
       const { data, error } = await supabase.rpc("import_people", {
         _version_id: versionId,

@@ -11,7 +11,7 @@ import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
 import { parseDate } from "@/lib/people-import";
 import { PageHeader } from "@/components/page-header";
 import { AdjustDialog, FillDialog, PlanGrid } from "@/components/plan-grid";
-import { PeopleImportDialog } from "@/components/people-import";
+import { NamesImportDialog, PeopleImportDialog } from "@/components/people-import";
 import { PayrollDetail } from "@/components/payroll-detail";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MoneyCell } from "@/components/money-cell";
@@ -57,6 +57,7 @@ type Dialogs =
   | { type: "adjust"; item: PersonLine }
   | { type: "delete"; person: Person }
   | { type: "import" }
+  | { type: "names" }
   | null;
 
 function FolhaPage() {
@@ -96,6 +97,9 @@ function FolhaPage() {
         actions={
           canEdit && (
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setDialog({ type: "names" })}>
+                Nomes
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -150,7 +154,13 @@ function FolhaPage() {
                         <td className="sticky left-0 z-10 bg-card px-3 py-1">
                           <div className="font-medium">{p.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            {[p.role_title, ctMap.get(p.contract_type_id)?.name]
+                            {[
+                              p.external_id && !p.name.startsWith("ID ")
+                                ? `ID ${p.external_id}`
+                                : null,
+                              p.role_title,
+                              ctMap.get(p.contract_type_id)?.name,
+                            ]
                               .filter(Boolean)
                               .join(" · ")}
                           </div>
@@ -263,6 +273,7 @@ function FolhaPage() {
         <DeletePersonDialog person={dialog.person} onClose={() => setDialog(null)} />
       )}
       {dialog?.type === "import" && <PeopleImportDialog onClose={() => setDialog(null)} />}
+      {dialog?.type === "names" && <NamesImportDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }
