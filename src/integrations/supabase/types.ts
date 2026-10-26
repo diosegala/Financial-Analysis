@@ -510,7 +510,9 @@ export type Database = {
           category_code: string
           company_id: string
           department_code: string
+          item: string
           month: number
+          supplier_code: string
           synced_at: string
           year: number
         }
@@ -520,7 +522,9 @@ export type Database = {
           category_code: string
           company_id: string
           department_code?: string
+          item?: string
           month: number
+          supplier_code?: string
           synced_at?: string
           year: number
         }
@@ -530,7 +534,9 @@ export type Database = {
           category_code?: string
           company_id?: string
           department_code?: string
+          item?: string
           month?: number
+          supplier_code?: string
           synced_at?: string
           year?: number
         }
@@ -736,6 +742,32 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      omie_suppliers: {
+        Row: {
+          code: string
+          company_id: string
+          name: string
+        }
+        Insert: {
+          code: string
+          company_id: string
+          name: string
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_suppliers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "omie_companies"
             referencedColumns: ["id"]
           },
         ]
@@ -1869,6 +1901,7 @@ export type Database = {
           open: number[]
           paid: number[]
           source: string
+          supplier_name: string
           unit_id: string
         }[]
       }
@@ -1879,6 +1912,7 @@ export type Database = {
           open: number[]
           paid: number[]
           source: string
+          supplier_name: string
           unit_id: string
         }[]
       }

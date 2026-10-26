@@ -13,6 +13,8 @@ export interface OmieExpense {
   source: "departamento" | "rateio" | "palavra" | "sem";
   paid: number[];
   open: number[];
+  /** Os lançamentos que compõem a categoria: fornecedor, ou o item quando foi pago no cartão. */
+  suppliers: { name: string; paid: number[]; open: number[] }[];
 }
 
 /** Despesas do ano lidas do Omie, por categoria e unidade, com os 12 meses (índice 0 = janeiro). */
@@ -23,13 +25,27 @@ export function useOmieExpenses(year: number | undefined) {
     queryFn: async (): Promise<OmieExpense[]> => {
       const { data, error } = await supabase.rpc("omie_expense_summary", { _year: year! });
       if (error) throw error;
-      return (data ?? []).map((r) => ({
-        categoryName: r.category_name,
-        unitId: r.unit_id,
-        source: r.source as OmieExpense["source"],
-        paid: (r.paid ?? []).map(Number),
-        open: (r.open ?? []).map(Number),
-      }));
+      // Uma linha por categoria, unidade e origem da unidade, com o detalhe por fornecedor dentro.
+      const add = (a: number[], b: number[]) => a.map((v, i) => v + (b[i] ?? 0));
+      const out = new Map<string, OmieExpense>();
+      for (const r of data ?? []) {
+        const paid = (r.paid ?? []).map(Number);
+        const open = (r.open ?? []).map(Number);
+        const key = `${r.category_name}|${r.unit_id ?? ""}|${r.source}`;
+        const row: OmieExpense = out.get(key) ?? {
+          categoryName: r.category_name,
+          unitId: r.unit_id,
+          source: r.source as OmieExpense["source"],
+          paid: Array(12).fill(0) as number[],
+          open: Array(12).fill(0) as number[],
+          suppliers: [],
+        };
+        row.paid = add(row.paid, paid);
+        row.open = add(row.open, open);
+        row.suppliers.push({ name: r.supplier_name || "Sem fornecedor", paid, open });
+        out.set(key, row);
+      }
+      return [...out.values()];
     },
   });
 }

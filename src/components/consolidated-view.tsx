@@ -11,6 +11,7 @@ import { OptionSelect } from "@/components/form-fields";
 interface LineSum {
   unitId: string;
   accountId: string;
+  description: string | null;
   months: number[];
 }
 
@@ -24,15 +25,23 @@ function useAllLines(versionId: string | null, kind: AccountKind) {
       for (let from = 0; ; from += 1000) {
         const { data, error } = await supabase
           .from("plan_lines")
-          .select("unit_id, account_id, plan_values(month, amount), accounts!inner(kind)")
+          .select(
+            "unit_id, account_id, description, plan_values(month, amount), accounts!inner(kind)",
+          )
           .eq("version_id", versionId!)
           .eq("accounts.kind", kind)
+          .order("id")
           .range(from, from + 999);
         if (error) throw error;
         for (const l of data ?? []) {
           const months = Array(12).fill(0) as number[];
           for (const v of l.plan_values) months[v.month - 1]! += Number(v.amount);
-          out.push({ unitId: l.unit_id, accountId: l.account_id, months });
+          out.push({
+            unitId: l.unit_id,
+            accountId: l.account_id,
+            description: l.description,
+            months,
+          });
         }
         if (!data || data.length < 1000) return out;
       }
@@ -59,7 +68,9 @@ export function ConsolidatedView({ kind }: { kind: AccountKind }) {
 
   const rows = useMemo(() => {
     const key = (l: LineSum) => (group === "conta" ? l.accountId : l.unitId);
-    const sub = (l: LineSum) => (group === "conta" ? l.unitId : l.accountId);
+    // Por conta, o detalhe são os lançamentos (ex.: cada SaaS) com a unidade; por unidade, as contas.
+    const sub = (l: LineSum) =>
+      group === "conta" ? `${l.unitId}|${l.description ?? ""}` : l.accountId;
     const m = new Map<string, { months: number[]; parts: Map<string, number[]> }>();
     for (const l of lines ?? []) {
       const r = m.get(key(l)) ?? { months: Array(12).fill(0), parts: new Map() };
@@ -77,6 +88,11 @@ export function ConsolidatedView({ kind }: { kind: AccountKind }) {
       .sort((a, b) => total(b.months) - total(a.months));
   }, [lines, group]);
 
+  const partName = (pid: string) => {
+    if (group === "unidade") return name(pid, false);
+    const [unitId, description] = pid.split(/\|(.*)/s);
+    return `${description || "Sem descrição"} · ${unitMap.get(unitId ?? "")?.name ?? "—"}`;
+  };
   const name = (id: string, isUnit: boolean) =>
     (isUnit ? unitMap.get(id)?.name : accountMap.get(id)?.name) ?? "—";
   const grand = rows.reduce((a, r) => add(a, r.months), Array(12).fill(0) as number[]);
@@ -160,7 +176,7 @@ export function ConsolidatedView({ kind }: { kind: AccountKind }) {
                         className="border-b border-border/50 bg-muted/10 text-muted-foreground"
                       >
                         <td className="sticky left-0 z-10 bg-card px-3 py-1 pl-9">
-                          {name(pid, group === "conta")}
+                          {partName(pid)}
                         </td>
                         {pm.map((v, i) => (
                           <td key={i} className="px-2 py-1 text-right font-mono tabular-nums">

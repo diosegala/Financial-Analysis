@@ -36,6 +36,9 @@ depois.
   3. a **palavra no nome da categoria** (SAAS - Agência → Agência; Summit, Imersão, Insider… → Educação). Maior prioridade
      vence; "Financeiro Essencial" (treinamento) vence "Financeiro" (a unidade);
   4. senão, fica **"a ratear"** e, na base de 2027, entra na ADM.
+- **Fornecedor e item**: cada despesa guarda o fornecedor do título. Quando o fornecedor é o banco do cartão de crédito
+  (lista editável em Configurações → Avançado → Omie), o nome do lançamento vem da observação do título (o nome da
+  ferramenta ou serviço). A base de 2027 tem uma linha por fornecedor ou item dentro da conta; a conta é a soma deles.
 - Mudou a unidade de uma categoria? Para levar à base de 2027, use "Gerar de novo" em Despesas (refaz as linhas geradas),
   ou mude uma linha só pelo menu da linha → "Mudar de unidade".
 - Em "Planejar", a unidade e a parte vêm dessa atribuição e podem ser trocadas.

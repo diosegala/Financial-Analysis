@@ -1,5 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
@@ -56,6 +57,14 @@ function RealizadoPage() {
   const [planning, setPlanning] = useState<Row | null>(null);
   const [splitting, setSplitting] = useState<string | null>(null);
   const saveUnits = useCategoryUnitSaver();
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (k: string) =>
+    setOpen((o) => {
+      const n = new Set(o);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
   const unitMap = byId(units);
 
   const rows: Row[] = useMemo(
@@ -158,80 +167,124 @@ function RealizadoPage() {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((r) => (
-                  <tr
-                    key={`${r.categoryName}|${r.unitId}|${r.source}`}
-                    className="border-b border-border last:border-0"
-                  >
-                    <td className="px-3 py-1.5 font-medium">{r.categoryName}</td>
-                    <td className="px-3 py-1.5 text-muted-foreground">
-                      <div className="w-40">
-                        <OptionSelect
-                          value={r.unitId}
-                          onChange={async (v) => {
-                            if (!v || v === r.unitId) return;
-                            if (await saveUnits(r.categoryName, [{ unit_id: v, share: 1 }]))
-                              toast.success(
-                                `${r.categoryName} agora é de ${unitMap.get(v)?.name}. Para levar à base de ${version?.year}, use “Gerar de novo” em Despesas.`,
-                              );
-                          }}
-                          noneLabel="A ratear"
-                          options={(units ?? [])
-                            .filter((u) => u.active)
-                            .map((u) => ({ value: u.id, label: u.name }))}
-                        />
-                      </div>
-                      <span className="text-xs">({SOURCE_LABELS[r.source]})</span>
-                    </td>
-                    <td className="px-3 py-1.5">
-                      {r.match.status === "sem_conta" ? (
-                        <Badge variant="outline">sem conta</Badge>
-                      ) : (
-                        <span className={r.match.status === "conta" ? "" : "text-muted-foreground"}>
-                          {r.match.account.name}
-                          {r.match.status !== "conta" && (
-                            <span className="ml-1 text-xs">
-                              (
-                              {r.match.status === "calculada"
-                                ? "calculada pelo app"
-                                : "fora da DRE"}
-                              )
+                {shown.map((r) => {
+                  const key = `${r.categoryName}|${r.unitId}|${r.source}`;
+                  return (
+                    <Fragment key={key}>
+                      <tr className="border-b border-border last:border-0">
+                        <td className="px-3 py-1.5 font-medium">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-left"
+                            onClick={() => toggle(key)}
+                            aria-label={`Ver lançamentos de ${r.categoryName}`}
+                          >
+                            {open.has(key) ? (
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            )}
+                            {r.categoryName}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              ({r.suppliers.length})
+                            </span>
+                          </button>
+                        </td>
+                        <td className="px-3 py-1.5 text-muted-foreground">
+                          <div className="w-40">
+                            <OptionSelect
+                              value={r.unitId}
+                              onChange={async (v) => {
+                                if (!v || v === r.unitId) return;
+                                if (await saveUnits(r.categoryName, [{ unit_id: v, share: 1 }]))
+                                  toast.success(
+                                    `${r.categoryName} agora é de ${unitMap.get(v)?.name}. Para levar à base de ${version?.year}, use “Gerar de novo” em Despesas.`,
+                                  );
+                              }}
+                              noneLabel="A ratear"
+                              options={(units ?? [])
+                                .filter((u) => u.active)
+                                .map((u) => ({ value: u.id, label: u.name }))}
+                            />
+                          </div>
+                          <span className="text-xs">({SOURCE_LABELS[r.source]})</span>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {r.match.status === "sem_conta" ? (
+                            <Badge variant="outline">sem conta</Badge>
+                          ) : (
+                            <span
+                              className={r.match.status === "conta" ? "" : "text-muted-foreground"}
+                            >
+                              {r.match.account.name}
+                              {r.match.status !== "conta" && (
+                                <span className="ml-1 text-xs">
+                                  (
+                                  {r.match.status === "calculada"
+                                    ? "calculada pelo app"
+                                    : "fora da DRE"}
+                                  )
+                                </span>
+                              )}
                             </span>
                           )}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                      {fmtBRL(sum(r.paid))}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                      {fmtBRL(sum(r.open))}
-                    </td>
-                    <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                      {fmtBRL(r.total)}
-                    </td>
-                    <td className="space-x-1 whitespace-nowrap px-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        aria-label={`Dividir ${r.categoryName}`}
-                        onClick={() => setSplitting(r.categoryName)}
-                      >
-                        Dividir
-                      </Button>
-                      {r.match.status === "conta" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          aria-label={`Planejar ${r.categoryName}`}
-                          onClick={() => setPlanning(r)}
-                        >
-                          Planejar
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                          {fmtBRL(sum(r.paid))}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                          {fmtBRL(sum(r.open))}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                          {fmtBRL(r.total)}
+                        </td>
+                        <td className="space-x-1 whitespace-nowrap px-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Dividir ${r.categoryName}`}
+                            onClick={() => setSplitting(r.categoryName)}
+                          >
+                            Dividir
+                          </Button>
+                          {r.match.status === "conta" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              aria-label={`Planejar ${r.categoryName}`}
+                              onClick={() => setPlanning(r)}
+                            >
+                              Planejar
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                      {open.has(key) &&
+                        [...r.suppliers]
+                          .sort((a, b) => sum(b.paid) + sum(b.open) - sum(a.paid) - sum(a.open))
+                          .map((sp) => (
+                            <tr
+                              key={`${key}|${sp.name}`}
+                              className="border-b border-border/50 bg-muted/10 text-muted-foreground"
+                            >
+                              <td className="px-3 py-1 pl-9" colSpan={3}>
+                                {sp.name}
+                              </td>
+                              <td className="px-3 py-1 text-right font-mono tabular-nums">
+                                {fmtBRL(sum(sp.paid))}
+                              </td>
+                              <td className="px-3 py-1 text-right font-mono tabular-nums">
+                                {fmtBRL(sum(sp.open))}
+                              </td>
+                              <td className="px-3 py-1 text-right font-mono tabular-nums">
+                                {fmtBRL(sum(sp.paid) + sum(sp.open))}
+                              </td>
+                              <td />
+                            </tr>
+                          ))}
+                    </Fragment>
+                  );
+                })}
                 {shown.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">

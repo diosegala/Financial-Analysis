@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { MoreHorizontal, Plus, AlertTriangle } from "lucide-react";
+import { MoreHorizontal, Plus, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { usePlanning } from "@/lib/planning";
 import {
   byId,
@@ -110,7 +110,7 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
 
   function pasteBlock(rowIndex: number, month: number, block: string[][]) {
     block.forEach((cells, r) => {
-      const line = rows[rowIndex + r];
+      const line = visible[rowIndex + r];
       if (!line) return;
       const values = cells
         .map((text, c) => ({ month: month + c, amount: parseNum(text) }))
@@ -122,6 +122,120 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
   const monthTotals = MONTHS.map((_, i) =>
     rows.reduce((a, l) => a + (l.values.get(i + 1) ?? 0), 0),
   );
+
+  // Despesas e outros lançamentos de folha: agrupados por conta. A conta é a soma dos lançamentos (ex.: os SaaS de
+  // "SAAS - Agência"); conta com até 3 lançamentos já vem aberta, a maior abre com um clique.
+  const grouped = kind !== "receita" && !event;
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (id: string) =>
+    setOpenGroups((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const groups = (() => {
+    const m = new Map<string, PlanLine[]>();
+    for (const l of rows) m.set(l.account_id, [...(m.get(l.account_id) ?? []), l]);
+    const total = (l: PlanLine) => [...l.values.values()].reduce((a, v) => a + v, 0);
+    return [...m.entries()]
+      .map(([accountId, ls]) => ({
+        accountId,
+        lines: [...ls].sort((a, b) => total(b) - total(a)),
+        months: MONTHS.map((_, i) => ls.reduce((a, l) => a + (l.values.get(i + 1) ?? 0), 0)),
+      }))
+      .sort((a, b) =>
+        (accountMap.get(a.accountId)?.name ?? "").localeCompare(
+          accountMap.get(b.accountId)?.name ?? "",
+          "pt-BR",
+        ),
+      );
+  })();
+  // Linhas visíveis, na ordem da tela: a navegação por teclado e o colar do Excel seguem esta ordem.
+  const visible = grouped
+    ? groups.flatMap((g) => (openGroups.has(g.accountId) !== g.lines.length <= 3 ? g.lines : []))
+    : rows;
+
+  /** Uma linha da grade. Dentro de um grupo de conta, a conta já está no cabeçalho e sai do subtítulo. */
+  function renderLine(line: PlanLine, r: number, inGroup: boolean) {
+    const total = [...line.values.values()].reduce((a, v) => a + v, 0);
+    const type = line.revenue_type_id ? typeMap.get(line.revenue_type_id) : undefined;
+    const filled = [...line.values.values()].filter((v) => v !== 0).length;
+    const overMax = type?.max_months != null && filled > type.max_months;
+    const accountName = accountMap.get(line.account_id)?.name;
+    const clientName = line.client_id ? clientMap.get(line.client_id)?.name : null;
+    const productName = line.product_id ? productMap.get(line.product_id)?.name : null;
+    const label =
+      line.description || [clientName, productName].filter(Boolean).join(" — ") || accountName;
+    // O cliente (ou patrocinador) já está no título quando a linha não tem descrição.
+    const sub = [
+      inGroup ? null : accountName,
+      type?.name,
+      REVENUE_ORIGINS.find((o) => o.value === line.revenue_origin)?.label,
+      line.description ? clientName : null,
+    ].filter(Boolean);
+    return (
+      <tr key={line.id} className="border-b border-border last:border-0">
+        <td className="sticky left-0 z-10 bg-card px-3 py-1">
+          <div className="font-medium">{label}</div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {sub.join(" · ")}
+            {overMax && (
+              <Badge variant="destructive" className="gap-1 px-1.5 py-0 text-[10px]">
+                <AlertTriangle className="h-3 w-3" /> mais de {type!.max_months} meses
+              </Badge>
+            )}
+          </div>
+        </td>
+        {MONTHS.map((_, i) => (
+          <td key={i} className="border-l border-border/50 p-0">
+            <MoneyCell
+              value={line.values.get(i + 1) ?? 0}
+              disabled={!canEditRows}
+              pos={{ grid, row: r, col: i }}
+              onCommit={(v) => setValues(line.id, [{ month: i + 1, amount: v }])}
+              onPasteBlock={(block) => pasteBlock(r, i + 1, block)}
+            />
+          </td>
+        ))}
+        <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">{fmtBRL(total)}</td>
+        <td className="px-1">
+          {canEditRows && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Ações da linha">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setDialog({ type: "line", line })}>
+                  Editar linha
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setDialog({ type: "fill", line })}>
+                  Preencher meses…
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setDialog({ type: "adjust", line })}>
+                  Reajustar a partir de um mês…
+                </DropdownMenuItem>
+                {!event && (
+                  <DropdownMenuItem onClick={() => setDialog({ type: "move", line })}>
+                    Mudar de unidade…
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => setDialog({ type: "delete", line })}
+                >
+                  Excluir linha
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -164,94 +278,48 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((line, r) => {
-                const total = [...line.values.values()].reduce((a, v) => a + v, 0);
-                const type = line.revenue_type_id ? typeMap.get(line.revenue_type_id) : undefined;
-                const filled = [...line.values.values()].filter((v) => v !== 0).length;
-                const overMax = type?.max_months != null && filled > type.max_months;
-                const accountName = accountMap.get(line.account_id)?.name;
-                const clientName = line.client_id ? clientMap.get(line.client_id)?.name : null;
-                const productName = line.product_id ? productMap.get(line.product_id)?.name : null;
-                const label =
-                  line.description ||
-                  [clientName, productName].filter(Boolean).join(" — ") ||
-                  accountName;
-                // O cliente (ou patrocinador) já está no título quando a linha não tem descrição.
-                const sub = [
-                  accountName,
-                  type?.name,
-                  REVENUE_ORIGINS.find((o) => o.value === line.revenue_origin)?.label,
-                  line.description ? clientName : null,
-                ].filter(Boolean);
-                return (
-                  <tr key={line.id} className="border-b border-border last:border-0">
-                    <td className="sticky left-0 z-10 bg-card px-3 py-1">
-                      <div className="font-medium">{label}</div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {sub.join(" · ")}
-                        {overMax && (
-                          <Badge variant="destructive" className="gap-1 px-1.5 py-0 text-[10px]">
-                            <AlertTriangle className="h-3 w-3" /> mais de {type!.max_months} meses
-                          </Badge>
-                        )}
-                      </div>
-                    </td>
-                    {MONTHS.map((_, i) => (
-                      <td key={i} className="border-l border-border/50 p-0">
-                        <MoneyCell
-                          value={line.values.get(i + 1) ?? 0}
-                          disabled={!canEditRows}
-                          pos={{ grid, row: r, col: i }}
-                          onCommit={(v) => setValues(line.id, [{ month: i + 1, amount: v }])}
-                          onPasteBlock={(block) => pasteBlock(r, i + 1, block)}
-                        />
-                      </td>
-                    ))}
-                    <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
-                      {fmtBRL(total)}
-                    </td>
-                    <td className="px-1">
-                      {canEditRows && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              aria-label="Ações da linha"
+              {grouped
+                ? groups.map((g) => {
+                    const isOpen = openGroups.has(g.accountId) !== g.lines.length <= 3;
+                    return (
+                      <Fragment key={g.accountId}>
+                        <tr
+                          data-group-header
+                          className="cursor-pointer border-b border-border bg-muted/20 hover:bg-muted/40"
+                          onClick={() => toggleGroup(g.accountId)}
+                        >
+                          <td className="sticky left-0 z-10 bg-muted px-3 py-1.5 font-semibold">
+                            <span className="inline-flex items-center gap-1">
+                              {isOpen ? (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              )}
+                              {accountMap.get(g.accountId)?.name ?? "—"}
+                              <span className="text-xs font-normal text-muted-foreground">
+                                ({g.lines.length} lançamento{g.lines.length === 1 ? "" : "s"})
+                              </span>
+                            </span>
+                          </td>
+                          {g.months.map((v, i) => (
+                            <td
+                              key={i}
+                              className="px-2 py-1.5 text-right font-mono font-semibold tabular-nums"
                             >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setDialog({ type: "line", line })}>
-                              Editar linha
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setDialog({ type: "fill", line })}>
-                              Preencher meses…
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setDialog({ type: "adjust", line })}>
-                              Reajustar a partir de um mês…
-                            </DropdownMenuItem>
-                            {!event && (
-                              <DropdownMenuItem onClick={() => setDialog({ type: "move", line })}>
-                                Mudar de unidade…
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => setDialog({ type: "delete", line })}
-                            >
-                              Excluir linha
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                              {v ? fmtBRL(v) : "—"}
+                            </td>
+                          ))}
+                          <td className="px-3 py-1.5 text-right font-mono font-semibold tabular-nums">
+                            {fmtBRL(g.months.reduce((a, v) => a + v, 0))}
+                          </td>
+                          <td />
+                        </tr>
+                        {isOpen &&
+                          g.lines.map((line) => renderLine(line, visible.indexOf(line), true))}
+                      </Fragment>
+                    );
+                  })
+                : rows.map((line, r) => renderLine(line, r, false))}
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={15} className="px-3 py-8 text-center text-muted-foreground">
