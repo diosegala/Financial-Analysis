@@ -23,12 +23,24 @@ export function useOmieExpenses(year: number | undefined) {
     queryKey: ["omie_expenses", year],
     enabled: !!year,
     queryFn: async (): Promise<OmieExpense[]> => {
-      const { data, error } = await supabase.rpc("omie_expense_summary", { _year: year! });
-      if (error) throw error;
+      // Uma linha por categoria, fornecedor e unidade: passa de mil, e o Supabase entrega no máximo 1.000 por consulta.
+      const data = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: page, error } = await supabase
+          .rpc("omie_expense_summary", { _year: year! })
+          .order("category_name")
+          .order("supplier_name")
+          .order("unit_id")
+          .order("source")
+          .range(from, from + 999);
+        if (error) throw error;
+        data.push(...(page ?? []));
+        if (!page || page.length < 1000) break;
+      }
       // Uma linha por categoria, unidade e origem da unidade, com o detalhe por fornecedor dentro.
       const add = (a: number[], b: number[]) => a.map((v, i) => v + (b[i] ?? 0));
       const out = new Map<string, OmieExpense>();
-      for (const r of data ?? []) {
+      for (const r of data) {
         const paid = (r.paid ?? []).map(Number);
         const open = (r.open ?? []).map(Number);
         const key = `${r.category_name}|${r.unit_id ?? ""}|${r.source}`;
