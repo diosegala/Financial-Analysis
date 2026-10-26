@@ -1,6 +1,6 @@
 -- Folha por pessoa: a remuneração é uma linha editável do plano; importação idempotente pelo ID.
 BEGIN;
-SELECT plan(26);
+SELECT plan(28);
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT, INSERT ON ids TO authenticated;
@@ -69,6 +69,13 @@ UPDATE people SET contract_type_id = pg_temp.ct('Sócio (pró-labore)') WHERE na
 SELECT is((SELECT a.name FROM plan_lines l JOIN accounts a ON a.id = l.account_id JOIN people p ON p.id = l.person_id
   WHERE p.name = 'Ana'), 'Pró-labore', 'Trocar o vínculo leva a linha para a conta do novo vínculo');
 UPDATE people SET contract_type_id = pg_temp.ct('CLT') WHERE name = 'Ana';
+
+-- Transferir a pessoa de unidade leva a remuneração do ano junto
+UPDATE people SET unit_id = pg_temp.id('agencia') WHERE name = 'Ana';
+SELECT is((SELECT l.unit_id FROM plan_lines l JOIN people p ON p.id = l.person_id WHERE p.name = 'Ana'), pg_temp.id('agencia'),
+  'Mudar a unidade da pessoa leva a linha de remuneração');
+SELECT is(pg_temp.base('salario', 3), 0::NUMERIC, 'A unidade de origem deixa de ter o custo');
+UPDATE people SET unit_id = pg_temp.id('consultoria') WHERE name = 'Ana';
 
 -- ───────────── Importação ─────────────
 CREATE FUNCTION pg_temp.rows() RETURNS JSONB LANGUAGE sql AS $$

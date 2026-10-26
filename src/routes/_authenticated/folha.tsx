@@ -4,7 +4,7 @@ import { MoreHorizontal, Plus, Upload } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
-import { byId, useContractTypes } from "@/lib/catalog";
+import { byId, useContractTypes, useUnits } from "@/lib/catalog";
 import { usePersonLines, usePeopleMutations, type Person, type PersonLine } from "@/lib/payroll";
 import { usePlanMutations } from "@/lib/plan-data";
 import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
@@ -281,7 +281,9 @@ function FolhaPage() {
 function PersonDialog({ person, onClose }: { person: Person | null; onClose: () => void }) {
   const { versionId, unitId } = usePlanning();
   const { data: contractTypes } = useContractTypes();
+  const { data: units } = useUnits();
   const { addPerson, updatePerson } = usePeopleMutations();
+  const [personUnitId, setPersonUnitId] = useState<string | null>(person?.unit_id ?? unitId);
   const [externalId, setExternalId] = useState(person?.external_id ?? "");
   const [name, setName] = useState(person?.name ?? "");
   const [roleTitle, setRoleTitle] = useState(person?.role_title ?? "");
@@ -315,7 +317,7 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
       dependents: dependentsValue,
     };
     const ok = person
-      ? await updatePerson(person.id, fields)
+      ? await updatePerson(person.id, { ...fields, unit_id: personUnitId ?? person.unit_id })
       : await addPerson({
           ...fields,
           version_id: versionId!,
@@ -347,6 +349,20 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
               placeholder="opcional"
             />
           </Field>
+          {person && (
+            <Field
+              label="Unidade"
+              hint="Para transferir a pessoa. A remuneração do ano inteiro vai junto para a unidade escolhida."
+            >
+              <OptionSelect
+                value={personUnitId}
+                onChange={setPersonUnitId}
+                options={(units ?? [])
+                  .filter((u) => u.active)
+                  .map((u) => ({ value: u.id, label: u.name }))}
+              />
+            </Field>
+          )}
           <Field label="Vínculo">
             <OptionSelect
               value={contractTypeId}
