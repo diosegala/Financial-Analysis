@@ -15,20 +15,28 @@ export function useExpenseBase(versionId: string | null) {
     queryKey: ["expense_base", versionId],
     enabled: !!versionId,
     queryFn: async (): Promise<ExpenseBaseSummary> => {
-      const { data, error } = await supabase
-        .from("plan_lines")
-        .select("id, unit_id, plan_values(amount)")
-        .eq("version_id", versionId!)
-        .eq("origin", "gerada");
-      if (error) throw error;
+      // Em páginas de 1.000 (limite do Supabase por consulta): a base por fornecedor passa de mil linhas.
+      const data: { unit_id: string; plan_values: { amount: number }[] }[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: page, error } = await supabase
+          .from("plan_lines")
+          .select("id, unit_id, plan_values(amount)")
+          .eq("version_id", versionId!)
+          .eq("origin", "gerada")
+          .order("id")
+          .range(from, from + 999);
+        if (error) throw error;
+        data.push(...(page ?? []));
+        if (!page || page.length < 1000) break;
+      }
       const byUnit = new Map<string, number>();
       let total = 0;
-      for (const l of data ?? []) {
+      for (const l of data) {
         const sum = l.plan_values.reduce((a, v) => a + Number(v.amount), 0);
         byUnit.set(l.unit_id, (byUnit.get(l.unit_id) ?? 0) + sum);
         total += sum;
       }
-      return { lines: data?.length ?? 0, total, byUnit };
+      return { lines: data.length, total, byUnit };
     },
   });
 }

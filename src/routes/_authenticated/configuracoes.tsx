@@ -30,6 +30,7 @@ import { norm } from "@/lib/products-import";
 import { VERSION_STATUS_LABELS } from "@/lib/submissions";
 import { PageHeader } from "@/components/page-header";
 import { AccountsImport } from "@/components/accounts-import";
+import { AppSettingField } from "@/components/app-setting-field";
 import { CrudTable, type FieldDef } from "@/components/crud-table";
 import { Field, OptionSelect } from "@/components/form-fields";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -655,6 +656,14 @@ function OmieTab() {
         nome da categoria, ou fica “a ratear”. A leitura roda com python3 scripts/omie-sync.py
         (somente leitura).
       </p>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Compras no cartão</h2>
+        <AppSettingField
+          settingKey="card_supplier_keywords"
+          label="Fornecedores que são cartão de crédito"
+          hint="Separe por vírgula. Nas despesas desses fornecedores (o banco do cartão), o lançamento leva o nome da observação do título, por exemplo Figma ou Adobe."
+        />
+      </div>
       <div className="space-y-2">
         <h2 className="text-lg font-semibold">Palavras no nome da categoria</h2>
         <CrudTable

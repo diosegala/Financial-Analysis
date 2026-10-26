@@ -37,20 +37,28 @@ export function usePlanLines(
     queryKey: ["plan_lines", versionId, unitId, kind, eventId],
     enabled: !!versionId && !!unitId,
     queryFn: async (): Promise<PlanLine[]> => {
-      const base = supabase
-        .from("plan_lines")
-        .select("*, plan_values(month, amount), accounts!inner(kind)")
-        .eq("version_id", versionId!)
-        .eq("unit_id", unitId!)
-        .eq("accounts.kind", kind)
-        // A remuneração das pessoas tem grade própria, na Folha.
-        .is("person_id", null);
-      const { data, error } = await (
-        eventId ? base.eq("event_id", eventId) : base.is("event_id", null)
-      )
-        .order("sort_order")
-        .order("created_at");
-      if (error) throw error;
+      // Em páginas de 1.000 (limite do Supabase por consulta): uma unidade pode ter centenas de lançamentos.
+      const data = [];
+      for (let from = 0; ; from += 1000) {
+        const base = supabase
+          .from("plan_lines")
+          .select("*, plan_values(month, amount), accounts!inner(kind)")
+          .eq("version_id", versionId!)
+          .eq("unit_id", unitId!)
+          .eq("accounts.kind", kind)
+          // A remuneração das pessoas tem grade própria, na Folha.
+          .is("person_id", null);
+        const { data: page, error } = await (
+          eventId ? base.eq("event_id", eventId) : base.is("event_id", null)
+        )
+          .order("sort_order")
+          .order("created_at")
+          .order("id")
+          .range(from, from + 999);
+        if (error) throw error;
+        data.push(...(page ?? []));
+        if (!page || page.length < 1000) break;
+      }
       return (data ?? []).map(({ plan_values, accounts: _account, ...line }) => ({
         ...line,
         values: new Map(plan_values.map((v) => [v.month, Number(v.amount)])),

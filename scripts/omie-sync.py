@@ -20,6 +20,7 @@ import collections
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -76,6 +77,16 @@ def payments(creds, years):
         page += 1
 
 
+def item_of(obs):
+    """Nome do item a partir da observação do título (ex.: "Figma||14/03 FIGMA USD60" → "Figma";
+    "Nekt - CY7SCCNQ-0001" → "Nekt"). Textos automáticos do Omie ("Conta a Pagar gerada…", "importada…") não são item."""
+    text = re.split(r"\|", (obs or "").split("\n")[0])[0].strip()
+    text = re.sub(r"\s*[-–]\s*[A-Za-z0-9-]*\d[A-Za-z0-9-]*\s*$", "", text).strip()
+    if not text or text.lower().startswith(("conta a pagar", "importad", "gerad")):
+        return ""
+    return text[:80]
+
+
 def split(cats, deps, value):
     """Reparte um valor pelas categorias do título (na proporção de cada uma) e pelos departamentos."""
     base = sum(float(c.get("valor") or 0) for c in cats) or 1
@@ -92,7 +103,8 @@ def sync_company(path, years):
     name = (cad.get("nome_fantasia") or cad.get("razao_social") or os.path.basename(path)).strip().title()
     departments = pages(creds, "geral/departamentos", "ListarDepartamentos", "departamentos")
     categories = pages(creds, "geral/categorias", "ListarCategorias", "categoria_cadastro")
-    payables = pages(creds, "financas/contapagar", "ListarContasPagar", "conta_pagar_cadastro", {"apenas_importado_api": "N"})
+    payables = pages(creds, "financas/contapagar", "ListarContasPagar", "conta_pagar_cadastro",
+                     {"apenas_importado_api": "N", "exibir_obs": "S"})
     titles = {t.get("codigo_lancamento_omie"): t for t in payables}
     no_dep = [{"cCodDep": "", "nPerDep": 100}]
 
@@ -107,8 +119,11 @@ def sync_company(path, years):
         if len(paid_on) != 10 or int(paid_on[6:]) not in years or not value:
             continue
         group, origin = d.get("cGrupo"), d.get("cOrigem")
+        supplier, item = str(d.get("nCodCliente") or ""), ""
         if group == "CONTA_A_PAGAR":
             t = titles.get(d.get("nCodTitulo")) or {}
+            supplier = str(t.get("codigo_cliente_fornecedor") or supplier)
+            item = item_of(t.get("observacao"))
             cats = t.get("categorias") or [{"cCodCateg": d.get("cCodCateg"), "valor": value}]
             deps = t.get("distribuicao") or no_dep
             status["pago (título)"] += 1
@@ -118,7 +133,7 @@ def sync_company(path, years):
         else:
             continue
         for cat, dep, part in split(cats, deps, value):
-            agg[(int(paid_on[6:]), int(paid_on[3:5]), cat, dep)][0] += part
+            agg[(int(paid_on[6:]), int(paid_on[3:5]), cat, dep, supplier, item)][0] += part
     # Em aberto: títulos a vencer ou atrasados, pelo vencimento.
     for t in payables:
         st = t.get("status_titulo")
@@ -130,13 +145,22 @@ def sync_company(path, years):
         status["em aberto"] += 1
         cats = t.get("categorias") or [{"codigo_categoria": t.get("codigo_categoria"), "valor": t.get("valor_documento", 0)}]
         for cat, dep, part in split(cats, t.get("distribuicao") or no_dep, float(t.get("valor_documento") or 0)):
-            agg[(int(due[6:]), int(due[3:5]), cat, dep)][1] += part
-    return name, departments, categories, agg, status
+            agg[(int(due[6:]), int(due[3:5]), cat, dep, str(t.get("codigo_cliente_fornecedor") or ""),
+                 item_of(t.get("observacao")))][1] += part
+    # Nome dos fornecedores que aparecem nas despesas (o cadastro tem também clientes).
+    used = {k[4] for k in agg if k[4]}
+    suppliers = {}
+    if used:
+        for c in pages(creds, "geral/clientes", "ListarClientes", "clientes_cadastro", {"apenas_importado_api": "N"}):
+            code = str(c.get("codigo_cliente_omie") or "")
+            if code in used:
+                suppliers[code] = (c.get("nome_fantasia") or c.get("razao_social") or code).strip()
+    return name, departments, categories, agg, status, suppliers
 
 
 def to_sql(companies, years):
     out = ["BEGIN;"]
-    for name, departments, categories, agg, _ in companies:
+    for name, departments, categories, agg, _, suppliers in companies:
         cid = f"(SELECT id FROM public.omie_companies WHERE name = {q(name)})"
         out.append(f"INSERT INTO public.omie_companies (name, last_synced_at) VALUES ({q(name)}, now()) "
                    "ON CONFLICT (name) DO UPDATE SET last_synced_at = now();")
@@ -150,10 +174,13 @@ def to_sql(companies, years):
             out.append("INSERT INTO public.omie_categories (company_id, code, name, parent_code, is_expense, is_revenue, is_total) VALUES "
                        f"({cid}, {q(c['codigo'])}, {q(c['descricao'])}, {q(parent if parent not in (None, '', '0') else None)}, "
                        f"{c.get('conta_despesa') == 'S'}, {c.get('conta_receita') == 'S'}, {c.get('totalizadora') == 'S'});")
+        out.append(f"DELETE FROM public.omie_suppliers WHERE company_id = {cid};")
+        for code, sname in sorted(suppliers.items()):
+            out.append(f"INSERT INTO public.omie_suppliers (company_id, code, name) VALUES ({cid}, {q(code)}, {q(sname)});")
         out.append(f"DELETE FROM public.omie_actuals WHERE company_id = {cid} AND year IN ({', '.join(map(str, years))});")
-        for (year, month, cat, dep), (paid, opened) in sorted(agg.items()):
-            out.append("INSERT INTO public.omie_actuals (company_id, year, month, category_code, department_code, amount_paid, amount_open) VALUES "
-                       f"({cid}, {year}, {month}, {q(cat)}, {q(dep)}, {round(paid, 2)}, {round(opened, 2)});")
+        for (year, month, cat, dep, sup, item), (paid, opened) in sorted(agg.items()):
+            out.append("INSERT INTO public.omie_actuals (company_id, year, month, category_code, department_code, supplier_code, item, amount_paid, amount_open) VALUES "
+                       f"({cid}, {year}, {month}, {q(cat)}, {q(dep)}, {q(sup)}, {q(item)}, {round(paid, 2)}, {round(opened, 2)});")
     out.append("COMMIT;")
     return "\n".join(out)
 
@@ -172,11 +199,11 @@ def main():
 
     companies = []
     for f in files:
-        name, departments, categories, agg, status = sync_company(f, years)
-        companies.append((name, departments, categories, agg, status))
+        name, departments, categories, agg, status, suppliers = sync_company(f, years)
+        companies.append((name, departments, categories, agg, status, suppliers))
         total = sum(p + o for p, o in agg.values())
         paid = sum(p for p, _ in agg.values())
-        print(f"{name}: {len(departments)} departamentos, {len(categories)} categorias, {len(agg)} linhas de realizado "
+        print(f"{name}: {len(departments)} departamentos, {len(categories)} categorias, {len(agg)} linhas de realizado, {len(suppliers)} fornecedores "
               f"({', '.join(map(str, years))}): R$ {total:,.0f} (pago R$ {paid:,.0f}). Situações: {dict(status)}")
     if args.dry_run:
         print("Simulação: nada foi gravado.")
