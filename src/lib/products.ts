@@ -16,6 +16,15 @@ export const KIND_LABELS: Record<ProductKind, string> = {
   evento: "Evento / treinamento",
 };
 
+export type ProductFormat = "online" | "presencial" | "hibrido" | "nenhum";
+
+export const FORMAT_LABELS: Record<ProductFormat, string> = {
+  online: "Online",
+  presencial: "Presencial",
+  hibrido: "Híbrido",
+  nenhum: "Sem formato",
+};
+
 export type ContractTerms = Pick<Product, "price" | "price_model" | "duration_months">;
 
 export interface ContractPlan {

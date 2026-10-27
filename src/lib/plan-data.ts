@@ -16,6 +16,7 @@ export interface NewLine {
   revenue_type_id?: string | null;
   event_id?: string | null;
   revenue_origin?: string | null;
+  note?: string | null;
 }
 
 export type PlanLine = Tables<"plan_lines"> & {
@@ -105,6 +106,23 @@ export function usePlanMutations() {
     line: NewLine,
     values: { month: number; amount: number }[] = [],
   ): Promise<string | null> {
+    const id = await launch(line, values);
+    if (id) await refresh();
+    return id;
+  }
+
+  /** Várias linhas de uma vez (ex.: coladas da planilha), atualizando a tela uma vez só. Devolve quantas entraram. */
+  async function addLines(rows: { line: NewLine; values: { month: number; amount: number }[] }[]) {
+    let ok = 0;
+    for (const r of rows) {
+      if (!(await launch(r.line, r.values))) break;
+      ok++;
+    }
+    await refresh();
+    return ok;
+  }
+
+  async function launch(line: NewLine, values: { month: number; amount: number }[]) {
     // As colunas opcionais aceitam null; os tipos gerados as marcam como obrigatórias.
     const orNull = <T>(v: T | null | undefined) => (v ?? null) as T;
     const { data, error } = await supabase.rpc("launch_line", {
@@ -118,9 +136,9 @@ export function usePlanMutations() {
       _values: values,
       _event_id: orNull(line.event_id),
       _revenue_origin: orNull(line.revenue_origin),
+      _note: orNull(line.note),
     });
     if (fail(error) || !data) return null;
-    await refresh();
     return data;
   }
 
@@ -138,7 +156,7 @@ export function usePlanMutations() {
     return true;
   }
 
-  return { setValues, addLine, updateLine, deleteLine };
+  return { setValues, addLine, addLines, updateLine, deleteLine };
 }
 
 /** Months [start, start + count) clipped to December. */

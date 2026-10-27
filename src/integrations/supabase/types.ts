@@ -1043,6 +1043,7 @@ export type Database = {
           description: string | null
           event_id: string | null
           id: string
+          note: string | null
           origin: string
           person_id: string | null
           product_id: string | null
@@ -1061,6 +1062,7 @@ export type Database = {
           description?: string | null
           event_id?: string | null
           id?: string
+          note?: string | null
           origin?: string
           person_id?: string | null
           product_id?: string | null
@@ -1079,6 +1081,7 @@ export type Database = {
           description?: string | null
           event_id?: string | null
           id?: string
+          note?: string | null
           origin?: string
           person_id?: string | null
           product_id?: string | null
@@ -1180,6 +1183,47 @@ export type Database = {
           },
         ]
       }
+      product_lines: {
+        Row: {
+          active: boolean
+          created_at: string
+          format: string
+          id: string
+          name: string
+          sort_order: number
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          format?: string
+          id?: string
+          name: string
+          sort_order?: number
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          format?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_lines_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean
@@ -1191,6 +1235,7 @@ export type Database = {
           fixed_cost: number | null
           id: string
           kind: string
+          line_id: string | null
           name: string
           omie_code: string | null
           price: number | null
@@ -1210,6 +1255,7 @@ export type Database = {
           fixed_cost?: number | null
           id?: string
           kind?: string
+          line_id?: string | null
           name: string
           omie_code?: string | null
           price?: number | null
@@ -1229,6 +1275,7 @@ export type Database = {
           fixed_cost?: number | null
           id?: string
           kind?: string
+          line_id?: string | null
           name?: string
           omie_code?: string | null
           price?: number | null
@@ -1244,6 +1291,13 @@ export type Database = {
             columns: ["cost_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "product_lines"
             referencedColumns: ["id"]
           },
           {
@@ -1884,6 +1938,7 @@ export type Database = {
           _client_id: string
           _description: string
           _event_id?: string
+          _note?: string
           _product_id: string
           _revenue_origin?: string
           _revenue_type_id: string
@@ -1996,6 +2051,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      revenue_by_product: {
+        Args: { _unit_ids?: string[]; _version_id: string }
+        Returns: {
+          amount: number
+          month: number
+          origin: string
+          product_id: string
+          unit_id: string
+        }[]
       }
       seed_person_line: {
         Args: { _person_id: string; _reset?: boolean }

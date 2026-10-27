@@ -2,26 +2,40 @@ import { Fragment, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { MoreHorizontal, Plus, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import {
+  MoreHorizontal,
+  Plus,
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  ClipboardPaste,
+  Download,
+  StickyNote,
+} from "lucide-react";
 import { usePlanning } from "@/lib/planning";
 import {
   byId,
   friendlyError,
   useAccounts,
   useClients,
+  useProductLines,
   useProducts,
   useRevenueTypes,
   useUnits,
 } from "@/lib/catalog";
 import {
+  FORMAT_LABELS,
   contractPlan,
   describePlan,
   describePrice,
   inputOf,
   type PriceModel,
+  type ProductFormat,
 } from "@/lib/products";
+import { downloadText } from "@/lib/dre";
+import { RevenuePasteDialog } from "@/components/revenue-paste-dialog";
 import { norm } from "@/lib/products-import";
-import { matchKeyword } from "@/lib/accounts-import";
+import { REVENUE_ORIGINS, unitRevenueAccount } from "@/lib/revenue-paste";
 import type { PlanEvent } from "@/lib/events";
 import {
   adjustFrom,
@@ -63,12 +77,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export const REVENUE_ORIGINS = [
-  { value: "carteira", label: "Carteira atual" },
-  { value: "renovacao", label: "Renovação" },
-  { value: "nova", label: "Venda nova" },
-];
-
 interface PlanGridProps {
   kind: AccountKind;
   emptyText: string;
@@ -82,12 +90,26 @@ type Dialogs =
   | { type: "adjust"; line: PlanLine }
   | { type: "delete"; line: PlanLine }
   | { type: "move"; line: PlanLine }
+  | { type: "paste" }
   | null;
+
+type RevenueView = "produto" | "origem" | "lancamento";
+const VIEW_KEY = "receitas.ver";
+function readRevenueView(): RevenueView {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    if (v === "produto" || v === "origem" || v === "lancamento") return v;
+  } catch {
+    // sem armazenamento local (aba privada, prévia): fica o padrão
+  }
+  return "produto";
+}
 
 /** Spreadsheet grid of plan lines × 12 months for one account kind of the selected unit/version. */
 export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
-  const { versionId, unitId, canEdit: unitEditable, lockReason } = usePlanning();
+  const { versionId, unitId, unit, canEdit: unitEditable, lockReason } = usePlanning();
   const { data: user } = useCurrentUser();
+  const { data: productLines } = useProductLines();
   const { data: lines, isLoading } = usePlanLines(versionId, unitId, kind, event?.id ?? null);
   const { data: accounts } = useAccounts();
   const { data: clients } = useClients();
@@ -124,8 +146,19 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
   );
 
   // Despesas e outros lançamentos de folha: agrupados por conta. A conta é a soma dos lançamentos (ex.: os SaaS de
-  // "SAAS - Agência"); conta com até 3 lançamentos já vem aberta, a maior abre com um clique.
-  const grouped = kind !== "receita" && !event;
+  // "SAAS - Agência"). Receitas: por produto (agrupados pela linha de produto), por origem ou lançamento a lançamento.
+  // Grupo com até 3 lançamentos já vem aberto; o maior abre com um clique.
+  const [revenueView, setRevenueView] = useState<RevenueView>(readRevenueView);
+  function chooseRevenueView(v: RevenueView) {
+    setRevenueView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // sem armazenamento local: a escolha vale só nesta tela
+    }
+  }
+  const isRevenueGrid = kind === "receita" && !event;
+  const grouped = !event && (kind !== "receita" || revenueView !== "lancamento");
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (id: string) =>
     setOpenGroups((s) => {
@@ -134,29 +167,119 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
       else n.add(id);
       return n;
     });
+  const lineMap = byId(productLines);
+  const groupOf = (
+    l: PlanLine,
+  ): { key: string; label: string; sub: string | null; order: string } => {
+    if (kind !== "receita") {
+      const name = accountMap.get(l.account_id)?.name ?? "—";
+      return { key: l.account_id, label: name, sub: null, order: name };
+    }
+    if (revenueView === "origem") {
+      const i = REVENUE_ORIGINS.findIndex((o) => o.value === l.revenue_origin);
+      return {
+        key: l.revenue_origin ?? "_none",
+        label: i >= 0 ? REVENUE_ORIGINS[i]!.label : "Sem origem",
+        sub: null,
+        order: String(i >= 0 ? i : 9),
+      };
+    }
+    const product = l.product_id ? productMap.get(l.product_id) : undefined;
+    const pl = product?.line_id ? lineMap.get(product.line_id) : undefined;
+    const format = pl && pl.format !== "nenhum" ? FORMAT_LABELS[pl.format as ProductFormat] : null;
+    return {
+      key: product?.id ?? "_none",
+      label: product?.name ?? "Sem produto",
+      sub: [pl?.name, format].filter(Boolean).join(" · ") || null,
+      // Linha de produto primeiro (na ordem do cadastro), depois o nome; "Sem produto" no fim.
+      order: product
+        ? `${pl ? String(pl.sort_order).padStart(4, "0") + pl.name : "~"}|${product.name}`
+        : "~~",
+    };
+  };
+  const total = (l: PlanLine) => [...l.values.values()].reduce((a, v) => a + v, 0);
   const groups = (() => {
-    const m = new Map<string, PlanLine[]>();
-    for (const l of rows) m.set(l.account_id, [...(m.get(l.account_id) ?? []), l]);
-    const total = (l: PlanLine) => [...l.values.values()].reduce((a, v) => a + v, 0);
-    return [...m.entries()]
-      .map(([accountId, ls]) => ({
-        accountId,
+    const m = new Map<string, { info: ReturnType<typeof groupOf>; lines: PlanLine[] }>();
+    for (const l of rows) {
+      const info = groupOf(l);
+      const g = m.get(info.key) ?? { info, lines: [] };
+      g.lines.push(l);
+      m.set(info.key, g);
+    }
+    return [...m.values()]
+      .map(({ info, lines: ls }) => ({
+        ...info,
         lines: [...ls].sort((a, b) => total(b) - total(a)),
         months: MONTHS.map((_, i) => ls.reduce((a, l) => a + (l.values.get(i + 1) ?? 0), 0)),
       }))
-      .sort((a, b) =>
-        (accountMap.get(a.accountId)?.name ?? "").localeCompare(
-          accountMap.get(b.accountId)?.name ?? "",
-          "pt-BR",
-        ),
-      );
+      .sort((a, b) => a.order.localeCompare(b.order, "pt-BR"));
   })();
+  // Visão por produto: total por formato (online × presencial) no rodapé, quando houver produto com formato.
+  const formatTotals = (() => {
+    if (!isRevenueGrid || revenueView !== "produto") return [];
+    const m = new Map<string, number[]>();
+    for (const l of rows) {
+      const product = l.product_id ? productMap.get(l.product_id) : undefined;
+      const f = (product?.line_id ? lineMap.get(product.line_id)?.format : null) ?? "nenhum";
+      const acc = m.get(f) ?? MONTHS.map(() => 0);
+      MONTHS.forEach((_, i) => (acc[i]! += l.values.get(i + 1) ?? 0));
+      m.set(f, acc);
+    }
+    if ([...m.keys()].every((f) => f === "nenhum")) return [];
+    return (["online", "presencial", "hibrido", "nenhum"] as ProductFormat[])
+      .filter((f) => m.has(f))
+      .map((f) => ({ label: FORMAT_LABELS[f], months: m.get(f)! }));
+  })();
+  const isOpen = (g: { key: string; lines: PlanLine[] }) =>
+    openGroups.has(g.key) !== g.lines.length <= 3;
   // Linhas visíveis, na ordem da tela: a navegação por teclado e o colar do Excel seguem esta ordem.
-  const visible = grouped
-    ? groups.flatMap((g) => (openGroups.has(g.accountId) !== g.lines.length <= 3 ? g.lines : []))
-    : rows;
+  const visible = grouped ? groups.flatMap((g) => (isOpen(g) ? g.lines : [])) : rows;
 
-  /** Uma linha da grade. Dentro de um grupo de conta, a conta já está no cabeçalho e sai do subtítulo. */
+  function exportCsv() {
+    const num = (v: number) => v.toFixed(2).replace(".", ",");
+    const q = (t: string | null | undefined) => `"${(t ?? "").replace(/"/g, '""')}"`;
+    const header = [
+      "Descrição",
+      "Produto",
+      "Origem",
+      ...MONTHS,
+      "Total",
+      "Linha do produto",
+      "Conta",
+      "Premissa",
+    ];
+    const body = (grouped ? groups.flatMap((g) => g.lines) : rows).map((l) => {
+      const product = l.product_id ? productMap.get(l.product_id) : undefined;
+      return [
+        q(lineLabel(l)),
+        q(product?.name),
+        q(REVENUE_ORIGINS.find((o) => o.value === l.revenue_origin)?.label),
+        ...MONTHS.map((_, i) => num(l.values.get(i + 1) ?? 0)),
+        num(total(l)),
+        q(product?.line_id ? lineMap.get(product.line_id)?.name : null),
+        q(accountMap.get(l.account_id)?.name),
+        q(l.note),
+      ].join(";");
+    });
+    downloadText(
+      `receitas-${(unit?.name ?? "unidade").toLowerCase().replace(/\s+/g, "-")}.csv`,
+      "\ufeff" + [header.join(";"), ...body].join("\n"),
+    );
+  }
+
+  /** Título da linha: a descrição; sem ela, cliente — produto; sem os dois, a conta. */
+  function lineLabel(line: PlanLine) {
+    const clientName = line.client_id ? clientMap.get(line.client_id)?.name : null;
+    const productName = line.product_id ? productMap.get(line.product_id)?.name : null;
+    return (
+      line.description ||
+      [clientName, productName].filter(Boolean).join(" — ") ||
+      accountMap.get(line.account_id)?.name ||
+      ""
+    );
+  }
+
+  /** Uma linha da grade. Dentro de um grupo, o que já está no cabeçalho (conta ou origem) sai do subtítulo. */
   function renderLine(line: PlanLine, r: number, inGroup: boolean) {
     const total = [...line.values.values()].reduce((a, v) => a + v, 0);
     const type = line.revenue_type_id ? typeMap.get(line.revenue_type_id) : undefined;
@@ -164,22 +287,29 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
     const overMax = type?.max_months != null && filled > type.max_months;
     const accountName = accountMap.get(line.account_id)?.name;
     const clientName = line.client_id ? clientMap.get(line.client_id)?.name : null;
-    const productName = line.product_id ? productMap.get(line.product_id)?.name : null;
-    const label =
-      line.description || [clientName, productName].filter(Boolean).join(" — ") || accountName;
     // O cliente (ou patrocinador) já está no título quando a linha não tem descrição.
     const sub = [
-      inGroup ? null : accountName,
+      inGroup && kind !== "receita" ? null : accountName,
       type?.name,
-      REVENUE_ORIGINS.find((o) => o.value === line.revenue_origin)?.label,
+      inGroup && revenueView === "origem"
+        ? null
+        : REVENUE_ORIGINS.find((o) => o.value === line.revenue_origin)?.label,
       line.description ? clientName : null,
     ].filter(Boolean);
     return (
       <tr key={line.id} className="border-b border-border last:border-0">
         <td className="sticky left-0 z-10 bg-card px-3 py-1">
-          <div className="font-medium">{label}</div>
+          <div className="font-medium">{lineLabel(line)}</div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {sub.join(" · ")}
+            {line.note && (
+              <span
+                className="inline-flex max-w-64 items-center gap-1 truncate italic"
+                title={line.note}
+              >
+                <StickyNote className="h-3 w-3 shrink-0" /> {line.note}
+              </span>
+            )}
             {overMax && (
               <Badge variant="destructive" className="gap-1 px-1.5 py-0 text-[10px]">
                 <AlertTriangle className="h-3 w-3" /> mais de {type!.max_months} meses
@@ -247,15 +377,50 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
               ? "Você adiciona linhas novas. Para corrigir ou excluir uma linha já lançada, peça ao financeiro."
               : (lockReason ?? (kind === "folha" ? "Somente o financeiro edita a folha." : ""))}
         </p>
-        {canAdd && (
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setDialog({ type: "line", line: null })}
-          >
-            <Plus className="h-4 w-4" /> Adicionar linha
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {isRevenueGrid && (
+            <>
+              <OptionSelect
+                className="w-44"
+                value={revenueView}
+                onChange={(v) => chooseRevenueView((v as RevenueView | null) ?? "produto")}
+                options={[
+                  { value: "produto", label: "Ver por produto" },
+                  { value: "origem", label: "Ver por origem" },
+                  { value: "lancamento", label: "Ver lançamentos" },
+                ]}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={rows.length === 0}
+                onClick={exportCsv}
+              >
+                <Download className="h-4 w-4" /> Exportar
+              </Button>
+              {canAdd && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => setDialog({ type: "paste" })}
+                >
+                  <ClipboardPaste className="h-4 w-4" /> Colar da planilha
+                </Button>
+              )}
+            </>
+          )}
+          {canAdd && (
+            <Button
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setDialog({ type: "line", line: null })}
+            >
+              <Plus className="h-4 w-4" /> Adicionar linha
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -280,26 +445,31 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
             <tbody>
               {grouped
                 ? groups.map((g) => {
-                    const isOpen = openGroups.has(g.accountId) !== g.lines.length <= 3;
+                    const open = isOpen(g);
                     return (
-                      <Fragment key={g.accountId}>
+                      <Fragment key={g.key}>
                         <tr
                           data-group-header
                           className="cursor-pointer border-b border-border bg-muted/20 hover:bg-muted/40"
-                          onClick={() => toggleGroup(g.accountId)}
+                          onClick={() => toggleGroup(g.key)}
                         >
                           <td className="sticky left-0 z-10 bg-muted px-3 py-1.5 font-semibold">
                             <span className="inline-flex items-center gap-1">
-                              {isOpen ? (
+                              {open ? (
                                 <ChevronDown className="h-3.5 w-3.5" />
                               ) : (
                                 <ChevronRight className="h-3.5 w-3.5" />
                               )}
-                              {accountMap.get(g.accountId)?.name ?? "—"}
-                              <span className="text-xs font-normal text-muted-foreground">
+                              {g.label}
+                              <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">
                                 ({g.lines.length} lançamento{g.lines.length === 1 ? "" : "s"})
                               </span>
                             </span>
+                            {g.sub && (
+                              <div className="pl-[18px] text-xs font-normal text-muted-foreground">
+                                {g.sub}
+                              </div>
+                            )}
                           </td>
                           {g.months.map((v, i) => (
                             <td
@@ -314,7 +484,7 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
                           </td>
                           <td />
                         </tr>
-                        {isOpen &&
+                        {open &&
                           g.lines.map((line) => renderLine(line, visible.indexOf(line), true))}
                       </Fragment>
                     );
@@ -340,6 +510,21 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
                   <td />
                 </tr>
               )}
+              {rows.length > 0 &&
+                formatTotals.map((f) => (
+                  <tr key={f.label} className="border-t border-border/60 text-muted-foreground">
+                    <td className="sticky left-0 z-10 bg-card px-3 py-1 pl-6">{f.label}</td>
+                    {f.months.map((v, i) => (
+                      <td key={i} className="px-2 py-1 text-right font-mono tabular-nums">
+                        {v ? fmtBRL(v) : "—"}
+                      </td>
+                    ))}
+                    <td className="px-3 py-1 text-right font-mono tabular-nums">
+                      {fmtBRL(f.months.reduce((a, v) => a + v, 0))}
+                    </td>
+                    <td />
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
@@ -356,6 +541,7 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
         <DeleteDialog line={dialog.line} onClose={() => setDialog(null)} />
       )}
       {dialog?.type === "move" && <MoveDialog line={dialog.line} onClose={() => setDialog(null)} />}
+      {dialog?.type === "paste" && <RevenuePasteDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }
@@ -415,6 +601,7 @@ function LineDialog({
   const { data: accounts } = useAccounts();
   const { data: clients } = useClients();
   const { data: products } = useProducts();
+  const { data: productLines } = useProductLines();
   const { data: revenueTypes } = useRevenueTypes();
   const { addLine, updateLine } = usePlanMutations();
   const queryClient = useQueryClient();
@@ -428,19 +615,15 @@ function LineDialog({
       a.treatment === "lancavel" &&
       (!a.unit_ids || a.unit_ids.includes(unitId!)),
   );
-  // Só serviços entram aqui; eventos e treinamentos são lançados em Eventos.
+  // Todos os produtos ativos da unidade (e os de todas as unidades): serviços, treinamentos, imersões, comunidade.
   const productOptions = (products ?? []).filter(
-    (p) =>
-      p.kind === "servico" &&
-      ((p.active && (!p.unit_id || p.unit_id === unitId)) || p.id === line?.product_id),
+    (p) => (p.active && (!p.unit_id || p.unit_id === unitId)) || p.id === line?.product_id,
+  );
+  const lineOptions = (productLines ?? []).filter(
+    (l) => l.active && (!l.unit_id || l.unit_id === unitId),
   );
 
-  // Conta padrão de uma receita nova: a que tem o nome da unidade (ex.: "Receitas Fixas - Agência"), senão a primeira.
-  const unitAccount = isRevenue
-    ? options.find((a) =>
-        [unit?.name, ...(unit?.name_keywords ?? [])].some((k) => !!k && matchKeyword(a.name, k)),
-      )
-    : undefined;
+  const unitAccount = isRevenue ? unitRevenueAccount(options, unit) : undefined;
   const [accountId, setAccountId] = useState<string | null>(
     line?.account_id ?? unitAccount?.id ?? options[0]?.id ?? null,
   );
@@ -449,6 +632,11 @@ function LineDialog({
     line?.client_id ? ((clients ?? []).find((c) => c.id === line.client_id)?.name ?? "") : "",
   );
   const [productId, setProductId] = useState<string | null>(line?.product_id ?? null);
+  const [productName, setProductName] = useState(
+    line?.product_id ? ((products ?? []).find((p) => p.id === line.product_id)?.name ?? "") : "",
+  );
+  const [newProductLineId, setNewProductLineId] = useState<string | null>(null);
+  const [note, setNote] = useState(line?.note ?? "");
   const [revenueTypeId, setRevenueTypeId] = useState<string | null>(line?.revenue_type_id ?? null);
   // Itens de evento são vendas novas; as demais linhas de receita escolhem a origem.
   const [revenueOrigin, setRevenueOrigin] = useState<string | null>(
@@ -462,8 +650,13 @@ function LineDialog({
   const [saving, setSaving] = useState(false);
 
   const product = productOptions.find((p) => p.id === productId);
+  // Produto digitado que ainda não existe: é cadastrado na unidade ao salvar.
+  const isNewProduct = isRevenue && !inEvent && !product && productName.trim() !== "";
   const type = (revenueTypes ?? []).find((t) => t.id === revenueTypeId);
-  const model = (product?.price_model ?? "mensal") as PriceModel;
+  // Treinamento, imersão ou evento: o preço é por venda, recebido uma vez no mês da venda.
+  const model = (
+    product?.kind === "evento" ? "unico" : (product?.price_model ?? "mensal")
+  ) as PriceModel;
   const priceNum = amount.trim() === "" ? null : parseNum(amount);
   const quantityNum = quantity.trim() === "" ? null : parseNum(quantity);
   const monthsNum = months.trim() === "" ? null : Number(months);
@@ -485,9 +678,13 @@ function LineDialog({
               startMonth,
             )
           : null
-        : priceNum !== null && priceNum >= 0
+        : priceNum !== null && priceNum >= 0 && quantityNum !== null && quantityNum >= 0
           ? contractPlan(
-              { price: priceNum, price_model: model, duration_months: monthsNum ?? defaultMonths },
+              {
+                price: Math.round(priceNum * (isRevenue ? quantityNum : 1) * 100) / 100,
+                price_model: model,
+                duration_months: monthsNum ?? defaultMonths,
+              },
               startMonth,
             )
           : null
@@ -514,9 +711,11 @@ function LineDialog({
     );
   }
 
-  function pickProduct(id: string | null) {
-    setProductId(id);
-    const p = productOptions.find((x) => x.id === id);
+  /** Produto digitado ou escolhido na lista: o cadastrado preenche conta, tipo, preço, prazo e quantidade. */
+  function typeProduct(name: string) {
+    setProductName(name);
+    const p = productOptions.find((x) => norm(x.name) === norm(name));
+    setProductId(p?.id ?? null);
     if (!p) return;
     if (p.revenue_type_id) setRevenueTypeId(p.revenue_type_id);
     if (p.revenue_account_id && options.some((a) => a.id === p.revenue_account_id))
@@ -524,7 +723,36 @@ function LineDialog({
     if (!line) {
       setAmount(inputOf(p.price));
       setMonths(p.duration_months ? String(p.duration_months) : "");
+      setQuantity(p.kind === "evento" && p.default_seats ? inputOf(p.default_seats) : "1");
     }
+  }
+
+  /** Cadastra o produto novo na unidade, com o valor e o prazo digitados. false = falhou. */
+  async function resolveProduct(): Promise<string | null | false> {
+    if (!isRevenue) return null;
+    if (inEvent) return event.product_id;
+    if (!isNewProduct) return productId;
+    const { data, error } = await supabase
+      .from("products")
+      .insert({
+        name: productName.trim(),
+        unit_id: unitId,
+        kind: "servico",
+        price: priceNum,
+        price_model: "mensal",
+        duration_months: monthsNum,
+        line_id: newProductLineId,
+        revenue_account_id: accountId,
+        revenue_type_id: revenueTypeId,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      toast.error(friendlyError(error.message));
+      return false;
+    }
+    await queryClient.invalidateQueries({ queryKey: ["products"] });
+    return data.id;
   }
 
   /** Cliente digitado: usa o cadastrado ou cria um novo. false = falhou. */
@@ -546,7 +774,8 @@ function LineDialog({
     if (!accountId) return;
     setSaving(true);
     const clientId = await resolveClient();
-    if (clientId === false) {
+    const newProductId = clientId === false ? false : await resolveProduct();
+    if (clientId === false || newProductId === false) {
       setSaving(false);
       return;
     }
@@ -554,9 +783,10 @@ function LineDialog({
       account_id: accountId,
       description: description.trim() || null,
       client_id: clientId,
-      product_id: isRevenue ? (inEvent ? event.product_id : productId) : null,
+      product_id: newProductId,
       revenue_type_id: isRevenue ? revenueTypeId : null,
       revenue_origin: isRevenue ? revenueOrigin : null,
+      note: note.trim() || null,
     };
     let ok: boolean;
     if (line) {
@@ -582,11 +812,13 @@ function LineDialog({
   const needsOrigin = isRevenue && !revenueOrigin;
   const needsDescription = inEvent && description.trim() === "";
   const valueLabel =
-    !isRevenue || model === "mensal"
-      ? "Valor por mês"
-      : model === "total"
-        ? "Valor do contrato"
-        : "Valor (cobrado uma vez)";
+    product?.kind === "evento"
+      ? "Preço por venda"
+      : !isRevenue || model === "mensal"
+        ? "Valor por mês"
+        : model === "total"
+          ? "Valor do contrato"
+          : "Valor (cobrado uma vez)";
 
   const accountField = (
     <Field label={inEvent ? "Categoria" : "Conta"}>
@@ -650,6 +882,51 @@ function LineDialog({
     </Field>
   );
 
+  const productField = (
+    <Field
+      label="Produto"
+      hint={
+        product
+          ? [
+              describePrice(product),
+              (productLines ?? []).find((l) => l.id === product.line_id)?.name,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : isNewProduct
+            ? `Produto novo: será cadastrado em ${unit?.name ?? "esta unidade"} com o valor e o prazo abaixo.`
+            : "Opcional. Escolha da lista ou digite um novo; o valor e o prazo vêm do cadastro."
+      }
+    >
+      <Input
+        list="products-list"
+        value={productName}
+        onChange={(e) => typeProduct(e.target.value)}
+        placeholder="Ex.: Imersão, Fee mensal, Comunidade"
+      />
+      <datalist id="products-list">
+        {productOptions
+          .filter((p) => p.active)
+          .map((p) => (
+            <option key={p.id} value={p.name} />
+          ))}
+      </datalist>
+    </Field>
+  );
+  const newProductLineField = isNewProduct && lineOptions.length > 0 && (
+    <Field
+      label="Linha do produto novo"
+      hint="Agrupa a receita (ex.: Treinamento online, Fee mensal)."
+    >
+      <OptionSelect
+        value={newProductLineId}
+        onChange={setNewProductLineId}
+        noneLabel="Sem linha"
+        options={lineOptions.map((l) => ({ value: l.id, label: l.name }))}
+      />
+    </Field>
+  );
+
   const title = line
     ? "Editar linha"
     : inEvent
@@ -675,6 +952,8 @@ function LineDialog({
           ) : (
             isRevenue && (
               <>
+                {productField}
+                {newProductLineField}
                 {descriptionField}
                 <Field
                   label="Origem da receita"
@@ -721,10 +1000,19 @@ function LineDialog({
                   </Field>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-3">
+                <div className={`grid gap-3 ${isRevenue ? "grid-cols-4" : "grid-cols-3"}`}>
                   <Field label="Início">
                     <MonthSelect value={startMonth} onChange={setStartMonth} />
                   </Field>
+                  {isRevenue && (
+                    <Field label="Quantidade">
+                      <Input
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        className="font-mono"
+                      />
+                    </Field>
+                  )}
                   <Field label={valueLabel}>
                     <Input
                       value={amount}
@@ -776,7 +1064,7 @@ function LineDialog({
             (isRevenue ? (
               <details className="rounded-md border border-border">
                 <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
-                  Mais detalhes (opcional): cliente, produto, conta e tipo
+                  Mais detalhes (opcional): cliente, conta e tipo
                   <span className="ml-1 font-normal text-muted-foreground">
                     · conta {options.find((a) => a.id === accountId)?.name ?? "—"}
                     {type ? ` · ${type.name}` : ""}
@@ -784,24 +1072,6 @@ function LineDialog({
                 </summary>
                 <div className="grid gap-3 border-t border-border p-3">
                   {clientField}
-                  <Field
-                    label="Produto"
-                    hint={
-                      productOptions.length === 0
-                        ? "Nenhum produto cadastrado para esta unidade."
-                        : "O preço e o prazo do produto são preenchidos sozinhos."
-                    }
-                  >
-                    <OptionSelect
-                      value={productId}
-                      onChange={pickProduct}
-                      noneLabel="Sem produto"
-                      options={productOptions.map((p) => ({
-                        value: p.id,
-                        label: `${p.name} — ${describePrice(p)}`,
-                      }))}
-                    />
-                  </Field>
                   {accountField}
                   {typeField}
                 </div>
@@ -812,6 +1082,14 @@ function LineDialog({
                 {descriptionField}
               </div>
             ))}
+          {isRevenue && !inEvent && (
+            <Field
+              label="Premissa (opcional)"
+              hint="De onde vem o número. Ex.: 3 turmas de 30 alunos; reajuste IPCA em março."
+            >
+              <Input value={note} onChange={(e) => setNote(e.target.value)} />
+            </Field>
+          )}
           {needsType && <p className="text-sm text-destructive">Escolha o tipo de receita.</p>}
         </div>
         <DialogFooter>
