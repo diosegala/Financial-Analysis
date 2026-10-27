@@ -27,6 +27,7 @@ import {
 } from "@/lib/catalog";
 import { MONTHS_FULL } from "@/lib/format";
 import { norm } from "@/lib/products-import";
+import { NATURE_OPTIONS } from "@/lib/products";
 import { VERSION_STATUS_LABELS } from "@/lib/submissions";
 import { PageHeader } from "@/components/page-header";
 import { AccountsImport } from "@/components/accounts-import";
@@ -576,6 +577,13 @@ function RevenueTypesTab() {
           type: "number",
           integer: true,
           hint: "A grade avisa quando a linha passa deste limite.",
+        },
+        {
+          key: "nature",
+          label: "Natureza",
+          type: "select",
+          options: NATURE_OPTIONS,
+          hint: "Separa a receita recorrente da variável na DRE e no painel da diretoria.",
         },
         active,
         order,

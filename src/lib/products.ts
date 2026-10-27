@@ -25,6 +25,12 @@ export const FORMAT_LABELS: Record<ProductFormat, string> = {
   nenhum: "Sem formato",
 };
 
+/** Natureza da receita: recorrente (contratos, assinaturas) ou variável. Vazio = decide a linha do produto. */
+export const NATURE_OPTIONS = [
+  { value: "recorrente", label: "Recorrente" },
+  { value: "variavel", label: "Variável" },
+];
+
 export type ContractTerms = Pick<Product, "price" | "price_model" | "duration_months">;
 
 export interface ContractPlan {

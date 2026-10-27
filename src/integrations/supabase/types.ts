@@ -1234,6 +1234,7 @@ export type Database = {
           format: string
           id: string
           name: string
+          nature: string | null
           sort_order: number
           unit_id: string | null
           updated_at: string
@@ -1244,6 +1245,7 @@ export type Database = {
           format?: string
           id?: string
           name: string
+          nature?: string | null
           sort_order?: number
           unit_id?: string | null
           updated_at?: string
@@ -1254,6 +1256,7 @@ export type Database = {
           format?: string
           id?: string
           name?: string
+          nature?: string | null
           sort_order?: number
           unit_id?: string | null
           updated_at?: string
@@ -1431,6 +1434,7 @@ export type Database = {
           id: string
           max_months: number | null
           name: string
+          nature: string | null
           recurrence_months: number | null
           sort_order: number
           updated_at: string
@@ -1441,6 +1445,7 @@ export type Database = {
           id?: string
           max_months?: number | null
           name: string
+          nature?: string | null
           recurrence_months?: number | null
           sort_order?: number
           updated_at?: string
@@ -1451,6 +1456,7 @@ export type Database = {
           id?: string
           max_months?: number | null
           name?: string
+          nature?: string | null
           recurrence_months?: number | null
           sort_order?: number
           updated_at?: string
@@ -1568,6 +1574,45 @@ export type Database = {
             columns: ["version_id"]
             isOneToOne: false
             referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_shares: {
+        Row: {
+          id: string
+          scenario_id: string
+          share: number
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          scenario_id: string
+          share: number
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          scenario_id?: string
+          share?: number
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_shares_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_shares_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
@@ -2146,6 +2191,19 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      revenue_by_nature: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          amount: number
+          month: number
+          nature: string
+          unit_id: string
+        }[]
       }
       revenue_by_product: {
         Args: { _unit_ids?: string[]; _version_id: string }
