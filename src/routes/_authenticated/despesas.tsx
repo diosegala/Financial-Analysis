@@ -5,6 +5,7 @@ import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { PlanGrid } from "@/components/plan-grid";
+import { GuardrailScore } from "@/components/guardrail-score";
 import { ExpenseBasePanel } from "@/components/expense-base-panel";
 import { ConsolidatedView, ScopeSelect } from "@/components/consolidated-view";
 
@@ -29,7 +30,13 @@ function DespesasPage() {
       {all ? (
         <ConsolidatedView kind="despesa" />
       ) : (
-        <PlanGrid kind="despesa" emptyText="Nenhuma despesa lançada. Adicione a primeira linha." />
+        <>
+          <GuardrailScore />
+          <PlanGrid
+            kind="despesa"
+            emptyText="Nenhuma despesa lançada. Adicione a primeira linha."
+          />
+        </>
       )}
     </div>
   );

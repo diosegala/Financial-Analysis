@@ -6,6 +6,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { PlanGrid } from "@/components/plan-grid";
 import { MetaPanel } from "@/components/meta-panel";
+import { GuardrailScore } from "@/components/guardrail-score";
 import { ProductsLink } from "@/components/products-link";
 import { ConsolidatedView, ScopeSelect } from "@/components/consolidated-view";
 
@@ -35,6 +36,7 @@ function ReceitasPage() {
         <ConsolidatedView kind="receita" />
       ) : (
         <>
+          <GuardrailScore />
           <MetaPanel />
           <PlanGrid
             kind="receita"

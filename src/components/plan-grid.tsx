@@ -12,6 +12,7 @@ import {
   Download,
   History,
   StickyNote,
+  Hourglass,
 } from "lucide-react";
 import { usePlanning } from "@/lib/planning";
 import {
@@ -94,6 +95,7 @@ type Dialogs =
   | { type: "move"; line: PlanLine }
   | { type: "paste" }
   | { type: "portfolio" }
+  | { type: "condition"; line: PlanLine }
   | null;
 
 type RevenueView = "produto" | "origem" | "lancamento";
@@ -313,6 +315,16 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
                 <StickyNote className="h-3 w-3 shrink-0" /> {line.note}
               </span>
             )}
+            {line.conditional && (
+              <Badge
+                variant="outline"
+                className="gap-1 border-amber-500 px-1.5 py-0 text-[10px] text-amber-700 dark:text-amber-400"
+                title={line.condition_note ?? "Só acontece se a receita passar do piso"}
+              >
+                <Hourglass className="h-3 w-3" /> condicionada
+                {line.condition_note ? `: ${line.condition_note}` : ""}
+              </Badge>
+            )}
             {overMax && (
               <Badge variant="destructive" className="gap-1 px-1.5 py-0 text-[10px]">
                 <AlertTriangle className="h-3 w-3" /> mais de {type!.max_months} meses
@@ -332,7 +344,25 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
           </td>
         ))}
         <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">{fmtBRL(total)}</td>
-        <td className="px-1">
+        <td className="whitespace-nowrap px-1">
+          {kind === "despesa" && unitEditable && !event && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={line.conditional ? "Editar condição" : "Marcar como condicionada"}
+              title={
+                line.conditional
+                  ? "Despesa condicionada: editar o gatilho ou tirar a condição"
+                  : "Marcar como condicionada (só acontece se a receita passar do piso)"
+              }
+              onClick={() => setDialog({ type: "condition", line })}
+            >
+              <Hourglass
+                className={`h-4 w-4 ${line.conditional ? "text-amber-600" : "text-muted-foreground"}`}
+              />
+            </Button>
+          )}
           {canEditRows && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -556,6 +586,9 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
       {dialog?.type === "move" && <MoveDialog line={dialog.line} onClose={() => setDialog(null)} />}
       {dialog?.type === "paste" && <RevenuePasteDialog onClose={() => setDialog(null)} />}
       {dialog?.type === "portfolio" && <PortfolioDialog onClose={() => setDialog(null)} />}
+      {dialog?.type === "condition" && (
+        <ConditionDialog line={dialog.line} onClose={() => setDialog(null)} />
+      )}
     </div>
   );
 }
@@ -651,6 +684,8 @@ function LineDialog({
   );
   const [newProductLineId, setNewProductLineId] = useState<string | null>(null);
   const [note, setNote] = useState(line?.note ?? "");
+  const [conditional, setConditional] = useState(line?.conditional ?? false);
+  const [conditionNote, setConditionNote] = useState(line?.condition_note ?? "");
   const [revenueTypeId, setRevenueTypeId] = useState<string | null>(line?.revenue_type_id ?? null);
   // Itens de evento são vendas novas; as demais linhas de receita escolhem a origem.
   const [revenueOrigin, setRevenueOrigin] = useState<string | null>(
@@ -801,6 +836,9 @@ function LineDialog({
       revenue_type_id: isRevenue ? revenueTypeId : null,
       revenue_origin: isRevenue ? revenueOrigin : null,
       note: note.trim() || null,
+      ...(kind === "despesa" && !inEvent
+        ? { conditional, condition_note: conditional ? conditionNote.trim() || null : null }
+        : {}),
     };
     let ok: boolean;
     if (line) {
@@ -1104,6 +1142,14 @@ function LineDialog({
               <Input value={note} onChange={(e) => setNote(e.target.value)} />
             </Field>
           )}
+          {kind === "despesa" && !inEvent && (
+            <ConditionFields
+              conditional={conditional}
+              note={conditionNote}
+              onConditional={setConditional}
+              onNote={setConditionNote}
+            />
+          )}
           {needsType && <p className="text-sm text-destructive">Escolha o tipo de receita.</p>}
         </div>
         <DialogFooter>
@@ -1292,5 +1338,84 @@ function DeleteDialog({ line, onClose }: { line: PlanLine; onClose: () => void }
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+/** Despesa condicionada: fica fora do teto e só acontece se a receita passar do piso (o gatilho diz quando). */
+function ConditionFields({
+  conditional,
+  note,
+  onConditional,
+  onNote,
+}: {
+  conditional: boolean;
+  note: string;
+  onConditional: (v: boolean) => void;
+  onNote: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-md border border-border p-3">
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={conditional}
+          onChange={(e) => onConditional(e.target.checked)}
+        />
+        <span>
+          <span className="font-medium">Despesa condicionada</span>
+          <span className="block text-xs text-muted-foreground">
+            Só acontece se a receita passar do piso. Fica fora do teto de despesa e do cenário de
+            trava.
+          </span>
+        </span>
+      </label>
+      {conditional && (
+        <Field
+          label="Gatilho"
+          hint="Ex.: contratar só se o realizado acumulado passar do piso em 10%."
+        >
+          <Input value={note} onChange={(e) => onNote(e.target.value)} />
+        </Field>
+      )}
+    </div>
+  );
+}
+
+function ConditionDialog({ line, onClose }: { line: PlanLine; onClose: () => void }) {
+  const { setCondition } = usePlanMutations();
+  const [conditional, setConditional] = useState(line.conditional);
+  const [note, setNote] = useState(line.condition_note ?? "");
+  const [saving, setSaving] = useState(false);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{line.description || "Despesa"}</DialogTitle>
+        </DialogHeader>
+        <ConditionFields
+          conditional={conditional}
+          note={note}
+          onConditional={setConditional}
+          onNote={setNote}
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              const ok = await setCondition(line.id, conditional, note.trim() || null);
+              setSaving(false);
+              if (ok) onClose();
+            }}
+          >
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
