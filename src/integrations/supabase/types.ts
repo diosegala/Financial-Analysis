@@ -150,6 +150,116 @@ export type Database = {
           },
         ]
       }
+      alert_summaries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          model: string | null
+          period: string
+          text: string
+          unit_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          model?: string | null
+          period: string
+          text: string
+          unit_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          model?: string | null
+          period?: string
+          text?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_summaries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      alerts: {
+        Row: {
+          change: number | null
+          created_at: string
+          detail: string | null
+          id: string
+          kind: string
+          link: string | null
+          period: string | null
+          ref: string
+          seen_at: string | null
+          seen_by: string | null
+          severity: string
+          status: string
+          title: string
+          unit_id: string | null
+          value: number | null
+          version_id: string | null
+        }
+        Insert: {
+          change?: number | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          kind: string
+          link?: string | null
+          period?: string | null
+          ref: string
+          seen_at?: string | null
+          seen_by?: string | null
+          severity: string
+          status?: string
+          title: string
+          unit_id?: string | null
+          value?: number | null
+          version_id?: string | null
+        }
+        Update: {
+          change?: number | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          kind?: string
+          link?: string | null
+          period?: string | null
+          ref?: string
+          seen_at?: string | null
+          seen_by?: string | null
+          severity?: string
+          status?: string
+          title?: string
+          unit_id?: string | null
+          value?: number | null
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           key: string
@@ -1889,6 +1999,14 @@ export type Database = {
         Args: { _pct: number; _version_id: string }
         Returns: number
       }
+      alert_setting: {
+        Args: { _default: number; _key: string }
+        Returns: number
+      }
+      alerts_refresh: {
+        Args: { _ref?: string; _scenario_id?: string; _version_id?: string }
+        Returns: number
+      }
       assert_editable: {
         Args: { _month: number; _unit_id: string; _version_id: string }
         Returns: undefined
@@ -2037,6 +2155,7 @@ export type Database = {
         }
         Returns: string
       }
+      mark_alert_seen: { Args: { _id: string }; Returns: undefined }
       norm_text: { Args: { _s: string }; Returns: string }
       omie_expense_attribution: {
         Args: { _year: number }

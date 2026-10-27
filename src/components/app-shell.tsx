@@ -46,6 +46,7 @@ import {
   CalendarDays,
   Settings,
   Send,
+  Bell,
 } from "lucide-react";
 
 interface NavItem {
@@ -76,6 +77,7 @@ const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
       { to: "/dre", label: "DRE prevista", icon: FileBarChart },
       { to: "/metas", label: "Metas", icon: Target, financeiro: true },
       { to: "/cenarios", label: "Cenários", icon: Layers, management: true },
+      { to: "/alertas", label: "Alertas", icon: Bell },
     ],
   },
   {
