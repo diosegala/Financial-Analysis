@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ClipboardPaste, Pencil, Plus, Trash2 } from "lucide-react";
+import { ClipboardPaste, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { pageHead } from "@/lib/head";
 import { useCurrentUser } from "@/lib/auth";
@@ -10,6 +10,7 @@ import {
   byId,
   friendlyError,
   useAccounts,
+  useProductLines,
   useProducts,
   useRevenueTypes,
   useTableMutations,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/catalog";
 import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
 import {
+  FORMAT_LABELS,
   KIND_LABELS,
   PRICE_MODEL_LABELS,
   contractPlan,
@@ -25,6 +27,7 @@ import {
   inputOf,
   type PriceModel,
   type Product,
+  type ProductFormat,
   type ProductKind,
 } from "@/lib/products";
 import { IMPORT_COLUMNS, norm, parseProducts, type ImportResult } from "@/lib/products-import";
@@ -68,11 +71,13 @@ function ProdutosPage() {
   const { data: products, isLoading } = useProducts();
   const { data: units } = useUnits();
   const { data: types } = useRevenueTypes();
+  const { data: productLines } = useProductLines();
   const { remove } = useTableMutations("products");
   const [chosenUnit, setUnitFilter] = useState<string | null>(null);
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [deleting, setDeleting] = useState<Product | null>(null);
   const [importing, setImporting] = useState(false);
+  const [editingLines, setEditingLines] = useState(false);
   // Financeiro cadastra tudo; o líder, os produtos das próprias unidades (nunca "todas as unidades").
   const isFin = !!user?.isFinanceiro;
   const ownUnitIds = user?.unitIds ?? [];
@@ -89,10 +94,19 @@ function ProdutosPage() {
         : (unitOptions[0]?.id ?? null);
   const unitMap = byId(units);
   const typeMap = byId(types);
+  const lineMap = byId(productLines);
 
-  const rows = (products ?? []).filter(
-    (p) => unitFilter === ALL || p.unit_id === unitFilter || p.unit_id === null,
-  );
+  // Agrupados pela linha de produto (na ordem do cadastro das linhas), depois pelo nome.
+  const lineOrder = (p: Product) => {
+    const l = p.line_id ? lineMap.get(p.line_id) : undefined;
+    return l ? `${String(l.sort_order).padStart(4, "0")}${l.name}` : "~";
+  };
+  const rows = (products ?? [])
+    .filter((p) => unitFilter === ALL || p.unit_id === unitFilter || p.unit_id === null)
+    .sort(
+      (a, b) =>
+        lineOrder(a).localeCompare(lineOrder(b), "pt-BR") || a.name.localeCompare(b.name, "pt-BR"),
+    );
 
   return (
     <div className="space-y-4">
@@ -102,6 +116,14 @@ function ProdutosPage() {
         actions={
           canCreate && (
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setEditingLines(true)}
+              >
+                <Layers className="h-4 w-4" /> Linhas de produto
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -146,6 +168,7 @@ function ProdutosPage() {
               <tr className="border-b border-border bg-muted/50 text-left">
                 <th className="px-3 py-2 font-medium">Produto</th>
                 <th className="px-3 py-2 font-medium">Unidade</th>
+                <th className="px-3 py-2 font-medium">Linha</th>
                 <th className="px-3 py-2 font-medium">Tipo</th>
                 <th className="px-3 py-2 font-medium">Preço e prazo</th>
                 <th className="px-3 py-2 font-medium">Tipo de receita</th>
@@ -164,6 +187,22 @@ function ProdutosPage() {
                   </td>
                   <td className="px-3 py-1.5">
                     {p.unit_id ? unitMap.get(p.unit_id)?.name : "Todas"}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {(() => {
+                      const l = p.line_id ? lineMap.get(p.line_id) : undefined;
+                      if (!l) return <span className="text-muted-foreground">—</span>;
+                      return (
+                        <>
+                          {l.name}
+                          {l.format !== "nenhum" && (
+                            <span className="ml-1 text-xs text-muted-foreground">
+                              · {FORMAT_LABELS[l.format as ProductFormat]}
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-1.5">
                     {p.kind === "evento" ? "Evento / treinamento" : "Serviço"}
@@ -213,7 +252,7 @@ function ProdutosPage() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
                     {canCreate
                       ? "Nenhum produto cadastrado. Use “Novo produto” ou cole uma lista do Excel."
                       : "Nenhum produto cadastrado ainda. Peça ao financeiro para cadastrar."}
@@ -232,6 +271,14 @@ function ProdutosPage() {
           unitOptions={unitOptions}
           allowAllUnits={isFin}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {editingLines && (
+        <LinesDialog
+          unitOptions={unitOptions}
+          defaultUnitId={newProductUnit}
+          allowAllUnits={isFin}
+          onClose={() => setEditingLines(false)}
         />
       )}
       {importing && (
@@ -274,7 +321,9 @@ function ProductDialog({
   const { insert, update } = useTableMutations("products");
   const { data: types } = useRevenueTypes();
   const { data: accounts } = useAccounts();
+  const { data: productLines } = useProductLines();
   const [name, setName] = useState(product?.name ?? "");
+  const [lineId, setLineId] = useState<string | null>(product?.line_id ?? null);
   const [unitId, setUnitId] = useState<string | null>(product ? product.unit_id : defaultUnitId);
   const [kind, setKind] = useState<ProductKind>(
     (product?.kind as ProductKind | undefined) ?? "servico",
@@ -340,6 +389,7 @@ function ProductDialog({
       fixed_cost: isEvent ? parsed.fixed : null,
       revenue_account_id: revenueAccountId,
       cost_account_id: isEvent ? costAccountId : null,
+      line_id: lineId,
       active,
     };
     const ok = product
@@ -372,6 +422,28 @@ function ProductDialog({
               value={kind}
               onChange={(v) => setKind((v as ProductKind) ?? "servico")}
               options={Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label }))}
+            />
+          </Field>
+          <Field
+            label="Linha"
+            hint="Agrupa a receita (ex.: Treinamento online, Imersão, Fee mensal)."
+          >
+            <OptionSelect
+              value={lineId}
+              onChange={setLineId}
+              noneLabel="Sem linha"
+              options={(productLines ?? [])
+                .filter(
+                  (l) =>
+                    (l.active && (!l.unit_id || l.unit_id === unitId)) || l.id === product?.line_id,
+                )
+                .map((l) => ({
+                  value: l.id,
+                  label:
+                    l.format === "nenhum"
+                      ? l.name
+                      : `${l.name} (${FORMAT_LABELS[l.format as ProductFormat]})`,
+                }))}
             />
           </Field>
           <Field label="Tipo de receita" hint="Define a regra de recorrência e a base da comissão.">
@@ -614,6 +686,156 @@ function ImportDialog({
                 ? `Cadastrar só os ${result.rows.length} válidos`
                 : "Cadastrar"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Linhas de produto: agrupam a receita (ex.: Treinamento online, Imersão, Fee mensal) e dizem o formato. */
+function LinesDialog({
+  unitOptions,
+  defaultUnitId,
+  allowAllUnits,
+  onClose,
+}: {
+  unitOptions: { id: string; name: string }[];
+  defaultUnitId: string | null;
+  allowAllUnits: boolean;
+  onClose: () => void;
+}) {
+  const { data: lines } = useProductLines();
+  const { data: products } = useProducts();
+  const { insert, update, remove } = useTableMutations("product_lines");
+  const [unitId, setUnitId] = useState<string | null>(defaultUnitId ?? unitOptions[0]?.id ?? null);
+  const [name, setName] = useState("");
+  const [format, setFormat] = useState<ProductFormat>("nenhum");
+  const rows = (lines ?? []).filter((l) => l.unit_id === unitId);
+  const formatOptions = Object.entries(FORMAT_LABELS).map(([value, label]) => ({ value, label }));
+  const used = (id: string) => (products ?? []).filter((p) => p.line_id === id).length;
+
+  async function add() {
+    if (name.trim() === "") return;
+    const ok = await insert({
+      name: name.trim(),
+      unit_id: unitId,
+      format,
+      sort_order: Math.max(0, ...rows.map((l) => l.sort_order)) + 1,
+    });
+    if (ok) {
+      setName("");
+      setFormat("nenhum");
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Linhas de produto</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            A linha agrupa os produtos em Receitas e no resumo da meta, e o formato separa online e
+            presencial. Ex.: Treinamento online, Imersão, Comunidade, Fee mensal.
+          </p>
+          <Field label="Unidade">
+            <OptionSelect
+              className="w-56"
+              value={unitId}
+              onChange={setUnitId}
+              {...(allowAllUnits ? { noneLabel: "Todas as unidades" } : {})}
+              options={unitOptions.map((u) => ({ value: u.id, label: u.name }))}
+            />
+          </Field>
+          <div className="rounded-md border border-border">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50 text-left">
+                  <th className="px-2 py-1.5 font-medium">Linha</th>
+                  <th className="w-40 px-2 py-1.5 font-medium">Formato</th>
+                  <th className="w-20 px-2 py-1.5 font-medium">Ativa</th>
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((l) => (
+                  <tr key={l.id} className="border-b border-border/60 last:border-0">
+                    <td className="px-2 py-1">
+                      <Input
+                        defaultValue={l.name}
+                        aria-label="Nome da linha"
+                        className="h-8"
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v !== "" && v !== l.name) void update(l.id, { name: v });
+                        }}
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <OptionSelect
+                        className="h-8"
+                        value={l.format}
+                        onChange={(v) => v && void update(l.id, { format: v })}
+                        options={formatOptions}
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <Switch
+                        checked={l.active}
+                        onCheckedChange={(v) => void update(l.id, { active: v })}
+                        aria-label="Ativa"
+                      />
+                    </td>
+                    <td className="px-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        aria-label={`Excluir ${l.name}`}
+                        disabled={used(l.id) > 0}
+                        title={
+                          used(l.id) > 0
+                            ? `${used(l.id)} produto(s) nesta linha: desative em vez de excluir.`
+                            : undefined
+                        }
+                        onClick={() => void remove(l.id, "Linha excluída.")}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                <tr>
+                  <td className="px-2 py-1">
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && void add()}
+                      placeholder="Nova linha"
+                      className="h-8"
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <OptionSelect
+                      className="h-8"
+                      value={format}
+                      onChange={(v) => setFormat((v as ProductFormat | null) ?? "nenhum")}
+                      options={formatOptions}
+                    />
+                  </td>
+                  <td colSpan={2} className="px-2 py-1">
+                    <Button size="sm" onClick={add} disabled={name.trim() === ""}>
+                      Adicionar
+                    </Button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

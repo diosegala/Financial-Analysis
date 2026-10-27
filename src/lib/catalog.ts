@@ -13,6 +13,7 @@ export type Account = Tables<"accounts">;
 export type RevenueType = Tables<"revenue_types">;
 export type ContractType = Tables<"contract_types">;
 export type Product = Tables<"products">;
+export type ProductLine = Tables<"product_lines">;
 export type Client = Tables<"clients">;
 export type ParameterDefinition = Tables<"parameter_definitions">;
 export type ParameterValue = Tables<"parameter_values">;
@@ -47,6 +48,7 @@ export const useAccounts = () => useTable("accounts", ["sort_order", "name"]);
 export const useRevenueTypes = () => useTable("revenue_types", ["sort_order", "name"]);
 export const useContractTypes = () => useTable("contract_types", ["sort_order", "name"]);
 export const useProducts = () => useTable("products", ["name"]);
+export const useProductLines = () => useTable("product_lines", ["sort_order", "name"]);
 export const useClients = () => useTable("clients", ["name"]);
 export const useParameterDefinitions = () =>
   useTable("parameter_definitions", ["sort_order", "label"]);

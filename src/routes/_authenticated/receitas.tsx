@@ -41,7 +41,8 @@ function ReceitasPage() {
             emptyText="Nenhuma receita lançada. Adicione a primeira linha."
           />
           <p className="text-xs text-muted-foreground">
-            Receitas de eventos e treinamentos são lançadas em Eventos e entram na DRE
+            Treinamentos, imersões e comunidade entram aqui pelo produto. Eventos com vários itens
+            (ingressos, patrocínio, local) ficam em Eventos e entram na DRE e na meta
             automaticamente.
           </p>
         </>

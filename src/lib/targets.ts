@@ -251,3 +251,28 @@ export function useTargetVsPlan(
     },
   });
 }
+
+/** Receita planejada da unidade por origem e produto: origem → produto (null = sem produto) → 12 meses. */
+export function useRevenueByProduct(versionId: string | null, unitId: string | null) {
+  return useQuery({
+    // Debaixo de "target_vs_plan": os lançamentos atualizam os dois juntos.
+    queryKey: ["target_vs_plan", "by_product", versionId, unitId],
+    enabled: !!versionId && !!unitId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("revenue_by_product", {
+        _version_id: versionId!,
+        _unit_ids: [unitId!],
+      });
+      if (error) throw error;
+      const out = new Map<string, Map<string | null, number[]>>();
+      for (const r of data ?? []) {
+        const byProduct = out.get(r.origin) ?? new Map<string | null, number[]>();
+        const months = byProduct.get(r.product_id) ?? Array.from({ length: 12 }, () => 0);
+        months[r.month - 1]! += Number(r.amount);
+        byProduct.set(r.product_id, months);
+        out.set(r.origin, byProduct);
+      }
+      return out;
+    },
+  });
+}
