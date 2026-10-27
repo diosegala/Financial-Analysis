@@ -19,6 +19,7 @@ import {
 import { norm } from "@/lib/products-import";
 import { MONTHS, fmtBRL, fmtInput, parseNum } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
+import { OmieRevenueView } from "@/components/omie-revenue-view";
 import { Field, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +53,7 @@ function RealizadoPage() {
   const { data: expenses, isLoading } = useOmieExpenses(year);
   const { data: accounts } = useAccounts();
   const { data: units } = useUnits();
+  const [tab, setTab] = useState<"despesas" | "receitas">("despesas");
   const [filter, setFilter] = useState<Filter>("lancaveis");
   const [search, setSearch] = useState("");
   const [planning, setPlanning] = useState<Row | null>(null);
@@ -95,11 +97,39 @@ function RealizadoPage() {
     )
     .filter((r) => search.trim() === "" || norm(r.categoryName).includes(norm(search)));
 
+  const tabs = (
+    <div className="flex gap-1 rounded-md border border-border bg-card p-1">
+      {(["despesas", "receitas"] as const).map((t) => (
+        <Button
+          key={t}
+          size="sm"
+          variant={tab === t ? "default" : "ghost"}
+          onClick={() => setTab(t)}
+        >
+          {t === "despesas" ? "Despesas" : "Receitas"}
+        </Button>
+      ))}
+    </div>
+  );
+
+  if (tab === "receitas")
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Realizado (Omie): receitas"
+          subtitle="Receitas das três empresas por unidade, categoria e cliente. A unidade segue as mesmas regras das despesas (departamento, rateio, palavra no nome). Somente leitura: o app nunca escreve no Omie."
+          actions={tabs}
+        />
+        <OmieRevenueView baseYear={year ?? new Date().getFullYear()} />
+      </div>
+    );
+
   return (
     <div className="space-y-6">
       <PageHeader
         title={`Realizado ${year ?? ""} (Omie)`}
         subtitle="Despesas das três empresas por categoria: pago pela data do pagamento efetivo, em aberto pelo vencimento. Somente leitura: o app nunca escreve no Omie. Escolha a unidade de cada categoria na coluna Unidade."
+        actions={tabs}
       />
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>

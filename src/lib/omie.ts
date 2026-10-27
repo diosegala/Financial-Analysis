@@ -62,6 +62,81 @@ export function useOmieExpenses(year: number | undefined) {
   });
 }
 
+export interface OmieRevenue {
+  categoryName: string;
+  clientCode: string;
+  clientName: string;
+  /** Unidade atribuída; null = sem unidade. */
+  unitId: string | null;
+  source: OmieExpense["source"];
+  /** Recebido (pela data do recebimento) e em aberto (pelo vencimento), índice 0 = janeiro. */
+  received: number[];
+  open: number[];
+}
+
+/** Receitas do ano lidas do Omie, por categoria, cliente e unidade. O líder recebe só as das suas unidades. */
+export function useOmieRevenue(year: number | undefined) {
+  return useQuery({
+    queryKey: ["omie_revenue", year],
+    enabled: !!year,
+    queryFn: async (): Promise<OmieRevenue[]> => {
+      const data = [];
+      for (let from = 0; ; from += 1000) {
+        const { data: page, error } = await supabase
+          .rpc("omie_revenue_summary", { _year: year! })
+          .order("category_name")
+          .order("client_code")
+          .order("unit_id")
+          .order("source")
+          .range(from, from + 999);
+        if (error) throw error;
+        data.push(...(page ?? []));
+        if (!page || page.length < 1000) break;
+      }
+      return data.map((r) => ({
+        categoryName: r.category_name,
+        clientCode: r.client_code,
+        clientName: r.client_name || "Sem cliente",
+        unitId: r.unit_id,
+        source: r.source as OmieExpense["source"],
+        received: (r.received ?? []).map(Number),
+        open: (r.open ?? []).map(Number),
+      }));
+    },
+  });
+}
+
+/** Clientes recorrentes do ano anterior ao da versão, sugeridos como carteira da unidade. */
+export function useRevenuePortfolio(
+  versionId: string | null,
+  unitId: string | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["revenue_portfolio", versionId, unitId],
+    enabled: enabled && !!versionId && !!unitId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("revenue_portfolio", {
+        _version_id: versionId!,
+        _unit_id: unitId!,
+      });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        clientCode: r.client_code,
+        clientName: r.client_name || "Sem nome",
+        categoryName: r.category_name,
+        accountId: r.account_id as string | null,
+        monthsActive: r.months_active,
+        monthly: Number(r.monthly),
+        lastMonth: r.last_month,
+        yearTotal: Number(r.year_total),
+        /** Já contratado: títulos a receber com vencimento no ano do plano, mês a mês. */
+        contracted: (r.contracted ?? []).map(Number),
+      }));
+    },
+  });
+}
+
 export const SOURCE_LABELS: Record<OmieExpense["source"], string> = {
   departamento: "departamento do Omie",
   rateio: "rateio",

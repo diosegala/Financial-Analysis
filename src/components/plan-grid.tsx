@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ClipboardPaste,
   Download,
+  History,
   StickyNote,
 } from "lucide-react";
 import { usePlanning } from "@/lib/planning";
@@ -34,6 +35,7 @@ import {
 } from "@/lib/products";
 import { downloadText } from "@/lib/dre";
 import { RevenuePasteDialog } from "@/components/revenue-paste-dialog";
+import { PortfolioDialog } from "@/components/portfolio-dialog";
 import { norm } from "@/lib/products-import";
 import { REVENUE_ORIGINS, unitRevenueAccount } from "@/lib/revenue-paste";
 import type { PlanEvent } from "@/lib/events";
@@ -91,6 +93,7 @@ type Dialogs =
   | { type: "delete"; line: PlanLine }
   | { type: "move"; line: PlanLine }
   | { type: "paste" }
+  | { type: "portfolio" }
   | null;
 
 type RevenueView = "produto" | "origem" | "lancamento";
@@ -404,6 +407,16 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
                   size="sm"
                   variant="outline"
                   className="gap-1.5"
+                  onClick={() => setDialog({ type: "portfolio" })}
+                >
+                  <History className="h-4 w-4" /> Carregar carteira
+                </Button>
+              )}
+              {canAdd && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
                   onClick={() => setDialog({ type: "paste" })}
                 >
                   <ClipboardPaste className="h-4 w-4" /> Colar da planilha
@@ -542,6 +555,7 @@ export function PlanGrid({ kind, emptyText, event = null }: PlanGridProps) {
       )}
       {dialog?.type === "move" && <MoveDialog line={dialog.line} onClose={() => setDialog(null)} />}
       {dialog?.type === "paste" && <RevenuePasteDialog onClose={() => setDialog(null)} />}
+      {dialog?.type === "portfolio" && <PortfolioDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }
