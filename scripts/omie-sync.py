@@ -207,36 +207,54 @@ def receipts(creds, years, no_dep):
     return agg
 
 
+def insert_rows(table, cols, cid, rows, conflict="", size=2000):
+    """INSERT em lote: a empresa é buscada uma vez por lote, não por linha."""
+    out = []
+    for i in range(0, len(rows), size):
+        values = ",\n".join("(" + ", ".join(r) + ")" for r in rows[i:i + size])
+        out.append(f"INSERT INTO public.{table} (company_id, {', '.join(cols)}) "
+                   f"SELECT c.id, v.* FROM {cid} c, (VALUES {values}) AS v({', '.join(cols)}){conflict};")
+    return out
+
+
 def to_sql(companies, years):
-    out = ["BEGIN;"]
+    """Uma transação por empresa (lista de scripts), para não mandar tudo num envio só."""
+    scripts = []
+    yrs = ", ".join(map(str, years))
     for name, departments, categories, agg, _, suppliers, revenue in companies:
         cid = f"(SELECT id FROM public.omie_companies WHERE name = {q(name)})"
-        out.append(f"INSERT INTO public.omie_companies (name, last_synced_at) VALUES ({q(name)}, now()) "
-                   "ON CONFLICT (name) DO UPDATE SET last_synced_at = now();")
-        out.append(f"DELETE FROM public.omie_departments WHERE company_id = {cid};")
-        for d in departments:
-            out.append("INSERT INTO public.omie_departments (company_id, code, name, structure) VALUES "
-                       f"({cid}, {q(d['codigo'])}, {q(d['descricao'])}, {q(d.get('estrutura') or '')});")
+        out = ["BEGIN;",
+               f"INSERT INTO public.omie_companies (name, last_synced_at) VALUES ({q(name)}, now()) "
+               "ON CONFLICT (name) DO UPDATE SET last_synced_at = now();",
+               f"DELETE FROM public.omie_departments WHERE company_id = {cid};"]
+        out += insert_rows("omie_departments", ["code", "name", "structure"], cid,
+                           [[q(d["codigo"]), q(d["descricao"]), q(d.get("estrutura") or "")] for d in departments])
         out.append(f"DELETE FROM public.omie_categories WHERE company_id = {cid};")
+        cats = []
         for c in categories:
             parent = c.get("categoria_superior")
-            out.append("INSERT INTO public.omie_categories (company_id, code, name, parent_code, is_expense, is_revenue, is_total) VALUES "
-                       f"({cid}, {q(c['codigo'])}, {q(c['descricao'])}, {q(parent if parent not in (None, '', '0') else None)}, "
-                       f"{c.get('conta_despesa') == 'S'}, {c.get('conta_receita') == 'S'}, {c.get('totalizadora') == 'S'});")
+            cats.append([q(c["codigo"]), q(c["descricao"]), f"{q(parent if parent not in (None, '', '0') else None)}::TEXT",
+                         str(c.get("conta_despesa") == "S"), str(c.get("conta_receita") == "S"), str(c.get("totalizadora") == "S")])
+        out += insert_rows("omie_categories", ["code", "name", "parent_code", "is_expense", "is_revenue", "is_total"], cid, cats)
         # Clientes e fornecedores: acumula (ler um ano só não apaga o nome dos que aparecem em outros anos).
-        for code, sname in sorted(suppliers.items()):
-            out.append(f"INSERT INTO public.omie_suppliers (company_id, code, name) VALUES ({cid}, {q(code)}, {q(sname)}) "
-                       "ON CONFLICT (company_id, code) DO UPDATE SET name = EXCLUDED.name;")
-        out.append(f"DELETE FROM public.omie_actuals WHERE company_id = {cid} AND year IN ({', '.join(map(str, years))});")
-        for (year, month, cat, dep, sup, item), (paid, opened) in sorted(agg.items()):
-            out.append("INSERT INTO public.omie_actuals (company_id, year, month, category_code, department_code, supplier_code, item, amount_paid, amount_open) VALUES "
-                       f"({cid}, {year}, {month}, {q(cat)}, {q(dep)}, {q(sup)}, {q(item)}, {round(paid, 2)}, {round(opened, 2)});")
-        out.append(f"DELETE FROM public.omie_receipts WHERE company_id = {cid} AND year IN ({', '.join(map(str, years))});")
-        for (year, month, cat, dep, client), (got, opened) in sorted(revenue.items()):
-            out.append("INSERT INTO public.omie_receipts (company_id, year, month, category_code, department_code, client_code, amount_received, amount_open) VALUES "
-                       f"({cid}, {year}, {month}, {q(cat)}, {q(dep)}, {q(client)}, {round(got, 2)}, {round(opened, 2)});")
-    out.append("COMMIT;")
-    return "\n".join(out)
+        out += insert_rows("omie_suppliers", ["code", "name"], cid,
+                           [[q(code), q(sname)] for code, sname in sorted(suppliers.items())],
+                           " ON CONFLICT (company_id, code) DO UPDATE SET name = EXCLUDED.name")
+        out.append(f"DELETE FROM public.omie_actuals WHERE company_id = {cid} AND year IN ({yrs});")
+        out += insert_rows("omie_actuals", ["year", "month", "category_code", "department_code", "supplier_code", "item",
+                                            "amount_paid", "amount_open"], cid,
+                           [[str(year), str(month), q(cat), q(dep), q(sup), q(item), f"{round(paid, 2)}::NUMERIC",
+                             f"{round(opened, 2)}::NUMERIC"]
+                            for (year, month, cat, dep, sup, item), (paid, opened) in sorted(agg.items())])
+        out.append(f"DELETE FROM public.omie_receipts WHERE company_id = {cid} AND year IN ({yrs});")
+        out += insert_rows("omie_receipts", ["year", "month", "category_code", "department_code", "client_code",
+                                             "amount_received", "amount_open"], cid,
+                           [[str(year), str(month), q(cat), q(dep), q(client), f"{round(got, 2)}::NUMERIC",
+                             f"{round(opened, 2)}::NUMERIC"]
+                            for (year, month, cat, dep, client), (got, opened) in sorted(revenue.items())])
+        out.append("COMMIT;")
+        scripts.append((name, "\n".join(out)))
+    return scripts
 
 
 def main():
@@ -264,17 +282,22 @@ def main():
     if args.dry_run:
         print("Simulação: nada foi gravado.")
         return
-    with tempfile.NamedTemporaryFile("w", suffix=".sql", delete=False, encoding="utf-8") as tmp:
-        tmp.write(to_sql(companies, years))
-    try:
-        if args.target == "local":
-            cmd = ["psql", "postgresql://postgres:postgres@127.0.0.1:54322/postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", tmp.name]
-        else:
-            cmd = ["supabase", "db", "query", "--linked", "-f", tmp.name]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
-    finally:
-        os.unlink(tmp.name)
-    print(f"Gravado no banco ({args.target}).")
+    for name, sql in to_sql(companies, years):
+        with tempfile.NamedTemporaryFile("w", suffix=".sql", delete=False, encoding="utf-8") as tmp:
+            tmp.write(sql)
+        try:
+            if args.target == "local":
+                cmd = ["psql", "postgresql://postgres:postgres@127.0.0.1:54322/postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", tmp.name]
+            else:
+                cmd = ["supabase", "db", "query", "--linked", "-f", tmp.name]
+            done = subprocess.run(cmd, capture_output=True, text=True)
+        finally:
+            os.unlink(tmp.name)
+        if done.returncode != 0:
+            # A mensagem do banco pode citar valores: os números saem mascarados.
+            msg = re.sub(r"\d", "#", (done.stderr + done.stdout)[-1500:])
+            sys.exit(f"Falhou ao gravar {name} ({args.target}); esta empresa ficou como estava.\n{msg}")
+        print(f"{name}: gravado no banco ({args.target}).")
 
 
 if __name__ == "__main__":
