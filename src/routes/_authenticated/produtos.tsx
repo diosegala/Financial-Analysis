@@ -19,6 +19,7 @@ import {
 import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
 import {
   FORMAT_LABELS,
+  NATURE_OPTIONS,
   KIND_LABELS,
   PRICE_MODEL_LABELS,
   contractPlan,
@@ -710,6 +711,7 @@ function LinesDialog({
   const [unitId, setUnitId] = useState<string | null>(defaultUnitId ?? unitOptions[0]?.id ?? null);
   const [name, setName] = useState("");
   const [format, setFormat] = useState<ProductFormat>("nenhum");
+  const [nature, setNature] = useState<string>("variavel");
   const rows = (lines ?? []).filter((l) => l.unit_id === unitId);
   const formatOptions = Object.entries(FORMAT_LABELS).map(([value, label]) => ({ value, label }));
   const used = (id: string) => (products ?? []).filter((p) => p.line_id === id).length;
@@ -720,11 +722,13 @@ function LinesDialog({
       name: name.trim(),
       unit_id: unitId,
       format,
+      nature,
       sort_order: Math.max(0, ...rows.map((l) => l.sort_order)) + 1,
     });
     if (ok) {
       setName("");
       setFormat("nenhum");
+      setNature("variavel");
     }
   }
 
@@ -737,7 +741,8 @@ function LinesDialog({
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             A linha agrupa os produtos em Receitas e no resumo da meta, e o formato separa online e
-            presencial. Ex.: Treinamento online, Imersão, Comunidade, Fee mensal.
+            presencial. A natureza separa a receita recorrente (contratos, assinaturas) da variável
+            na DRE. Ex.: Treinamento online, Imersão, Comunidade, Fee mensal.
           </p>
           <Field label="Unidade">
             <OptionSelect
@@ -754,6 +759,7 @@ function LinesDialog({
                 <tr className="border-b border-border bg-muted/50 text-left">
                   <th className="px-2 py-1.5 font-medium">Linha</th>
                   <th className="w-40 px-2 py-1.5 font-medium">Formato</th>
+                  <th className="w-36 px-2 py-1.5 font-medium">Natureza</th>
                   <th className="w-20 px-2 py-1.5 font-medium">Ativa</th>
                   <th className="w-10" />
                 </tr>
@@ -778,6 +784,14 @@ function LinesDialog({
                         value={l.format}
                         onChange={(v) => v && void update(l.id, { format: v })}
                         options={formatOptions}
+                      />
+                    </td>
+                    <td className="px-2 py-1">
+                      <OptionSelect
+                        className="h-8"
+                        value={l.nature}
+                        onChange={(v) => v && void update(l.id, { nature: v })}
+                        options={NATURE_OPTIONS}
                       />
                     </td>
                     <td className="px-2 py-1">
@@ -822,6 +836,14 @@ function LinesDialog({
                       value={format}
                       onChange={(v) => setFormat((v as ProductFormat | null) ?? "nenhum")}
                       options={formatOptions}
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <OptionSelect
+                      className="h-8"
+                      value={nature}
+                      onChange={(v) => setNature(v ?? "variavel")}
+                      options={NATURE_OPTIONS}
                     />
                   </td>
                   <td colSpan={2} className="px-2 py-1">

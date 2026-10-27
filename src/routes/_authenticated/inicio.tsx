@@ -4,6 +4,7 @@ import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
 import { useDreLines, useUnits } from "@/lib/catalog";
+import { useBoard } from "@/lib/board";
 import { dreValue, fmtLine, useDreReport } from "@/lib/dre";
 import {
   SUBMISSION_LABELS,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/submissions";
 import { PageHeader } from "@/components/page-header";
 import { LeaderGoal, SetupSteps } from "@/components/setup-steps";
+import { BoardCards } from "@/components/board-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +55,7 @@ function InicioPage() {
       />
       {user?.isFinanceiro && <SetupSteps />}
       {user && !user.isManagement && <LeaderGoal />}
+      {user?.isManagement && <BoardSection />}
       <h2 className="text-lg font-semibold">Resultado da unidade</h2>
       {isLoading || !values ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>
@@ -221,5 +224,29 @@ function CollectionPanel() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** Painel da diretoria: cada unidade de negócio com meta, planejado, recorrente e resultado com e sem apoio. */
+function BoardSection() {
+  const { version, versionId, scenario, scenarioId } = usePlanning();
+  const { data: units } = useUnits();
+  const { data: lines } = useDreLines();
+  const { data: board } = useBoard(versionId, scenarioId, units, lines);
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold">Painel da diretoria</h2>
+        <p className="text-sm text-muted-foreground">
+          {version?.name ?? "…"} · Cenário {scenario?.name ?? "…"}. A tabela completa, com o
+          critério do rateio, fica na DRE → Todas as unidades → Por unidade.
+        </p>
+      </div>
+      {board ? (
+        <BoardCards board={board} />
+      ) : (
+        <p className="text-sm text-muted-foreground">Carregando…</p>
+      )}
+    </section>
   );
 }
