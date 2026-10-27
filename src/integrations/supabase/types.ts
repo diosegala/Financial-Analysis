@@ -746,6 +746,50 @@ export type Database = {
           },
         ]
       }
+      omie_receipts: {
+        Row: {
+          amount_open: number
+          amount_received: number
+          category_code: string
+          client_code: string
+          company_id: string
+          department_code: string
+          month: number
+          synced_at: string
+          year: number
+        }
+        Insert: {
+          amount_open?: number
+          amount_received?: number
+          category_code: string
+          client_code?: string
+          company_id: string
+          department_code?: string
+          month: number
+          synced_at?: string
+          year: number
+        }
+        Update: {
+          amount_open?: number
+          amount_received?: number
+          category_code?: string
+          client_code?: string
+          company_id?: string
+          department_code?: string
+          month?: number
+          synced_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_receipts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "omie_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       omie_suppliers: {
         Row: {
           code: string
@@ -1971,6 +2015,30 @@ export type Database = {
           unit_id: string
         }[]
       }
+      omie_revenue_attribution: {
+        Args: { _year: number }
+        Returns: {
+          category_name: string
+          client_code: string
+          client_name: string
+          open: number[]
+          received: number[]
+          source: string
+          unit_id: string
+        }[]
+      }
+      omie_revenue_summary: {
+        Args: { _year: number }
+        Returns: {
+          category_name: string
+          client_code: string
+          client_name: string
+          open: number[]
+          received: number[]
+          source: string
+          unit_id: string
+        }[]
+      }
       param_value: {
         Args: {
           _contract_type_id: string
@@ -2052,6 +2120,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      revenue_account_for_category: {
+        Args: { _name: string; _plan_year: number }
+        Returns: {
+          active: boolean
+          base_name: string | null
+          code: string | null
+          created_at: string
+          dre_line_id: string | null
+          generates_tax_credit: boolean
+          group_name: string | null
+          id: string
+          kind: string
+          name: string
+          omie_category_code: string | null
+          period: string | null
+          sort_order: number
+          treatment: string
+          unit_ids: string[] | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "accounts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       revenue_by_product: {
         Args: { _unit_ids?: string[]; _version_id: string }
         Returns: {
@@ -2060,6 +2155,20 @@ export type Database = {
           origin: string
           product_id: string
           unit_id: string
+        }[]
+      }
+      revenue_portfolio: {
+        Args: { _unit_id: string; _version_id: string }
+        Returns: {
+          account_id: string
+          category_name: string
+          client_code: string
+          client_name: string
+          contracted: number[]
+          last_month: number
+          monthly: number
+          months_active: number
+          year_total: number
         }[]
       }
       seed_person_line: {
