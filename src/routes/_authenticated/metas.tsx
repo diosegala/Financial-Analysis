@@ -17,6 +17,7 @@ import {
 import { MONTHS, fmtBRL, fmtInput, fmtPct, parseNum } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { TargetExplanation } from "@/components/target-explanation";
+import { GuardrailsPanel } from "@/components/guardrails-panel";
 import { Field, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +61,51 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
+/** Duas formas de chegar ao plano: piso e teto (padrão) ou a meta de receita calculada a partir do alvo. */
 function MetasPage() {
+  const [tab, setTab] = useState<"teto" | "receita">(() => {
+    try {
+      return localStorage.getItem("metas.aba") === "receita" ? "receita" : "teto";
+    } catch {
+      return "teto";
+    }
+  });
+  const choose = (t: "teto" | "receita") => {
+    setTab(t);
+    try {
+      localStorage.setItem("metas.aba", t);
+    } catch {
+      // sem armazenamento: só não lembra a aba
+    }
+  };
+  const { data: user, isLoading } = useCurrentUser();
+  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
+  if (!user?.isFinanceiro) return <Navigate to="/inicio" />;
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 rounded-md border border-border bg-card p-1 text-sm w-fit">
+        {(
+          [
+            ["teto", "Piso e teto"],
+            ["receita", "Meta de receita"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => choose(k)}
+            className={`rounded px-3 py-1.5 ${tab === k ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "teto" ? <GuardrailsPanel /> : <RevenueTargetPage />}
+    </div>
+  );
+}
+
+function RevenueTargetPage() {
   const { data: user, isLoading: loadingUser } = useCurrentUser();
   const { scenario, scenarioId, version } = usePlanning();
   const { data: units } = useUnits();

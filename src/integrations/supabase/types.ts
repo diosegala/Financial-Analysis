@@ -613,6 +613,116 @@ export type Database = {
           },
         ]
       }
+      guardrail_settings: {
+        Row: {
+          base_closed_month: number | null
+          base_year: number | null
+          created_at: string
+          distribution: string
+          floor_adjust_pct: number
+          id: string
+          published_at: string | null
+          result_target: number
+          scenario_id: string
+          suggested_at: string | null
+          support_cut_pct: number
+          unassigned_revenue: number | null
+          updated_at: string
+        }
+        Insert: {
+          base_closed_month?: number | null
+          base_year?: number | null
+          created_at?: string
+          distribution?: string
+          floor_adjust_pct?: number
+          id?: string
+          published_at?: string | null
+          result_target?: number
+          scenario_id: string
+          suggested_at?: string | null
+          support_cut_pct?: number
+          unassigned_revenue?: number | null
+          updated_at?: string
+        }
+        Update: {
+          base_closed_month?: number | null
+          base_year?: number | null
+          created_at?: string
+          distribution?: string
+          floor_adjust_pct?: number
+          id?: string
+          published_at?: string | null
+          result_target?: number
+          scenario_id?: string
+          suggested_at?: string | null
+          support_cut_pct?: number
+          unassigned_revenue?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guardrail_settings_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: true
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guardrail_units: {
+        Row: {
+          ceiling_amount: number | null
+          floor_actual: number | null
+          floor_amount: number | null
+          floor_projected: number | null
+          id: string
+          manual_share: number | null
+          note: string | null
+          scenario_id: string
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          ceiling_amount?: number | null
+          floor_actual?: number | null
+          floor_amount?: number | null
+          floor_projected?: number | null
+          id?: string
+          manual_share?: number | null
+          note?: string | null
+          scenario_id: string
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          ceiling_amount?: number | null
+          floor_actual?: number | null
+          floor_amount?: number | null
+          floor_projected?: number | null
+          id?: string
+          manual_share?: number | null
+          note?: string | null
+          scenario_id?: string
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guardrail_units_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guardrail_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       omie_actuals: {
         Row: {
           amount_open: number
@@ -1192,6 +1302,8 @@ export type Database = {
         Row: {
           account_id: string
           client_id: string | null
+          condition_note: string | null
+          conditional: boolean
           created_at: string
           created_by: string | null
           description: string | null
@@ -1211,6 +1323,8 @@ export type Database = {
         Insert: {
           account_id: string
           client_id?: string | null
+          condition_note?: string | null
+          conditional?: boolean
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1230,6 +1344,8 @@ export type Database = {
         Update: {
           account_id?: string
           client_id?: string | null
+          condition_note?: string | null
+          conditional?: boolean
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -2093,6 +2209,27 @@ export type Database = {
           total: number
         }[]
       }
+      guardrails: {
+        Args: { _scenario_id: string }
+        Returns: {
+          ceiling: number
+          ceiling_suggested: number
+          conditional_expense: number
+          contribution: number
+          floor_amount: number
+          floor_net: number
+          floor_suggested: number
+          kind: string
+          planned_expense: number
+          planned_revenue: number
+          planned_variable: number
+          share: number
+          unit_id: string
+          variable_rate: number
+        }[]
+      }
+      guardrails_published: { Args: { _scenario_id: string }; Returns: boolean }
+      guardrails_suggest: { Args: { _scenario_id: string }; Returns: undefined }
       has_any_role: {
         Args: {
           _roles: Database["public"]["Enums"]["app_role"][]
@@ -2143,6 +2280,8 @@ export type Database = {
         Args: {
           _account_id: string
           _client_id: string
+          _condition_note?: string
+          _conditional?: boolean
           _description: string
           _event_id?: string
           _note?: string
@@ -2256,6 +2395,10 @@ export type Database = {
           unit_id: string
         }[]
       }
+      publish_guardrails: {
+        Args: { _publish?: boolean; _scenario_id: string }
+        Returns: undefined
+      }
       publish_targets: {
         Args: { _publish?: boolean; _scenario_id: string }
         Returns: {
@@ -2352,6 +2495,14 @@ export type Database = {
         Args: { _person_id: string; _reset?: boolean }
         Returns: string
       }
+      set_line_condition: {
+        Args: {
+          _condition_note?: string
+          _conditional: boolean
+          _line_id: string
+        }
+        Returns: undefined
+      }
       set_official_scenario: {
         Args: { _scenario_id: string }
         Returns: undefined
@@ -2410,6 +2561,10 @@ export type Database = {
         }[]
       }
       tax_constant: { Args: { _key: string; _ref: string }; Returns: number }
+      unit_variable_rate: {
+        Args: { _scenario_id: string; _unit_id: string }
+        Returns: number
+      }
       variable_rate_parts: {
         Args: { _ref: string; _unit_id: string }
         Returns: {

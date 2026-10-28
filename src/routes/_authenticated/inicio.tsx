@@ -5,6 +5,7 @@ import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
 import { useDreLines, useUnits } from "@/lib/catalog";
 import { useBoard } from "@/lib/board";
+import { fmtBRL } from "@/lib/format";
 import { dreValue, fmtLine, useDreReport } from "@/lib/dre";
 import {
   SUBMISSION_LABELS,
@@ -16,6 +17,8 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { LeaderGoal, SetupSteps } from "@/components/setup-steps";
 import { BoardCards } from "@/components/board-panel";
+import { GuardrailScore } from "@/components/guardrail-score";
+import { scenarioResults, useGuardrailSettings, useGuardrails } from "@/lib/guardrails";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,6 +58,7 @@ function InicioPage() {
       />
       {user?.isFinanceiro && <SetupSteps />}
       {user && !user.isManagement && <LeaderGoal />}
+      <GuardrailScore />
       {user?.isManagement && <BoardSection />}
       <h2 className="text-lg font-semibold">Resultado da unidade</h2>
       {isLoading || !values ? (
@@ -233,6 +237,10 @@ function BoardSection() {
   const { data: units } = useUnits();
   const { data: lines } = useDreLines();
   const { data: board } = useBoard(versionId, scenarioId, units, lines);
+  const { data: guard } = useGuardrails(scenarioId);
+  const { data: settings } = useGuardrailSettings(scenarioId);
+  const results = guard?.length ? scenarioResults(guard) : null;
+  const target = Number(settings?.result_target ?? 0);
   return (
     <section className="space-y-3">
       <div>
@@ -242,6 +250,31 @@ function BoardSection() {
           critério do rateio, fica na DRE → Todas as unidades → Por unidade.
         </p>
       </div>
+      {results && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          {(
+            [
+              ["Resultado alvo", target, "Piso e teto, em Metas"],
+              [
+                "Cenário trava (só o piso)",
+                results.trava,
+                "Piso de receita e despesa sem condicionadas",
+              ],
+              ["Cenário plano", results.plano, "Tudo o que os líderes lançaram"],
+            ] as const
+          ).map(([label, v, hint]) => (
+            <div key={label} className="rounded-md border border-border bg-card p-3">
+              <div className="text-xs text-muted-foreground">{label}</div>
+              <div
+                className={`font-mono text-lg font-semibold tabular-nums ${v < target && label !== "Resultado alvo" ? "text-destructive" : ""}`}
+              >
+                {fmtBRL(v)}
+              </div>
+              <div className="text-xs text-muted-foreground">{hint}</div>
+            </div>
+          ))}
+        </div>
+      )}
       {board ? (
         <BoardCards board={board} />
       ) : (

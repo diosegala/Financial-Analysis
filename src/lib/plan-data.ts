@@ -17,6 +17,9 @@ export interface NewLine {
   event_id?: string | null;
   revenue_origin?: string | null;
   note?: string | null;
+  /** Despesa que só acontece se a receita passar do piso (fica fora do teto). */
+  conditional?: boolean;
+  condition_note?: string | null;
 }
 
 export type PlanLine = Tables<"plan_lines"> & {
@@ -137,6 +140,8 @@ export function usePlanMutations() {
       _event_id: orNull(line.event_id),
       _revenue_origin: orNull(line.revenue_origin),
       _note: orNull(line.note),
+      _conditional: line.conditional ?? false,
+      _condition_note: orNull(line.condition_note),
     });
     if (fail(error) || !data) return null;
     return data;
@@ -156,7 +161,19 @@ export function usePlanMutations() {
     return true;
   }
 
-  return { setValues, addLine, addLines, updateLine, deleteLine };
+  /** Marca ou desmarca a despesa como condicionada. O líder da unidade também pode (só isso muda na linha). */
+  async function setCondition(lineId: string, conditional: boolean, note: string | null) {
+    const { error } = await supabase.rpc("set_line_condition", {
+      _line_id: lineId,
+      _conditional: conditional,
+      _condition_note: (note ?? null) as string,
+    });
+    if (fail(error)) return false;
+    await refresh();
+    return true;
+  }
+
+  return { setValues, addLine, addLines, updateLine, deleteLine, setCondition };
 }
 
 /** Months [start, start + count) clipped to December. */
