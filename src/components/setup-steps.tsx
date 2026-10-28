@@ -8,6 +8,7 @@ import { useAccounts, useUnits } from "@/lib/catalog";
 import { useExpenseBase } from "@/lib/expense-base";
 import { useScenarioTarget, useTargetVsPlan } from "@/lib/targets";
 import { useSubmissions } from "@/lib/submissions";
+import { useGuardrailSettings, useGuardrails } from "@/lib/guardrails";
 import { listUsers } from "@/lib/users.functions";
 import { fmtBRL } from "@/lib/format";
 import { ExpenseBasePanel } from "@/components/expense-base-panel";
@@ -88,6 +89,8 @@ export function SetupSteps() {
   const { data: base } = useExpenseBase(versionId);
   const { data: target } = useScenarioTarget(scenarioId);
   const { data: submissions } = useSubmissions(versionId);
+  const { data: guardSettings } = useGuardrailSettings(scenarioId);
+  const { data: guard } = useGuardrails(scenarioId);
   const { data: users } = useQuery({
     queryKey: ["users-list"],
     queryFn: () => listUsers({ data: {} }),
@@ -100,6 +103,15 @@ export function SetupSteps() {
     (s) => s.status === "enviado" || s.status === "aprovado",
   ).length;
   const approved = (submissions ?? []).filter((s) => s.status === "aprovado").length;
+  const business = (guard ?? []).filter((g) => g.kind === "negocio");
+  const withFloor = business.filter((g) => (g.floor ?? 0) > 0).length;
+  const required = business.reduce((a, g) => a + (g.contribution ?? 0), 0);
+  const unassigned = Number(guardSettings?.unassigned_revenue ?? 0);
+  const guardStatus = guardSettings?.published_at
+    ? `Publicado: ${withFloor} unidades com piso e contribuição exigida de ${fmtBRL(required)}. Os líderes já veem o placar.`
+    : guardSettings?.suggested_at
+      ? `${withFloor} de ${business.length} unidades com piso, contribuição exigida de ${fmtBRL(required)}. Revise pisos e tetos e publique.`
+      : "Defina o resultado alvo e busque o realizado do Omie para sugerir os pisos de receita e os tetos de despesa.";
 
   return (
     <section className="space-y-3">
@@ -125,7 +137,7 @@ export function SetupSteps() {
           title="Folha"
           status={
             payroll?.people
-              ? `${payroll.people} pessoas, ${fmtBRL(payroll.total)} de remuneração no ano. Confira vínculos e meses.`
+              ? `${payroll.people} pessoas, ${fmtBRL(payroll.total)} de remuneração no ano. Confira salários e custos (abra cada pessoa).`
               : "Nenhuma pessoa cadastrada. Importe a planilha da folha."
           }
         >
@@ -142,32 +154,44 @@ export function SetupSteps() {
         </Step>
         <Step
           n={4}
+          done={!!guardSettings?.published_at}
+          title={`Piso e teto (cenário ${scenario?.name ?? "…"})`}
+          status={
+            unassigned > 0 && !guardSettings?.published_at
+              ? `${guardStatus} Há ${fmtBRL(unassigned)} de receita do Omie sem unidade para distribuir nos pisos.`
+              : guardStatus
+          }
+        >
+          <GoTo to="/metas">Abrir piso e teto</GoTo>
+        </Step>
+        <Step
+          n={5}
           done={!!target?.published_at}
-          title={`Meta de receita (cenário ${scenario?.name ?? "…"})`}
+          title="Meta de receita acima do piso (opcional)"
           status={
             target?.published_at
               ? `Publicada: receita necessária de ${fmtBRL(Number(target.required_revenue ?? 0))}. Os líderes já veem a meta.`
               : target?.computed_at
                 ? `Calculada (${fmtBRL(Number(target.required_revenue ?? 0))}), ainda não publicada.`
-                : "Defina o alvo de resultado ou de margem, as participações das unidades e calcule."
+                : "Opcional: uma meta de receita além do piso, por unidade. Fica na aba Meta de receita, em Metas."
           }
         >
           <GoTo to="/metas">Abrir metas</GoTo>
         </Step>
         <Step
-          n={5}
+          n={6}
           done={leaders > 0}
           title="Líderes"
           status={
             leaders
               ? `${leaders} líder(es) com acesso.`
-              : "Nenhum líder com acesso ainda. Libere depois de publicar a meta."
+              : "Nenhum líder com acesso ainda. Libere depois de publicar o piso e teto."
           }
         >
           <GoTo to="/usuarios">Dar acesso</GoTo>
         </Step>
         <Step
-          n={6}
+          n={7}
           done={activeUnits > 0 && approved === activeUnits}
           title="Coleta e aprovação"
           status={`${sent} de ${activeUnits} unidades enviadas, ${approved} aprovadas. Acompanhe na tabela abaixo.`}
@@ -181,6 +205,9 @@ export function SetupSteps() {
 export function LeaderGoal() {
   const { versionId, scenarioId, unitId, unit } = usePlanning();
   const { data: months } = useTargetVsPlan(versionId, scenarioId, unitId);
+  // O líder só recebe o piso e teto depois de publicado.
+  const { data: guard } = useGuardrails(scenarioId);
+  const hasGuardrail = (guard ?? []).some((g) => g.unitId === unitId);
   const sum = (f: (m: NonNullable<typeof months>[number]) => number) =>
     (months ?? []).reduce((a, m) => a + f(m), 0);
   const target = sum((m) => m.target);
@@ -212,8 +239,9 @@ export function LeaderGoal() {
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          O financeiro ainda não publicou a meta. Enquanto isso, você já pode lançar a carteira
-          atual e as renovações.
+          {hasGuardrail
+            ? "O compromisso da unidade é o piso e teto logo abaixo: receita no piso, despesa dentro do teto. Lance a carteira atual, as renovações e as vendas novas."
+            : "O financeiro ainda não publicou a meta. Enquanto isso, você já pode lançar a carteira atual e as renovações."}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
