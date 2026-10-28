@@ -2230,6 +2230,7 @@ export type Database = {
       }
       guardrails_published: { Args: { _scenario_id: string }; Returns: boolean }
       guardrails_suggest: { Args: { _scenario_id: string }; Returns: undefined }
+      has_access: { Args: { _user_id: string }; Returns: boolean }
       has_any_role: {
         Args: {
           _roles: Database["public"]["Enums"]["app_role"][]
