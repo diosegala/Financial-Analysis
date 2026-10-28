@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { MoreHorizontal, Plus, Upload } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Upload } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
@@ -12,8 +12,8 @@ import { parseDate } from "@/lib/people-import";
 import { PageHeader } from "@/components/page-header";
 import { AdjustDialog, FillDialog, PlanGrid } from "@/components/plan-grid";
 import { NamesImportDialog, PeopleImportDialog } from "@/components/people-import";
-import { PayrollDetail } from "@/components/payroll-detail";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PayrollSummary } from "@/components/payroll-detail";
+import { groupBreakdown, usePayrollDetail, type BreakdownMode } from "@/lib/payroll";
 import { MoneyCell } from "@/components/money-cell";
 import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,46 @@ type Dialogs =
   | { type: "names" }
   | null;
 
+interface OpenState {
+  mode: BreakdownMode;
+  open: string[];
+}
+
+/** Os dados da folha calculada da unidade: as linhas de cada pessoa e os totais do ano por grupo. */
+function usePayrollBreakdown(mode: BreakdownMode) {
+  const { versionId, scenarioId, unitId } = usePlanning();
+  const { data, isLoading } = usePayrollDetail(versionId, scenarioId, unitId);
+  const breakdown = useMemo(() => groupBreakdown(data ?? [], mode), [data, mode]);
+  const yearTotals = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of data ?? []) m.set(r.grupo, (m.get(r.grupo) ?? 0) + r.amount);
+    return m;
+  }, [data]);
+  return { ...breakdown, yearTotals, isLoading };
+}
+
+/** Pessoas abertas e o modo das linhas de custo, lembrados neste navegador. */
+function useOpenPeople() {
+  const [state, setState] = useState<OpenState>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("folha.abertas") ?? "null") as OpenState | null;
+      if (saved && Array.isArray(saved.open)) return saved;
+    } catch {
+      // sem armazenamento ou valor inválido: começa fechado
+    }
+    return { mode: "grupo", open: [] };
+  });
+  const save = (next: OpenState) => {
+    setState(next);
+    try {
+      localStorage.setItem("folha.abertas", JSON.stringify(next));
+    } catch {
+      // sem armazenamento: só não lembra
+    }
+  };
+  return { ...state, save };
+}
+
 function FolhaPage() {
   const { unit, version, versionId, unitId, canEdit: unitEditable, lockReason } = usePlanning();
   const { data: user } = useCurrentUser();
@@ -67,12 +107,21 @@ function FolhaPage() {
   const { data: contractTypes } = useContractTypes();
   const { setValues } = usePlanMutations();
   const [dialog, setDialog] = useState<Dialogs>(null);
+  const opened = useOpenPeople();
+  const breakdown = usePayrollBreakdown(opened.mode);
   const canEdit = unitEditable && !!user?.isFinanceiro;
   const ctMap = byId(contractTypes);
   const rows = items ?? [];
   const monthTotals = MONTHS.map((_, i) =>
     rows.reduce((a, r) => a + (r.line.values.get(i + 1) ?? 0), 0),
   );
+  const openSet = new Set(opened.open);
+  const allOpen = rows.length > 0 && rows.every((r) => openSet.has(r.person.id));
+  const toggle = (id: string) =>
+    opened.save({
+      ...opened,
+      open: openSet.has(id) ? opened.open.filter((o) => o !== id) : [...opened.open, id],
+    });
 
   function pasteBlock(rowIndex: number, month: number, block: string[][]) {
     block.forEach((cells, r) => {
@@ -120,39 +169,78 @@ function FolhaPage() {
         }
       />
 
-      <Tabs defaultValue="remuneracao">
-        <TabsList>
-          <TabsTrigger value="remuneracao">Remuneração</TabsTrigger>
-          <TabsTrigger value="detalhe">Salário líquido e encargos</TabsTrigger>
-        </TabsList>
-        <TabsContent value="remuneracao" className="space-y-6">
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
-          ) : (
-            <div className="overflow-x-auto rounded-md border border-border bg-card">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50 text-left">
-                    <th className="sticky left-0 z-10 min-w-56 bg-muted px-3 py-2 font-medium">
-                      Pessoa
+      {rows.length > 0 && <PayrollSummary yearTotals={breakdown.yearTotals} />}
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              opened.save({ ...opened, open: allOpen ? [] : rows.map((r) => r.person.id) })
+            }
+          >
+            {allOpen ? "Fechar todos" : "Abrir todos"}
+          </Button>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Nas linhas abertas:</span>
+            <div className="w-48">
+              <OptionSelect
+                value={opened.mode}
+                onChange={(v) => v && opened.save({ ...opened, mode: v as BreakdownMode })}
+                options={[
+                  { value: "grupo", label: "Resumo por grupo" },
+                  { value: "item", label: "Item a item" },
+                ]}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="space-y-6">
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Carregando…</p>
+        ) : (
+          <div className="overflow-x-auto rounded-md border border-border bg-card">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50 text-left">
+                  <th className="sticky left-0 z-10 min-w-56 bg-muted px-3 py-2 font-medium">
+                    Pessoa
+                  </th>
+                  {MONTHS.map((m) => (
+                    <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
+                      {m}
                     </th>
-                    {MONTHS.map((m) => (
-                      <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
-                        {m}
-                      </th>
-                    ))}
-                    <th className="px-3 py-2 text-right font-medium">Total</th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((item, r) => {
-                    const { person: p, line } = item;
-                    const total = [...line.values.values()].reduce((a, v) => a + v, 0);
-                    return (
-                      <tr key={line.id} className="border-b border-border">
+                  ))}
+                  <th className="px-3 py-2 text-right font-medium">Total</th>
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((item, r) => {
+                  const { person: p, line } = item;
+                  const total = [...line.values.values()].reduce((a, v) => a + v, 0);
+                  const isOpen = openSet.has(p.id);
+                  return (
+                    <Fragment key={line.id}>
+                      <tr className="border-b border-border">
                         <td className="sticky left-0 z-10 bg-card px-3 py-1">
-                          <div className="font-medium">{p.name}</div>
+                          <div className="flex items-center gap-1 font-medium">
+                            <button
+                              type="button"
+                              className="-ml-1 rounded p-0.5 text-muted-foreground hover:bg-muted"
+                              aria-label={isOpen ? `Fechar ${p.name}` : `Abrir ${p.name}`}
+                              aria-expanded={isOpen}
+                              onClick={() => toggle(p.id)}
+                            >
+                              {isOpen ? (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                            {p.name}
+                          </div>
                           <div className="text-xs text-muted-foreground">
                             {[
                               p.external_id && !p.name.startsWith("ID ")
@@ -218,47 +306,82 @@ function FolhaPage() {
                           )}
                         </td>
                       </tr>
-                    );
-                  })}
-                  {rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={15} className="px-3 py-8 text-center text-muted-foreground">
-                        Nenhuma pessoa cadastrada nesta unidade.
+                      {isOpen &&
+                        (breakdown.byPerson.get(p.id) ?? []).map((b) => (
+                          <tr
+                            key={b.label}
+                            className={`border-b border-border/50 bg-muted/20 text-xs ${
+                              b.grupo === "custo_total" ? "font-semibold" : "text-muted-foreground"
+                            }`}
+                          >
+                            <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-9 pr-3">
+                              {b.label}
+                            </td>
+                            {b.months.map((v, i) => (
+                              <td key={i} className="px-2 py-1 text-right font-mono tabular-nums">
+                                {v ? fmtBRL(v) : "—"}
+                              </td>
+                            ))}
+                            <td className="px-3 py-1 text-right font-mono tabular-nums">
+                              {fmtBRL(b.months.reduce((a, v) => a + v, 0))}
+                            </td>
+                            <td />
+                          </tr>
+                        ))}
+                    </Fragment>
+                  );
+                })}
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={15} className="px-3 py-8 text-center text-muted-foreground">
+                      Nenhuma pessoa cadastrada nesta unidade.
+                    </td>
+                  </tr>
+                ) : (
+                  <tr className="border-t border-border bg-muted/30 font-semibold">
+                    <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">
+                      Total ({rows.length} pessoa{rows.length === 1 ? "" : "s"})
+                    </td>
+                    {monthTotals.map((t, i) => (
+                      <td key={i} className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {fmtBRL(t)}
                       </td>
-                    </tr>
-                  ) : (
-                    <tr className="border-t border-border bg-muted/30 font-semibold">
-                      <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">
-                        Total ({rows.length} pessoa{rows.length === 1 ? "" : "s"})
+                    ))}
+                    <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                      {fmtBRL(monthTotals.reduce((a, t) => a + t, 0))}
+                    </td>
+                    <td />
+                  </tr>
+                )}
+                {rows.length > 0 && (
+                  <tr className="bg-muted/30 font-semibold">
+                    <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">
+                      Custo total para a empresa
+                    </td>
+                    {breakdown.totalCost.map((t, i) => (
+                      <td key={i} className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {fmtBRL(t)}
                       </td>
-                      {monthTotals.map((t, i) => (
-                        <td key={i} className="px-2 py-1.5 text-right font-mono tabular-nums">
-                          {fmtBRL(t)}
-                        </td>
-                      ))}
-                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                        {fmtBRL(monthTotals.reduce((a, t) => a + t, 0))}
-                      </td>
-                      <td />
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <h2 className="text-lg font-semibold">Outros lançamentos de folha</h2>
-            <PlanGrid
-              kind="folha"
-              emptyText="Rescisões, bônus ou benefícios específicos entram aqui."
-            />
+                    ))}
+                    <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                      {fmtBRL(breakdown.totalCost.reduce((a, t) => a + t, 0))}
+                    </td>
+                    <td />
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </TabsContent>
-        <TabsContent value="detalhe">
-          <PayrollDetail people={rows} />
-        </TabsContent>
-      </Tabs>
+        )}
+
+        <div className="space-y-2">
+          <h2 className="text-lg font-semibold">Outros lançamentos de folha</h2>
+          <PlanGrid
+            kind="folha"
+            emptyText="Rescisões, bônus ou benefícios específicos entram aqui."
+          />
+        </div>
+      </div>
 
       {dialog?.type === "person" && (
         <PersonDialog person={dialog.person} onClose={() => setDialog(null)} />

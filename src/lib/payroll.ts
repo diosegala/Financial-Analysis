@@ -171,3 +171,62 @@ export function usePayrollDetail(
     },
   });
 }
+
+export const PAYROLL_GROUPS: { group: PayrollGroup; label: string; hint: string }[] = [
+  { group: "bruto", label: "Salário bruto", hint: "O que a pessoa tem direito" },
+  {
+    group: "retencao",
+    label: "INSS e IRRF do empregado",
+    hint: "Retidos do bruto, não são custo extra",
+  },
+  { group: "liquido", label: "Salário líquido", hint: "O que a pessoa recebe" },
+  { group: "encargo", label: "Encargos patronais", hint: "INSS patronal, RAT, terceiros, FGTS…" },
+  { group: "provisao", label: "Provisões", hint: "13º e férias" },
+  { group: "beneficio", label: "Benefícios", hint: "Por pessoa ativa" },
+  { group: "custo_total", label: "Custo total", hint: "Bruto + encargos + provisões + benefícios" },
+];
+
+export type BreakdownMode = "grupo" | "item";
+
+export interface BreakdownLine {
+  label: string;
+  grupo: PayrollGroup;
+  months: number[];
+}
+
+/**
+ * As linhas abaixo de cada pessoa na Folha: por grupo (retenções, líquido, encargos…) ou item a item.
+ * O bruto fica de fora, porque é a própria linha da pessoa.
+ */
+export function groupBreakdown(rows: PayrollDetailRow[], mode: BreakdownMode) {
+  const order = PAYROLL_GROUPS.map((g) => g.group);
+  const labels = new Map(PAYROLL_GROUPS.map((g) => [g.group, g.label]));
+  const byPerson = new Map<string, Map<string, BreakdownLine>>();
+  for (const r of rows) {
+    if (r.grupo === "bruto") continue;
+    const key = mode === "grupo" ? r.grupo : r.item;
+    const lines = byPerson.get(r.person_id) ?? new Map<string, BreakdownLine>();
+    byPerson.set(r.person_id, lines);
+    let line = lines.get(key);
+    if (!line) {
+      line = {
+        label: mode === "grupo" ? (labels.get(r.grupo) ?? r.grupo) : r.item,
+        grupo: r.grupo,
+        months: Array(12).fill(0),
+      };
+      lines.set(key, line);
+    }
+    line.months[r.month - 1] = (line.months[r.month - 1] ?? 0) + r.amount;
+  }
+  const result = new Map<string, BreakdownLine[]>();
+  for (const [person, lines] of byPerson)
+    result.set(
+      person,
+      [...lines.values()].sort((a, b) => order.indexOf(a.grupo) - order.indexOf(b.grupo)),
+    );
+  const totalCost = Array(12).fill(0) as number[];
+  for (const r of rows)
+    if (r.grupo === "custo_total")
+      totalCost[r.month - 1] = (totalCost[r.month - 1] ?? 0) + r.amount;
+  return { byPerson: result, totalCost };
+}
