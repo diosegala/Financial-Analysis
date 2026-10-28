@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedAlertasRouteImport } from './routes/_authenticated/alertas'
 import { Route as AuthenticatedAuditoriaRouteImport } from './routes/_authenticated/auditoria'
 import { Route as AuthenticatedCenariosRouteImport } from './routes/_authenticated/cenarios'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
@@ -40,6 +41,11 @@ const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAlertasRoute = AuthenticatedAlertasRouteImport.update({
+  id: '/alertas',
+  path: '/alertas',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAuditoriaRoute = AuthenticatedAuditoriaRouteImport.update({
   id: '/auditoria',
@@ -116,6 +122,7 @@ const AuthenticatedUsuariosRoute = AuthenticatedUsuariosRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/alertas': typeof AuthenticatedAlertasRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/cenarios': typeof AuthenticatedCenariosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/alertas': typeof AuthenticatedAlertasRoute
   '/auditoria': typeof AuthenticatedAuditoriaRoute
   '/cenarios': typeof AuthenticatedCenariosRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -154,6 +162,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/alertas': typeof AuthenticatedAlertasRoute
   '/_authenticated/auditoria': typeof AuthenticatedAuditoriaRoute
   '/_authenticated/cenarios': typeof AuthenticatedCenariosRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -174,6 +183,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/alertas'
     | '/auditoria'
     | '/cenarios'
     | '/configuracoes'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/alertas'
     | '/auditoria'
     | '/cenarios'
     | '/configuracoes'
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/alertas'
     | '/_authenticated/auditoria'
     | '/_authenticated/cenarios'
     | '/_authenticated/configuracoes'
@@ -255,6 +267,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/alertas': {
+      id: '/_authenticated/alertas'
+      path: '/alertas'
+      fullPath: '/alertas'
+      preLoaderRoute: typeof AuthenticatedAlertasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/auditoria': {
       id: '/_authenticated/auditoria'
@@ -358,6 +377,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAlertasRoute: typeof AuthenticatedAlertasRoute
   AuthenticatedAuditoriaRoute: typeof AuthenticatedAuditoriaRoute
   AuthenticatedCenariosRoute: typeof AuthenticatedCenariosRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
@@ -375,6 +395,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAlertasRoute: AuthenticatedAlertasRoute,
   AuthenticatedAuditoriaRoute: AuthenticatedAuditoriaRoute,
   AuthenticatedCenariosRoute: AuthenticatedCenariosRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
