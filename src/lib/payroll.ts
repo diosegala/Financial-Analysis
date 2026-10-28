@@ -22,7 +22,7 @@ export function usePersonLines(versionId: string | null, unitId: string | null) 
     queryFn: async (): Promise<PersonLine[]> => {
       const { data, error } = await supabase
         .from("plan_lines")
-        .select("*, plan_values(month, amount), people!inner(*)")
+        .select("*, plan_values(month, amount), people!plan_lines_person_id_fkey!inner(*)")
         .eq("version_id", versionId!)
         .eq("unit_id", unitId!)
         .not("person_id", "is", null);
@@ -62,6 +62,7 @@ export function usePeopleMutations() {
       queryClient.invalidateQueries({ queryKey: ["plan_lines"] }),
       queryClient.invalidateQueries({ queryKey: ["dre"] }),
       queryClient.invalidateQueries({ queryKey: ["payroll_detail"] }),
+      queryClient.invalidateQueries({ queryKey: ["person_benefits"] }),
     ]);
   }
   async function run(p: PromiseLike<{ error: { message: string } | null }>) {
@@ -229,4 +230,96 @@ export function groupBreakdown(rows: PayrollDetailRow[], mode: BreakdownMode) {
     if (r.grupo === "custo_total")
       totalCost[r.month - 1] = (totalCost[r.month - 1] ?? 0) + r.amount;
   return { byPerson: result, totalCost };
+}
+
+/** Valor mensal de cada benefício por pessoa da unidade (pessoa → conta → valor). */
+export function usePersonBenefits(versionId: string | null, unitId: string | null) {
+  return useQuery({
+    queryKey: ["person_benefits", versionId, unitId],
+    enabled: !!versionId && !!unitId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("person_benefits")
+        .select("person_id, account_id, amount, people!inner(version_id, unit_id)")
+        .eq("people.version_id", versionId!)
+        .eq("people.unit_id", unitId!);
+      if (error) throw error;
+      const m = new Map<string, Map<string, number>>();
+      for (const r of data ?? []) {
+        const row = m.get(r.person_id) ?? new Map<string, number>();
+        row.set(r.account_id, Number(r.amount));
+        m.set(r.person_id, row);
+      }
+      return m;
+    },
+  });
+}
+
+/** Total da base do Omie de cada benefício que já passou a ser lançado por pessoa (conta → valor no ano). */
+export function useBenefitBases(versionId: string | null, unitId: string | null) {
+  return useQuery({
+    queryKey: ["benefit_bases", versionId, unitId],
+    enabled: !!versionId && !!unitId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("benefit_bases")
+        .select("account_id, amount")
+        .eq("version_id", versionId!)
+        .eq("unit_id", unitId!);
+      if (error) throw error;
+      return new Map((data ?? []).map((r) => [r.account_id, Number(r.amount)]));
+    },
+  });
+}
+
+export function useBenefitMutations() {
+  const queryClient = useQueryClient();
+  const refresh = () =>
+    Promise.all(
+      [
+        "person_benefits",
+        "benefit_bases",
+        "plan_lines",
+        "payroll_detail",
+        "dre",
+        "target_vs_plan",
+      ].map((k) => queryClient.invalidateQueries({ queryKey: [k] })),
+    );
+  const fail = (e: { message: string } | null) => {
+    if (e) toast.error(friendlyError(e.message));
+    return !e;
+  };
+  return {
+    /** Grava vários valores de uma vez (colar da planilha); zero ou vazio tira o benefício da pessoa. */
+    async setBenefits(cells: { personId: string; accountId: string; amount: number }[]) {
+      const keep = cells.filter((c) => c.amount > 0);
+      const drop = cells.filter((c) => c.amount <= 0);
+      let error: { message: string } | null = null;
+      if (keep.length) {
+        ({ error } = await supabase.from("person_benefits").upsert(
+          keep.map((c) => ({ person_id: c.personId, account_id: c.accountId, amount: c.amount })),
+          { onConflict: "person_id,account_id" },
+        ));
+      }
+      for (const c of drop) {
+        if (error) break;
+        ({ error } = await supabase
+          .from("person_benefits")
+          .delete()
+          .eq("person_id", c.personId)
+          .eq("account_id", c.accountId));
+      }
+      await refresh();
+      return fail(error);
+    },
+    async distribute(versionId: string, unitId: string) {
+      const { data, error } = await supabase.rpc("distribute_benefits", {
+        _version_id: versionId,
+        _unit_id: unitId,
+      });
+      await refresh();
+      if (!error) toast.success(`${data} benefício(s) distribuído(s) entre as pessoas.`);
+      return fail(error);
+    },
+  };
 }

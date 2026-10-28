@@ -98,6 +98,7 @@ export type Database = {
           kind: string
           name: string
           omie_category_code: string | null
+          per_person: boolean
           period: string | null
           sort_order: number
           treatment: string
@@ -116,6 +117,7 @@ export type Database = {
           kind: string
           name: string
           omie_category_code?: string | null
+          per_person?: boolean
           period?: string | null
           sort_order?: number
           treatment?: string
@@ -134,6 +136,7 @@ export type Database = {
           kind?: string
           name?: string
           omie_category_code?: string | null
+          per_person?: boolean
           period?: string | null
           sort_order?: number
           treatment?: string
@@ -313,6 +316,58 @@ export type Database = {
           table_name?: string
         }
         Relationships: []
+      }
+      benefit_bases: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          id: string
+          unit_id: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          id?: string
+          unit_id: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          id?: string
+          unit_id?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "benefit_bases_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "benefit_bases_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "benefit_bases_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       budget_versions: {
         Row: {
@@ -1298,9 +1353,52 @@ export type Database = {
           },
         ]
       }
+      person_benefits: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          id: string
+          person_id: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          id?: string
+          person_id: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          id?: string
+          person_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "person_benefits_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_benefits_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_lines: {
         Row: {
           account_id: string
+          benefit_person_id: string | null
           client_id: string | null
           condition_note: string | null
           conditional: boolean
@@ -1322,6 +1420,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
+          benefit_person_id?: string | null
           client_id?: string | null
           condition_note?: string | null
           conditional?: boolean
@@ -1343,6 +1442,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
+          benefit_person_id?: string | null
           client_id?: string | null
           condition_note?: string | null
           conditional?: boolean
@@ -1368,6 +1468,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_benefit_person_id_fkey"
+            columns: ["benefit_person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
             referencedColumns: ["id"]
           },
           {
@@ -2096,6 +2203,7 @@ export type Database = {
           kind: string
           name: string
           omie_category_code: string | null
+          per_person: boolean
           period: string | null
           sort_order: number
           treatment: string
@@ -2176,6 +2284,10 @@ export type Database = {
           _year: number
         }
         Returns: string
+      }
+      distribute_benefits: {
+        Args: { _unit_id: string; _version_id: string }
+        Returns: number
       }
       dre_report: {
         Args: {
@@ -2442,6 +2554,7 @@ export type Database = {
           kind: string
           name: string
           omie_category_code: string | null
+          per_person: boolean
           period: string | null
           sort_order: number
           treatment: string
@@ -2517,6 +2630,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      sync_person_benefits: { Args: { _person_id: string }; Returns: undefined }
       target_gap: {
         Args: { _scenario_id: string }
         Returns: {

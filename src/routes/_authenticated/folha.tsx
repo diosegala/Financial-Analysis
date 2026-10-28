@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/page-header";
 import { AdjustDialog, FillDialog, PlanGrid } from "@/components/plan-grid";
 import { NamesImportDialog, PeopleImportDialog } from "@/components/people-import";
 import { PayrollSummary } from "@/components/payroll-detail";
+import { BenefitsGrid } from "@/components/benefits-grid";
 import { groupBreakdown, usePayrollDetail, type BreakdownMode } from "@/lib/payroll";
 import { MoneyCell } from "@/components/money-cell";
 import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
@@ -374,11 +375,13 @@ function FolhaPage() {
           </div>
         )}
 
+        <BenefitsGrid people={rows} canEdit={canEdit} />
+
         <div className="space-y-2">
           <h2 className="text-lg font-semibold">Outros lançamentos de folha</h2>
           <PlanGrid
             kind="folha"
-            emptyText="Rescisões, bônus ou benefícios específicos entram aqui."
+            emptyText="Rescisões, confraternizações e outros custos de folha que não são por pessoa entram aqui."
           />
         </div>
       </div>

@@ -491,6 +491,13 @@ function AccountsTab() {
             emptyLabel: "Todas",
           },
           {
+            key: "per_person",
+            label: "Benefício por pessoa",
+            type: "boolean",
+            hideInTable: true,
+            hint: "Só para contas de Folha: o valor é lançado por pessoa na Folha (ex.: assistência médica).",
+          },
+          {
             key: "generates_tax_credit",
             label: "Gera crédito de PIS/COFINS",
             type: "boolean",
@@ -506,6 +513,7 @@ function AccountsTab() {
           active: true,
           sort_order: 0,
           generates_tax_credit: false,
+          per_person: false,
         }}
       />
     </div>
