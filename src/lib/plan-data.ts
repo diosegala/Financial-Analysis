@@ -51,7 +51,9 @@ export function usePlanLines(
           .eq("unit_id", unitId!)
           .eq("accounts.kind", kind)
           // A remuneração das pessoas tem grade própria, na Folha.
-          .is("person_id", null);
+          .is("person_id", null)
+          // Benefícios por pessoa têm grade própria, na Folha.
+          .is("benefit_person_id", null);
         const { data: page, error } = await (
           eventId ? base.eq("event_id", eventId) : base.is("event_id", null)
         )
