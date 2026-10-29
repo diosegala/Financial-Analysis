@@ -835,6 +835,13 @@ function CalcRulesTab() {
           hint: "Só para bases de remuneração e pessoas ativas: define onde o valor aparece no detalhe por colaborador.",
         },
         {
+          key: "on_provisions",
+          label: "Incide sobre as provisões",
+          type: "boolean",
+          hideInTable: true,
+          hint: "Só para encargos sobre a remuneração: aplica o percentual também sobre as provisões de 13º e férias.",
+        },
+        {
           key: "revenue_type_ids",
           label: "Só os tipos de receita",
           type: "multi",
@@ -867,7 +874,7 @@ function CalcRulesTab() {
         active,
         order,
       ]}
-      defaults={{ base_kind: "receita", active: true, sort_order: 0 }}
+      defaults={{ base_kind: "receita", active: true, sort_order: 0, on_provisions: false }}
     />
   );
 }
