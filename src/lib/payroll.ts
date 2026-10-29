@@ -182,7 +182,11 @@ export const PAYROLL_GROUPS: { group: PayrollGroup; label: string; hint: string 
   },
   { group: "liquido", label: "Salário líquido", hint: "O que a pessoa recebe" },
   { group: "encargo", label: "Encargos patronais", hint: "INSS patronal, RAT, terceiros, FGTS…" },
-  { group: "provisao", label: "Provisões", hint: "13º e férias, com os encargos sobre eles" },
+  {
+    group: "provisao",
+    label: "13º e férias",
+    hint: "13º em parcelas e terço de férias, com encargos",
+  },
   { group: "beneficio", label: "Benefícios", hint: "Por pessoa ativa" },
   { group: "custo_total", label: "Custo total", hint: "Bruto + encargos + provisões + benefícios" },
 ];
@@ -262,6 +266,24 @@ export function usePersonBenefits(versionId: string | null, unitId: string | nul
 }
 
 /** Total da base do Omie de cada benefício que já passou a ser lançado por pessoa (conta → valor no ano). */
+/** Reajuste de cada benefício na versão: X% a partir do mês, para todas as pessoas. */
+export function useBenefitAdjustments(versionId: string | null) {
+  return useQuery({
+    queryKey: ["benefit_adjustments", versionId],
+    enabled: !!versionId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("benefit_adjustments")
+        .select("account_id, month, pct")
+        .eq("version_id", versionId!);
+      if (error) throw error;
+      return new Map(
+        (data ?? []).map((r) => [r.account_id, { month: r.month, pct: Number(r.pct) }]),
+      );
+    },
+  });
+}
+
 export function useBenefitBases(versionId: string | null, unitId: string | null) {
   return useQuery({
     queryKey: ["benefit_bases", versionId, unitId],
@@ -285,6 +307,7 @@ export function useBenefitMutations() {
       [
         "person_benefits",
         "benefit_bases",
+        "benefit_adjustments",
         "plan_lines",
         "payroll_detail",
         "dre",
@@ -315,6 +338,23 @@ export function useBenefitMutations() {
           .eq("person_id", c.personId)
           .eq("account_id", c.accountId));
       }
+      await refresh();
+      return fail(error);
+    },
+    /** Grava o reajuste do benefício (pct em fração; zero tira o reajuste). */
+    async setAdjustment(versionId: string, accountId: string, month: number, pct: number) {
+      const { error } = pct
+        ? await supabase
+            .from("benefit_adjustments")
+            .upsert(
+              { version_id: versionId, account_id: accountId, month, pct },
+              { onConflict: "version_id,account_id" },
+            )
+        : await supabase
+            .from("benefit_adjustments")
+            .delete()
+            .eq("version_id", versionId)
+            .eq("account_id", accountId);
       await refresh();
       return fail(error);
     },

@@ -16,6 +16,7 @@ import {
   useOmieDepartmentUnits,
   useOmieKeywordUnits,
   usePayrollBrackets,
+  usePayrollCalendar,
   usePayrollConstants,
   useClients,
   useContractTypes,
@@ -604,33 +605,73 @@ function RevenueTypesTab() {
 function ContractTypesTab() {
   const { data: types } = useContractTypes();
   const { data: accounts } = useAccounts();
+  const { data: calendar } = usePayrollCalendar();
   return (
-    <CrudTable
-      table="contract_types"
-      rows={types ?? []}
-      description="Encargos, provisões e benefícios de cada vínculo são informados na página Parâmetros."
-      fields={[
-        { key: "name", label: "Nome", type: "text", required: true },
-        {
-          key: "account_id",
-          label: "Conta da remuneração",
-          type: "select",
-          required: true,
-          options: opts(
-            (accounts ?? []).filter((a) => a.kind === "folha" && a.treatment === "lancavel"),
-          ),
-        },
-        {
-          key: "role_keywords",
-          label: "Palavras no cargo",
-          type: "tags",
-          hint: "Separe por vírgula. Na importação da folha, cargos com estas palavras sugerem este vínculo. Ex.: estagio, estagiario.",
-        },
-        active,
-        order,
-      ]}
-      defaults={{ active: true, sort_order: 0 }}
-    />
+    <div className="space-y-8">
+      <CrudTable
+        table="contract_types"
+        rows={types ?? []}
+        description="Encargos, 13º, terço de férias e benefícios de cada vínculo são informados na página Parâmetros."
+        fields={[
+          { key: "name", label: "Nome", type: "text", required: true },
+          {
+            key: "account_id",
+            label: "Conta da remuneração",
+            type: "select",
+            required: true,
+            options: opts(
+              (accounts ?? []).filter((a) => a.kind === "folha" && a.treatment === "lancavel"),
+            ),
+          },
+          {
+            key: "role_keywords",
+            label: "Palavras no cargo",
+            type: "tags",
+            hint: "Separe por vírgula. Na importação da folha, cargos com estas palavras sugerem este vínculo. Ex.: estagio, estagiario.",
+          },
+          {
+            key: "withholds",
+            label: "Desconta INSS e IRRF pela tabela",
+            type: "boolean",
+            hint: "Desligado (ex.: sócios), o salário líquido só desconta o IRRF informado em cada pessoa.",
+          },
+          active,
+          order,
+        ]}
+        defaults={{ active: true, sort_order: 0, withholds: true }}
+      />
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Calendário do 13º e das férias</h2>
+        <CrudTable
+          table="payroll_calendar"
+          rows={calendar ?? []}
+          description="Em que mês a folha paga o 13º e o terço de férias. 13º: cada linha é uma parcela, em fração do 13º do ano (0,5 = metade); as parcelas somam 1, e os descontos e encargos do 13º saem na última. Férias: cada linha é um período, em dias; entra o terço sobre esses dias no mês (o resto é salário adiantado). Quem recebe cada um, por vínculo, fica em Parâmetros (13º salário e Terço de férias)."
+          fields={[
+            {
+              key: "kind",
+              label: "Tipo",
+              type: "select",
+              required: true,
+              options: [
+                { value: "decimo_terceiro", label: "13º salário" },
+                { value: "ferias", label: "Férias" },
+              ],
+            },
+            {
+              key: "month",
+              label: "Mês",
+              type: "select",
+              required: true,
+              options: MONTH_OPTIONS,
+            },
+            { key: "share", label: "Parcela do 13º (fração)", type: "number" },
+            { key: "days", label: "Dias de férias", type: "number", integer: true },
+            { key: "note", label: "Observação", type: "text" },
+          ]}
+          defaults={{ kind: "decimo_terceiro" }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -836,10 +877,10 @@ function CalcRulesTab() {
         },
         {
           key: "on_provisions",
-          label: "Incide sobre as provisões",
+          label: "Incide sobre 13º e férias",
           type: "boolean",
           hideInTable: true,
-          hint: "Só para encargos sobre a remuneração: aplica o percentual também sobre as provisões de 13º e férias.",
+          hint: "Só para encargos sobre a remuneração: aplica o percentual também sobre o 13º e o terço de férias.",
         },
         {
           key: "revenue_type_ids",

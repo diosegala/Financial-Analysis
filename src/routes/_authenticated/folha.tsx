@@ -141,7 +141,7 @@ function FolhaPage() {
         title="Folha"
         subtitle={`${unit?.name ?? "…"} · ${version?.name ?? "…"} · ${
           canEdit
-            ? "A remuneração de cada pessoa é editável mês a mês. Encargos, provisões e benefícios são calculados pelos parâmetros."
+            ? "A remuneração de cada pessoa é editável mês a mês. Encargos, 13º, férias e benefícios são calculados pelos parâmetros."
             : (lockReason ?? "Somente o financeiro edita a folha.")
         }`}
         actions={
@@ -418,11 +418,15 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
   );
   const [hire, setHire] = useState(person?.hire_date ?? "");
   const [dependents, setDependents] = useState(String(person?.dependents ?? 0));
+  const [irrf, setIrrf] = useState(
+    person?.irrf_override == null ? "" : String(person.irrf_override).replace(".", ","),
+  );
   const [salary, setSalary] = useState("");
   const [start, setStart] = useState<number | null>(null);
   const [end, setEnd] = useState<number | null>(null);
   const salaryValue = parseNum(salary);
   const dependentsValue = Number(dependents);
+  const irrfValue = irrf.trim() === "" ? null : parseNum(irrf);
   const label = name.trim() || (externalId.trim() ? `ID ${externalId.trim()}` : "");
   const valid =
     label !== "" &&
@@ -430,6 +434,7 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
     (hire === "" || parseDate(hire) !== null) &&
     Number.isInteger(dependentsValue) &&
     dependentsValue >= 0 &&
+    (irrf.trim() === "" || (irrfValue !== null && irrfValue >= 0)) &&
     (!!person || (salaryValue !== null && (!start || !end || start <= end)));
 
   async function save() {
@@ -441,6 +446,7 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
       contract_type_id: contractTypeId!,
       hire_date: hire === "" ? null : parseDate(hire),
       dependents: dependentsValue,
+      irrf_override: irrfValue,
     };
     const ok = person
       ? await updatePerson(person.id, { ...fields, unit_id: personUnitId ?? person.unit_id })
@@ -510,6 +516,17 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
               value={dependents}
               onChange={(e) => setDependents(e.target.value)}
               className="font-mono"
+            />
+          </Field>
+          <Field
+            label="IRRF informado (R$/mês)"
+            hint="Opcional. Substitui o cálculo pela tabela (ex.: sócios)."
+          >
+            <Input
+              value={irrf}
+              onChange={(e) => setIrrf(e.target.value)}
+              className="font-mono"
+              placeholder="pela tabela"
             />
           </Field>
           {!person && (
