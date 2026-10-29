@@ -28,16 +28,20 @@ describe("folha aberta por pessoa", () => {
     { person_id: "a", month: 1, grupo: "retencao", item: "IRRF", amount: 100 },
     { person_id: "a", month: 1, grupo: "liquido", item: "Salário líquido", amount: 4400 },
     { person_id: "a", month: 1, grupo: "encargo", item: "FGTS", amount: 400 },
+    { person_id: "a", month: 1, grupo: "provisao", item: "Provisão de 13º", amount: 417 },
+    { person_id: "a", month: 1, grupo: "provisao", item: "Provisão de férias", amount: 556 },
     { person_id: "a", month: 1, grupo: "custo_total", item: "Custo total", amount: 5400 },
     { person_id: "b", month: 2, grupo: "custo_total", item: "Custo total", amount: 3000 },
   ];
-  it("agrupa por grupo sem repetir o bruto, na ordem da folha", () => {
+  it("agrupa por grupo sem repetir o bruto, na ordem da folha, com as provisões separadas", () => {
     const { byPerson, totalCost } = groupBreakdown(rows, "grupo");
     const a = byPerson.get("a")!;
     expect(a.map((l) => l.label)).toEqual([
       "INSS e IRRF do empregado",
       "Salário líquido",
       "Encargos patronais",
+      "Provisão de 13º",
+      "Provisão de férias",
       "Custo total",
     ]);
     expect(a[0]?.months[0]).toBe(600);
@@ -48,7 +52,7 @@ describe("folha aberta por pessoa", () => {
       groupBreakdown(rows, mode)
         .byPerson.get("a")!
         .reduce((t, l) => t + (l.months[0] ?? 0), 0);
-    expect(groupBreakdown(rows, "item").byPerson.get("a")!.length).toBe(5);
+    expect(groupBreakdown(rows, "item").byPerson.get("a")!.length).toBe(7);
     expect(sum("item")).toBe(sum("grupo"));
   });
 });
