@@ -426,6 +426,7 @@ export type Database = {
           exclude_revenue_type_ids: string[] | null
           id: string
           name: string
+          on_provisions: boolean
           parameter_definition_id: string
           payroll_group: string | null
           revenue_type_ids: string[] | null
@@ -442,6 +443,7 @@ export type Database = {
           exclude_revenue_type_ids?: string[] | null
           id?: string
           name: string
+          on_provisions?: boolean
           parameter_definition_id: string
           payroll_group?: string | null
           revenue_type_ids?: string[] | null
@@ -458,6 +460,7 @@ export type Database = {
           exclude_revenue_type_ids?: string[] | null
           id?: string
           name?: string
+          on_provisions?: boolean
           parameter_definition_id?: string
           payroll_group?: string | null
           revenue_type_ids?: string[] | null
@@ -2507,6 +2510,15 @@ export type Database = {
           month: number
           unit_id: string
         }[]
+      }
+      provision_rate: {
+        Args: {
+          _account_id: string
+          _contract_type_id: string
+          _ref: string
+          _unit_id: string
+        }
+        Returns: number
       }
       publish_guardrails: {
         Args: { _publish?: boolean; _scenario_id: string }

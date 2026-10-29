@@ -182,7 +182,7 @@ export const PAYROLL_GROUPS: { group: PayrollGroup; label: string; hint: string 
   },
   { group: "liquido", label: "Salário líquido", hint: "O que a pessoa recebe" },
   { group: "encargo", label: "Encargos patronais", hint: "INSS patronal, RAT, terceiros, FGTS…" },
-  { group: "provisao", label: "Provisões", hint: "13º e férias" },
+  { group: "provisao", label: "Provisões", hint: "13º e férias, com os encargos sobre eles" },
   { group: "beneficio", label: "Benefícios", hint: "Por pessoa ativa" },
   { group: "custo_total", label: "Custo total", hint: "Bruto + encargos + provisões + benefícios" },
 ];
@@ -224,7 +224,12 @@ export function groupBreakdown(rows: PayrollDetailRow[], mode: BreakdownMode) {
   for (const [person, lines] of byPerson)
     result.set(
       person,
-      [...lines.values()].sort((a, b) => order.indexOf(a.grupo) - order.indexOf(b.grupo)),
+      // Dentro das provisões, cada uma seguida dos encargos sobre ela.
+      [...lines.values()].sort(
+        (a, b) =>
+          order.indexOf(a.grupo) - order.indexOf(b.grupo) ||
+          (a.grupo === "provisao" ? a.label.localeCompare(b.label) : 0),
+      ),
     );
   const totalCost = Array(12).fill(0) as number[];
   for (const r of rows)

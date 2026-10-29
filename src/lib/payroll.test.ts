@@ -30,6 +30,13 @@ describe("folha aberta por pessoa", () => {
     { person_id: "a", month: 1, grupo: "encargo", item: "FGTS", amount: 400 },
     { person_id: "a", month: 1, grupo: "provisao", item: "Provisão de 13º", amount: 417 },
     { person_id: "a", month: 1, grupo: "provisao", item: "Provisão de férias", amount: 556 },
+    {
+      person_id: "a",
+      month: 1,
+      grupo: "provisao",
+      item: "Provisão de 13º · encargos",
+      amount: 145,
+    },
     { person_id: "a", month: 1, grupo: "custo_total", item: "Custo total", amount: 5400 },
     { person_id: "b", month: 2, grupo: "custo_total", item: "Custo total", amount: 3000 },
   ];
@@ -41,6 +48,7 @@ describe("folha aberta por pessoa", () => {
       "Salário líquido",
       "Encargos patronais",
       "Provisão de 13º",
+      "Provisão de 13º · encargos",
       "Provisão de férias",
       "Custo total",
     ]);
@@ -52,7 +60,7 @@ describe("folha aberta por pessoa", () => {
       groupBreakdown(rows, mode)
         .byPerson.get("a")!
         .reduce((t, l) => t + (l.months[0] ?? 0), 0);
-    expect(groupBreakdown(rows, "item").byPerson.get("a")!.length).toBe(7);
+    expect(groupBreakdown(rows, "item").byPerson.get("a")!.length).toBe(8);
     expect(sum("item")).toBe(sum("grupo"));
   });
 });
