@@ -197,7 +197,7 @@ export interface BreakdownLine {
 
 /**
  * As linhas abaixo de cada pessoa na Folha: por grupo (retenções, líquido, encargos…) ou item a item.
- * O bruto fica de fora, porque é a própria linha da pessoa.
+ * O bruto fica de fora, porque é a própria linha da pessoa. As provisões (13º, férias) saem sempre item a item.
  */
 export function groupBreakdown(rows: PayrollDetailRow[], mode: BreakdownMode) {
   const order = PAYROLL_GROUPS.map((g) => g.group);
@@ -205,13 +205,14 @@ export function groupBreakdown(rows: PayrollDetailRow[], mode: BreakdownMode) {
   const byPerson = new Map<string, Map<string, BreakdownLine>>();
   for (const r of rows) {
     if (r.grupo === "bruto") continue;
-    const key = mode === "grupo" ? r.grupo : r.item;
+    const byGroup = mode === "grupo" && r.grupo !== "provisao";
+    const key = byGroup ? r.grupo : r.item;
     const lines = byPerson.get(r.person_id) ?? new Map<string, BreakdownLine>();
     byPerson.set(r.person_id, lines);
     let line = lines.get(key);
     if (!line) {
       line = {
-        label: mode === "grupo" ? (labels.get(r.grupo) ?? r.grupo) : r.item,
+        label: byGroup ? (labels.get(r.grupo) ?? r.grupo) : r.item,
         grupo: r.grupo,
         months: Array(12).fill(0),
       };
@@ -310,6 +311,19 @@ export function useBenefitMutations() {
           .eq("account_id", c.accountId));
       }
       await refresh();
+      return fail(error);
+    },
+    /** Cria uma conta de Folha lançável já marcada como benefício por pessoa (ex.: auxílio home office). */
+    async addBenefit(name: string, dreLineId: string) {
+      const { error } = await supabase.from("accounts").insert({
+        name,
+        kind: "folha",
+        treatment: "lancavel",
+        per_person: true,
+        dre_line_id: dreLineId,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      if (!error) toast.success(`Benefício "${name}" criado.`);
       return fail(error);
     },
     async distribute(versionId: string, unitId: string) {
