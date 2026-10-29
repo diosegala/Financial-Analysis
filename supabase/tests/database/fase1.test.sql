@@ -32,8 +32,8 @@ INSERT INTO user_units (user_id, unit_id) VALUES (pg_temp.id('lid'), pg_temp.id(
 INSERT INTO products (id, name, unit_id, revenue_type_id)
 VALUES (pg_temp.id('produto'), 'Programa X', pg_temp.id('consultoria'), pg_temp.rt('Recorrente 12 meses'));
 
--- Este teste usa os próprios encargos: fora os itens patronais semeados com as tabelas da folha.
-DELETE FROM parameter_values WHERE note = 'Tabelas_Folha_2026_CUPOLA';
+-- Este teste usa os próprios encargos: fora os itens patronais, o 13º e o terço de férias semeados.
+DELETE FROM parameter_values WHERE note IN ('Tabelas_Folha_2026_CUPOLA', 'Regra do financeiro (out/2026)');
 INSERT INTO parameter_values (definition_id, value, valid_from, unit_id, product_id, contract_type_id) VALUES
   (pg_temp.pd('pis'), 0.0165, '2027-01-01', NULL, NULL, NULL),
   (pg_temp.pd('cofins'), 0.076, '2027-01-01', NULL, NULL, NULL),

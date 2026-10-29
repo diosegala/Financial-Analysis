@@ -317,6 +317,51 @@ export type Database = {
         }
         Relationships: []
       }
+      benefit_adjustments: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          month: number
+          pct: number
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          month: number
+          pct: number
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          month?: number
+          pct?: number
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "benefit_adjustments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "benefit_adjustments_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       benefit_bases: {
         Row: {
           account_id: string
@@ -525,6 +570,7 @@ export type Database = {
           role_keywords: string[] | null
           sort_order: number
           updated_at: string
+          withholds: boolean
         }
         Insert: {
           account_id: string
@@ -535,6 +581,7 @@ export type Database = {
           role_keywords?: string[] | null
           sort_order?: number
           updated_at?: string
+          withholds?: boolean
         }
         Update: {
           account_id?: string
@@ -545,6 +592,7 @@ export type Database = {
           role_keywords?: string[] | null
           sort_order?: number
           updated_at?: string
+          withholds?: boolean
         }
         Relationships: [
           {
@@ -1217,6 +1265,39 @@ export type Database = {
           },
         ]
       }
+      payroll_calendar: {
+        Row: {
+          created_at: string
+          days: number | null
+          id: string
+          kind: string
+          month: number
+          note: string | null
+          share: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days?: number | null
+          id?: string
+          kind: string
+          month: number
+          note?: string | null
+          share?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days?: number | null
+          id?: string
+          kind?: string
+          month?: number
+          note?: string | null
+          share?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payroll_tax_brackets: {
         Row: {
           created_at: string
@@ -1293,6 +1374,7 @@ export type Database = {
           external_id: string | null
           hire_date: string | null
           id: string
+          irrf_override: number | null
           name: string
           role_title: string | null
           start_month: number | null
@@ -1309,6 +1391,7 @@ export type Database = {
           external_id?: string | null
           hire_date?: string | null
           id?: string
+          irrf_override?: number | null
           name: string
           role_title?: string | null
           start_month?: number | null
@@ -1325,6 +1408,7 @@ export type Database = {
           external_id?: string | null
           hire_date?: string | null
           id?: string
+          irrf_override?: number | null
           name?: string
           role_title?: string | null
           start_month?: number | null
@@ -2484,6 +2568,23 @@ export type Database = {
           unit_id: string
         }[]
       }
+      payroll_events: {
+        Args: {
+          _scenario_id?: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          account_id: string
+          amount: number
+          charge_base: number
+          contract_type_id: string
+          kind: string
+          month: number
+          person_id: string
+          unit_id: string
+        }[]
+      }
       plan_base_rows: {
         Args: {
           _scenario_id: string
@@ -2510,15 +2611,6 @@ export type Database = {
           month: number
           unit_id: string
         }[]
-      }
-      provision_rate: {
-        Args: {
-          _account_id: string
-          _contract_type_id: string
-          _ref: string
-          _unit_id: string
-        }
-        Returns: number
       }
       publish_guardrails: {
         Args: { _publish?: boolean; _scenario_id: string }

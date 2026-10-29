@@ -3,12 +3,14 @@ import { usePlanning } from "@/lib/planning";
 import { useAccounts } from "@/lib/catalog";
 import { usePlanLines } from "@/lib/plan-data";
 import {
+  useBenefitAdjustments,
   useBenefitBases,
   useBenefitMutations,
   usePersonBenefits,
   type PersonLine,
 } from "@/lib/payroll";
-import { fmtBRL, parseNum } from "@/lib/format";
+import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
+import { MonthSelect } from "@/components/form-fields";
 import { MoneyCell } from "@/components/money-cell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,8 +42,9 @@ export function BenefitsGrid({ people, canEdit }: { people: PersonLine[]; canEdi
   const { data: accounts } = useAccounts();
   const { data: benefits } = usePersonBenefits(versionId, unitId);
   const { data: bases } = useBenefitBases(versionId, unitId);
+  const { data: adjustments } = useBenefitAdjustments(versionId);
   const { data: folhaLines } = usePlanLines(versionId, unitId, "folha");
-  const { setBenefits, distribute, addBenefit } = useBenefitMutations();
+  const { setBenefits, distribute, addBenefit, setAdjustment } = useBenefitMutations();
   const [confirm, setConfirm] = useState(false);
   const [newName, setNewName] = useState<string | null>(null);
 
@@ -68,11 +71,19 @@ export function BenefitsGrid({ people, canEdit }: { people: PersonLine[]; canEdi
     pending.set(l.account_id, (pending.get(l.account_id) ?? 0) + sum);
   }
   const hasPending = cols.some((c) => (pending.get(c.id) ?? 0) > 0);
-  const activeMonths = (p: PersonLine) => [...p.line.values.values()].filter((v) => v > 0).length;
   const amount = (personId: string, accountId: string) =>
     benefits?.get(personId)?.get(accountId) ?? 0;
-  const yearTotal = (accountId: string) =>
-    people.reduce((a, p) => a + amount(p.person.id, accountId) * activeMonths(p), 0);
+  // Soma no ano: o valor mensal em cada mês com salário, reajustado a partir do mês do reajuste.
+  const yearTotal = (accountId: string) => {
+    const adj = adjustments?.get(accountId);
+    return people.reduce((total, p) => {
+      const value = amount(p.person.id, accountId);
+      let sum = 0;
+      for (const [month, salary] of p.line.values)
+        if (salary > 0) sum += adj && month >= adj.month ? value * (1 + adj.pct) : value;
+      return total + sum;
+    }, 0);
+  };
 
   function pasteBlock(row: number, col: number, block: string[][]) {
     const cells = block.flatMap((line, r) =>
@@ -94,9 +105,10 @@ export function BenefitsGrid({ people, canEdit }: { people: PersonLine[]; canEdi
         <div>
           <h2 className="text-lg font-semibold">Benefícios por pessoa</h2>
           <p className="text-sm text-muted-foreground">
-            Valor mensal de cada benefício; vale nos meses em que a pessoa tem salário. Cole da
-            planilha (ex.: fatura da Unimed por beneficiário). Quando a unidade passa a ter o valor
-            por pessoa, a linha da base do Omie daquela conta sai e fica como referência.
+            Valor mensal de cada benefício; vale nos meses em que a pessoa tem salário. O reajuste
+            (última linha) vale para todas as pessoas a partir do mês escolhido. Cole da planilha
+            (ex.: fatura da Unimed por beneficiário). Quando a unidade passa a ter o valor por
+            pessoa, a linha da base do Omie daquela conta sai e fica como referência.
           </p>
         </div>
         {canEdit && (
@@ -178,6 +190,20 @@ export function BenefitsGrid({ people, canEdit }: { people: PersonLine[]; canEdi
                 })}
                 <td />
               </tr>
+              <tr className="bg-muted/30 text-muted-foreground">
+                <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">Reajuste no ano</td>
+                {cols.map((c) => (
+                  <td key={c.id} className="px-2 py-1.5 text-right">
+                    <AdjustmentCell
+                      name={c.name}
+                      value={adjustments?.get(c.id)}
+                      canEdit={canEdit}
+                      onChange={(month, pct) => void setAdjustment(versionId!, c.id, month, pct)}
+                    />
+                  </td>
+                ))}
+                <td />
+              </tr>
             </tbody>
           </table>
         </div>
@@ -239,6 +265,55 @@ export function BenefitsGrid({ people, canEdit }: { people: PersonLine[]; canEdi
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/** Reajuste de um benefício: percentual e mês de início. Zero ou vazio tira o reajuste. */
+function AdjustmentCell({
+  name,
+  value,
+  canEdit,
+  onChange,
+}: {
+  name: string;
+  value: { month: number; pct: number } | undefined;
+  canEdit: boolean;
+  onChange: (month: number, pct: number) => void;
+}) {
+  const shown = value ? String(Math.round(value.pct * 10000) / 100).replace(".", ",") : "";
+  const [pct, setPct] = useState(shown);
+  const [month, setMonth] = useState<number | null>(value?.month ?? null);
+  if (!canEdit)
+    return <span>{value ? `${shown}% a partir de ${MONTHS[value.month - 1]}` : "—"}</span>;
+
+  function commit(nextPct: string, nextMonth: number | null) {
+    const v = parseNum(nextPct) ?? 0;
+    if (v === 0) {
+      if (value) onChange(value.month, 0);
+      return;
+    }
+    if (nextMonth) onChange(nextMonth, v / 100);
+  }
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Input
+        aria-label={`Reajuste de ${name} (%)`}
+        value={pct}
+        placeholder="%"
+        onChange={(e) => setPct(e.target.value)}
+        onBlur={() => pct !== shown && commit(pct, month)}
+        className="h-7 w-14 text-right font-mono text-xs"
+      />
+      <MonthSelect
+        value={month}
+        onChange={(m) => {
+          setMonth(m);
+          commit(pct, m);
+        }}
+        noneLabel="mês"
+        className="h-7 w-24 text-xs"
+      />
     </div>
   );
 }
