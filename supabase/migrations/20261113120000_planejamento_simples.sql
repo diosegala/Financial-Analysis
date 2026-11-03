@@ -75,6 +75,65 @@ ALTER TABLE public.guardrail_settings
 UPDATE public.guardrail_settings SET cost_cut_pct = support_cut_pct;
 ALTER TABLE public.guardrail_units ADD COLUMN base_expense NUMERIC, ADD COLUMN base_payroll NUMERIC;
 
+-- ───────────── Recebimentos do Omie por unidade, mais rápido ─────────────
+CREATE OR REPLACE FUNCTION public.omie_revenue_attribution(_year INT)
+RETURNS TABLE (category_name TEXT, client_code TEXT, client_name TEXT, unit_id UUID, source TEXT,
+  received NUMERIC[], open NUMERIC[])
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  -- O tratamento de cada categoria é procurado uma vez só: há milhares de recebimentos por ano.
+  WITH treat AS MATERIALIZED (
+    SELECT n.name, a.treatment FROM (SELECT DISTINCT name FROM public.omie_categories WHERE is_revenue) n
+    LEFT JOIN LATERAL public.revenue_account_for_category(n.name, _year) a ON true
+  ), base AS (
+    SELECT c.name, r.month, r.amount_received AS got, r.amount_open AS open, du.unit_id AS dept_unit,
+      r.client_code, COALESCE(s.name, '') AS client_name
+    FROM public.omie_receipts r
+    JOIN public.omie_categories c ON c.company_id = r.company_id AND c.code = r.category_code AND c.is_revenue
+    LEFT JOIN public.omie_department_unit du ON du.company_id = r.company_id AND du.department_code = r.department_code
+    LEFT JOIN public.omie_suppliers s ON s.company_id = r.company_id AND s.code = r.client_code
+    LEFT JOIN treat t ON t.name = c.name
+    WHERE r.year = _year
+      -- Com conta no app, vale o tratamento dela; sem conta, só as receitas operacionais (grupo 1.01 do Omie).
+      AND COALESCE(t.treatment, CASE WHEN r.category_code LIKE '1.01.%' THEN 'lancavel' ELSE 'fora_dre' END) <> 'fora_dre'
+  ), names AS (SELECT DISTINCT name FROM base),
+  alloc AS (
+    SELECT n.name, al.unit_id, al.share / SUM(al.share) OVER (PARTITION BY n.name) AS share
+    FROM names n JOIN public.omie_category_allocations al ON public.norm_text(al.category_name) = public.norm_text(n.name)
+  ), kw AS (
+    SELECT DISTINCT ON (n.name) n.name, k.unit_id
+    FROM names n
+    JOIN public.omie_keyword_units k ON public.norm_text(n.name) ~
+      ('(^|[^a-z0-9])' || regexp_replace(public.norm_text(k.keyword), '([.*+?^${}()|\\[\\]\\\\])', '\\\\\\1', 'g') || 's?($|[^a-z0-9])')
+    WHERE NOT EXISTS (SELECT 1 FROM alloc a WHERE a.name = n.name)
+    ORDER BY n.name, k.priority DESC, length(k.keyword) DESC
+  ), resolved AS (
+    SELECT b.name, b.client_code, b.client_name, b.month, b.got * a.share AS got, b.open * a.share AS open, a.unit_id, 'rateio' AS source
+    FROM base b JOIN alloc a ON a.name = b.name
+    UNION ALL
+    SELECT b.name, b.client_code, b.client_name, b.month, b.got, b.open, b.dept_unit, 'departamento'
+    FROM base b WHERE b.dept_unit IS NOT NULL AND NOT EXISTS (SELECT 1 FROM alloc a WHERE a.name = b.name)
+    UNION ALL
+    SELECT b.name, b.client_code, b.client_name, b.month, b.got, b.open, k.unit_id, 'palavra'
+    FROM base b JOIN kw k ON k.name = b.name WHERE b.dept_unit IS NULL
+    UNION ALL
+    SELECT b.name, b.client_code, b.client_name, b.month, b.got, b.open, NULL::UUID, 'sem'
+    FROM base b WHERE b.dept_unit IS NULL
+      AND NOT EXISTS (SELECT 1 FROM alloc a WHERE a.name = b.name) AND NOT EXISTS (SELECT 1 FROM kw k WHERE k.name = b.name)
+  ), m AS (
+    SELECT name, client_code, client_name, unit_id, source, month, SUM(got) AS got, SUM(open) AS open
+    FROM resolved GROUP BY 1, 2, 3, 4, 5, 6
+  ), g AS (
+    SELECT name, client_code, client_name, unit_id, source,
+      array_agg(got ORDER BY month) AS gots, array_agg(month ORDER BY month) AS months,
+      array_agg(open ORDER BY month) AS opens
+    FROM m GROUP BY 1, 2, 3, 4, 5
+  )
+  SELECT g.name, g.client_code, g.client_name, g.unit_id, g.source,
+    ARRAY(SELECT COALESCE(g.gots[array_position(g.months, k)], 0) FROM generate_series(1, 12) k),
+    ARRAY(SELECT COALESCE(g.opens[array_position(g.months, k)], 0) FROM generate_series(1, 12) k)
+  FROM g
+$$;
+
 -- ───────────── Referência do ano base, por unidade, conta e mês ─────────────
 -- A unidade de um valor do Omie: a da atribuição, a menos que a conta seja de outra unidade (a conta manda).
 CREATE OR REPLACE FUNCTION public.owner_unit(_attributed UUID, _account_units UUID[]) RETURNS UUID
