@@ -150,7 +150,7 @@ function PlanoPage() {
               <Button
                 size="sm"
                 className="gap-1.5"
-                disabled={busy || !settings}
+                disabled={busy || !settings?.suggested_at}
                 onClick={() => void run(() => m.publish(!published))}
               >
                 {published ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
@@ -185,7 +185,7 @@ function PlanoPage() {
           {lastSync &&
             `Omie lido pela última vez em ${new Date(lastSync).toLocaleDateString("pt-BR")}. `}
           {settings?.suggested_at
-            ? `Ano base ${settings.base_year}: realizado do Omie até o último mês fechado, com os meses que faltam projetados. Limite = custo-base × (1 − corte). Custo-base = despesas no Omie + custo atual da folha. Para um caso especial, digite o limite ou a receita da unidade; vazio volta para o cálculo.`
+            ? `Ano base ${settings.base_year}: realizado do Omie até o último mês fechado, com os meses que faltam projetados. Limite de despesas = despesas de 2026 no Omie menos o corte. Limite de folha = custo atual da folha menos o corte. Para um caso especial, digite o valor; vazio volta para o cálculo.`
             : "Clique em Calcular com o realizado de 2026 para obter a receita e o custo-base de cada unidade."}
           {Number(settings?.unassigned_revenue ?? 0) > 0 &&
             ` Há ${fmtBRL(Number(settings?.unassigned_revenue))} de receita do Omie sem unidade: distribua digitando a receita das unidades.`}
@@ -214,8 +214,8 @@ function PlanoPage() {
               <th className="px-3 py-2 font-medium">Unidade</th>
               <th className="px-3 py-2 text-right font-medium">Receita-compromisso</th>
               <th className="px-3 py-2 text-right font-medium">Receita lançada</th>
-              <th className="px-3 py-2 text-right font-medium">Custo-base</th>
-              <th className="px-3 py-2 text-right font-medium">Limite de custos</th>
+              <th className="px-3 py-2 text-right font-medium">Limite de despesas</th>
+              <th className="px-3 py-2 text-right font-medium">Limite de folha</th>
               <th className="px-3 py-2 text-right font-medium">Custos lançados</th>
               <th className="px-3 py-2 text-right font-medium">Situação</th>
               <th className="px-3 py-2 text-right font-medium">Resultado</th>
@@ -264,23 +264,33 @@ function PlanoPage() {
                   <td className="px-3 py-1.5 text-right font-mono tabular-nums">
                     {fmtBRL(g.plannedRevenue)}
                   </td>
-                  <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                    {fmtBRL(g.baseExpense + g.basePayroll)}
+                  <td className="px-3 py-1.5 text-right">
+                    <NumberCell
+                      label={`Limite de despesas de ${name}`}
+                      value={t?.expense_limit != null ? Number(t.expense_limit) : null}
+                      placeholder={fmtBRL(g.expenseLimitAuto)}
+                      disabled={locked}
+                      onSave={(v) => void m.saveUnit(g.unitId, { expense_limit: v })}
+                    />
                   </td>
                   <td className="px-3 py-1.5 text-right">
                     <NumberCell
-                      label={`Limite de ${name}`}
-                      value={t?.ceiling_amount != null ? Number(t.ceiling_amount) : null}
-                      placeholder={fmtBRL(g.ceilingSuggested)}
+                      label={`Limite de folha de ${name}`}
+                      value={t?.payroll_limit != null ? Number(t.payroll_limit) : null}
+                      placeholder={fmtBRL(g.payrollLimitAuto)}
                       disabled={locked}
-                      onSave={(v) => void m.saveUnit(g.unitId, { ceiling_amount: v })}
+                      onSave={(v) => void m.saveUnit(g.unitId, { payroll_limit: v })}
                     />
                   </td>
                   <td className="px-3 py-1.5 text-right font-mono tabular-nums">
                     {fmtBRL(plannedCosts(g))}
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-right">
-                    <Situation planned={plannedCosts(g)} limit={g.ceiling} />
+                    <Situation
+                      planned={plannedCosts(g)}
+                      limit={g.ceiling}
+                      pending={!settings?.suggested_at}
+                    />
                   </td>
                   <td
                     className={`px-3 py-1.5 text-right font-mono tabular-nums ${
@@ -346,10 +356,10 @@ function PlanoPage() {
                   {fmtBRL(sumBy((g) => g.plannedRevenue))}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                  {fmtBRL(sumBy((g) => g.baseExpense + g.basePayroll))}
+                  {fmtBRL(sumBy((g) => g.expenseLimit))}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                  {fmtBRL(sumBy((g) => g.ceiling))}
+                  {fmtBRL(sumBy((g) => g.payrollLimit))}
                 </td>
                 <td className="px-3 py-1.5 text-right font-mono tabular-nums">
                   {fmtBRL(sumBy(plannedCosts))}

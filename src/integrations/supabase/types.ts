@@ -153,6 +153,100 @@ export type Database = {
           },
         ]
       }
+      actual_adjustments: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          month: number
+          note: string
+          unit_id: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month: number
+          note: string
+          unit_id: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          month?: number
+          note?: string
+          unit_id?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actual_adjustments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_adjustments_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_adjustments_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_settings: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          key_last4: string | null
+          key_updated_at: string | null
+          key_updated_by: string | null
+          model: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          key_last4?: string | null
+          key_updated_at?: string | null
+          key_updated_by?: string | null
+          model?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          key_last4?: string | null
+          key_updated_at?: string | null
+          key_updated_by?: string | null
+          model?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       alert_summaries: {
         Row: {
           created_at: string
@@ -417,6 +511,7 @@ export type Database = {
       budget_versions: {
         Row: {
           base_version_id: string | null
+          closed_month: number
           created_at: string
           first_editable_month: number
           id: string
@@ -429,6 +524,7 @@ export type Database = {
         }
         Insert: {
           base_version_id?: string | null
+          closed_month?: number
           created_at?: string
           first_editable_month?: number
           id?: string
@@ -441,6 +537,7 @@ export type Database = {
         }
         Update: {
           base_version_id?: string | null
+          closed_month?: number
           created_at?: string
           first_editable_month?: number
           id?: string
@@ -600,6 +697,54 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dre_analyses: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          model: string | null
+          unit_id: string | null
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          model?: string | null
+          unit_id?: string | null
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          model?: string | null
+          unit_id?: string | null
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dre_analyses_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dre_analyses_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -783,12 +928,14 @@ export type Database = {
           base_expense: number | null
           base_payroll: number | null
           ceiling_amount: number | null
+          expense_limit: number | null
           floor_actual: number | null
           floor_amount: number | null
           floor_projected: number | null
           id: string
           manual_share: number | null
           note: string | null
+          payroll_limit: number | null
           scenario_id: string
           unit_id: string
           updated_at: string
@@ -797,12 +944,14 @@ export type Database = {
           base_expense?: number | null
           base_payroll?: number | null
           ceiling_amount?: number | null
+          expense_limit?: number | null
           floor_actual?: number | null
           floor_amount?: number | null
           floor_projected?: number | null
           id?: string
           manual_share?: number | null
           note?: string | null
+          payroll_limit?: number | null
           scenario_id: string
           unit_id: string
           updated_at?: string
@@ -811,12 +960,14 @@ export type Database = {
           base_expense?: number | null
           base_payroll?: number | null
           ceiling_amount?: number | null
+          expense_limit?: number | null
           floor_actual?: number | null
           floor_amount?: number | null
           floor_projected?: number | null
           id?: string
           manual_share?: number | null
           note?: string | null
+          payroll_limit?: number | null
           scenario_id?: string
           unit_id?: string
           updated_at?: string
@@ -1624,6 +1775,70 @@ export type Database = {
           },
         ]
       }
+      plan_shifts: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          created_by: string | null
+          from_month: number
+          id: string
+          note: string
+          to_month: number
+          unit_id: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          from_month: number
+          id?: string
+          note: string
+          to_month: number
+          unit_id: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          from_month?: number
+          id?: string
+          note?: string
+          to_month?: number
+          unit_id?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_shifts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_shifts_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_shifts_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_values: {
         Row: {
           amount: number
@@ -2285,6 +2500,22 @@ export type Database = {
       }
     }
     Functions: {
+      account_compare: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          account_id: string
+          actual: number
+          base: number
+          kind: string
+          month: number
+          name: string
+          planned: number
+        }[]
+      }
       account_for_category: {
         Args: { _name: string; _plan_year: number }
         Returns: {
@@ -2315,9 +2546,35 @@ export type Database = {
       }
       account_kind: { Args: { _account_id: string }; Returns: string }
       accounts_in_use: { Args: never; Returns: string[] }
+      actual_rows: {
+        Args: { _scenario_id: string; _version_id: string }
+        Returns: {
+          account_id: string
+          amount: number
+          dre_line_id: string
+          month: number
+          unit_id: string
+        }[]
+      }
+      actual_unmatched: {
+        Args: { _version_id: string }
+        Returns: {
+          amount: number
+          category_name: string
+          issue: string
+        }[]
+      }
       adjust_generated_lines: {
         Args: { _pct: number; _version_id: string }
         Returns: number
+      }
+      ai_runtime_config: {
+        Args: never
+        Returns: {
+          api_key: string
+          enabled: boolean
+          model: string
+        }[]
       }
       alert_setting: {
         Args: { _default: number; _key: string }
@@ -2331,6 +2588,7 @@ export type Database = {
         Args: { _month: number; _unit_id: string; _version_id: string }
         Returns: undefined
       }
+      can_see_units: { Args: { _unit_ids: string[] }; Returns: boolean }
       can_write_line: {
         Args: { _line_id: string; _user_id: string }
         Returns: boolean
@@ -2344,6 +2602,7 @@ export type Database = {
         Args: { _name: string; _year: number }
         Returns: boolean
       }
+      clear_ai_key: { Args: never; Returns: undefined }
       compute_targets: {
         Args: { _scenario_id: string }
         Returns: {
@@ -2385,6 +2644,20 @@ export type Database = {
         Args: { _unit_id: string; _version_id: string }
         Returns: number
       }
+      dre_compare: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          actual: number
+          dre_line_id: string
+          forecast: number
+          month: number
+          planned: number
+        }[]
+      }
       dre_report: {
         Args: {
           _scenario_id: string
@@ -2423,11 +2696,14 @@ export type Database = {
           base_expense: number
           base_payroll: number
           ceiling: number
-          ceiling_suggested: number
+          expense_limit: number
+          expense_limit_auto: number
           floor_amount: number
           floor_net: number
           floor_suggested: number
           kind: string
+          payroll_limit: number
+          payroll_limit_auto: number
           planned_expense: number
           planned_payroll: number
           planned_revenue: number
@@ -2554,6 +2830,10 @@ export type Database = {
           source: string
           unit_id: string
         }[]
+      }
+      owner_unit: {
+        Args: { _account_units: string[]; _attributed: string }
+        Returns: string
       }
       param_value: {
         Args: {
@@ -2736,6 +3016,7 @@ export type Database = {
         Args: { _person_id: string; _reset?: boolean }
         Returns: string
       }
+      set_ai_key: { Args: { _key: string }; Returns: undefined }
       set_line_condition: {
         Args: {
           _condition_note?: string

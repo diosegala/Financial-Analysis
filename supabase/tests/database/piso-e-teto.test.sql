@@ -65,12 +65,12 @@ SELECT is((SELECT base_payroll FROM guardrail_units WHERE scenario_id = pg_temp.
 UPDATE guardrail_settings SET cost_cut_pct = 0.1 WHERE scenario_id = pg_temp.id('cenario');
 SELECT is((SELECT ceiling FROM guardrails(pg_temp.id('cenario')) WHERE unit_id = pg_temp.id('agencia')), 21600::NUMERIC,
   'Limite = custo-base menos o corte');
-SELECT is((SELECT ceiling_suggested FROM guardrails(pg_temp.id('cenario')) WHERE unit_id = pg_temp.id('rh')), 0::NUMERIC,
+SELECT is((SELECT ceiling FROM guardrails(pg_temp.id('cenario')) WHERE unit_id = pg_temp.id('rh')), 0::NUMERIC,
   'Área de apoio segue a mesma regra');
-UPDATE guardrail_units SET ceiling_amount = 20000 WHERE scenario_id = pg_temp.id('cenario') AND unit_id = pg_temp.id('agencia');
-SELECT is((SELECT ceiling FROM guardrails(pg_temp.id('cenario')) WHERE unit_id = pg_temp.id('agencia')), 20000::NUMERIC,
-  'Limite digitado vale mais que o calculado');
-UPDATE guardrail_units SET ceiling_amount = NULL, floor_amount = 3000 WHERE scenario_id = pg_temp.id('cenario') AND unit_id = pg_temp.id('agencia');
+UPDATE guardrail_units SET payroll_limit = 9000 WHERE scenario_id = pg_temp.id('cenario') AND unit_id = pg_temp.id('agencia');
+SELECT is((SELECT ceiling FROM guardrails(pg_temp.id('cenario')) WHERE unit_id = pg_temp.id('agencia')), 19800::NUMERIC,
+  'Limite de folha digitado: 10.800 de despesas + 9.000 de folha');
+UPDATE guardrail_units SET payroll_limit = NULL, floor_amount = 3000 WHERE scenario_id = pg_temp.id('cenario') AND unit_id = pg_temp.id('agencia');
 SELECT is((SELECT floor_amount FROM guardrails(pg_temp.id('cenario')) WHERE unit_id = pg_temp.id('agencia')), 3000::NUMERIC,
   'Receita-compromisso digitada vale mais que a sugerida');
 
