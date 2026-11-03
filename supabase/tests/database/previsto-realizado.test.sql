@@ -1,6 +1,6 @@
 -- Previsto × realizado: realizado por unidade, previsão do ano com remanejamento, plano travado e quem vê.
 BEGIN;
-SELECT plan(19);
+SELECT plan(24);
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT ON ids TO authenticated;
@@ -69,6 +69,24 @@ SELECT is((SELECT count(*)::INT FROM dre_compare(pg_temp.id('versao'), pg_temp.i
   'Diretor não vê outra unidade');
 SELECT throws_ok($$ INSERT INTO actual_adjustments (version_id, unit_id, account_id, month, amount, note)
   VALUES (pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.id('mkt'), 1, 5, 'x') $$, '42501', NULL, 'Diretor não ajusta o realizado');
+
+-- Peso do apoio: RH custa 1.000. Antes de publicar, o diretor não vê; sem receita nem compromisso, divide por igual.
+SELECT is((SELECT count(*)::INT FROM support_allocation(pg_temp.id('cenario'))), 0, 'Antes de publicar, o diretor não vê o rateio');
+RESET ROLE;
+SELECT pg_temp.login('fin');
+UPDATE budget_versions SET status = 'em_coleta' WHERE id = pg_temp.id('versao');
+SELECT launch_line(pg_temp.id('versao'), (SELECT id FROM units WHERE name = 'RH'), pg_temp.id('mkt'), 'apoio', NULL, NULL, NULL,
+  '[{"month": 1, "amount": 1000}]'::JSONB);
+INSERT INTO guardrail_settings (scenario_id) VALUES (pg_temp.id('cenario')) ON CONFLICT (scenario_id) DO NOTHING;
+INSERT INTO support_shares (scenario_id, unit_id, share) VALUES (pg_temp.id('cenario'), pg_temp.id('consultoria'), 0.6), (pg_temp.id('cenario'), pg_temp.id('agencia'), 0.2);
+SELECT is((SELECT round(share, 2) FROM support_allocation(pg_temp.id('cenario')) WHERE unit_id = pg_temp.id('consultoria')), 0.75, 'Critério digitado vale mais: 60% de 80% vira 75%');
+SELECT ok((SELECT support_cost FROM support_allocation(pg_temp.id('cenario')) WHERE unit_id = pg_temp.id('consultoria'))
+  = 0.75 * (SELECT SUM(support_cost) FROM support_allocation(pg_temp.id('cenario'))), 'O apoio é dividido na proporção do critério');
+SELECT is((SELECT basis FROM support_allocation(pg_temp.id('cenario')) LIMIT 1), 'criterio', 'Mostra qual critério valeu');
+SELECT publish_guardrails(pg_temp.id('cenario'));
+RESET ROLE;
+SELECT pg_temp.login('lid');
+SELECT is((SELECT array_agg(unit_id) FROM support_allocation(pg_temp.id('cenario'))), ARRAY[pg_temp.id('consultoria')], 'Depois de publicar, o diretor vê só a própria unidade');
 
 -- Configuração da IA: diretor não vê nem grava; ninguém logado lê a chave.
 SELECT is((SELECT count(*)::INT FROM ai_settings), 0, 'Diretor não vê a configuração da IA');

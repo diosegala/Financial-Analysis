@@ -28,6 +28,9 @@ Regras:
 - "ajustes": onde a DRE pode ser ajustada, em ordem de impacto, com o valor quando der para calcular.
 - "previsao": como o ano tende a fechar e o que muda esse fechamento.
 - Diferença de calendário coberta por remanejamento não é economia nem estouro.
+- Unidades de negócio geram receita; áreas de apoio só têm custo. Mostre quanto o apoio pesa nas unidades ("apoio_rateado",
+  "resultado_apos_apoio") e compare cortes nos dois grupos. Cortar numa unidade de negócio pode reduzir a capacidade de
+  atender clientes e, com isso, a receita. Você não tem dados de atendimento: trate esse risco como hipótese a confirmar.
 - Seja direto, em português do Brasil e sem jargão. No máximo 5 gargalos e 5 ajustes.`;
 
 const SCHEMA = {
@@ -110,7 +113,7 @@ Deno.serve(async (req) => {
     return json({ error: "Versão e cenário são obrigatórios." }, 400);
   const scope = unit_id ? { _unit_ids: [unit_id] } : {};
   const base = { _version_id: version_id, _scenario_id: scenario_id, ...scope };
-  const [compare, accounts, lines, guardrails, version, units, shifts, settings] =
+  const [compare, accounts, lines, guardrails, version, units, shifts, settings, support] =
     await Promise.all([
       supabase.rpc("dre_compare", base),
       supabase.rpc("account_compare", base),
@@ -130,6 +133,7 @@ Deno.serve(async (req) => {
         .select("result_target, cost_cut_pct")
         .eq("scenario_id", scenario_id)
         .maybeSingle(),
+      supabase.rpc("support_allocation", { _scenario_id: scenario_id }),
     ]);
   const failed = [compare, accounts, lines, guardrails, version, units, shifts].find(
     (r) => r.error,
@@ -195,6 +199,19 @@ Deno.serve(async (req) => {
       limite_de_custos: round(g.ceiling),
       despesas_lancadas: round(g.planned_expense),
       folha_lancada: round(g.planned_payroll),
+      ...(() => {
+        const share = support.data?.find((x) => x.unit_id === g.unit_id);
+        if (!share) return {};
+        const result =
+          Number(g.planned_revenue) -
+          Number(g.planned_variable) -
+          Number(g.planned_expense) -
+          Number(g.planned_payroll);
+        return {
+          apoio_rateado: round(share.support_cost),
+          resultado_apos_apoio: round(result - Number(share.support_cost)),
+        };
+      })(),
     }));
   const input = {
     escopo: unit_id ? names.get(unit_id)?.name : "CUPOLA (empresa inteira)",

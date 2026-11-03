@@ -166,6 +166,49 @@ export function useReferenceSuppliers(
   });
 }
 
+export const SUPPORT_BASIS_LABELS: Record<string, string> = {
+  criterio: "pelo critério digitado",
+  receita: "pela receita planejada",
+  compromisso: "pela receita-compromisso",
+  igual: "por igual, enquanto não há receita",
+};
+
+/** Parte de cada unidade de negócio no custo das áreas de apoio. O diretor recebe só a dele, depois de publicado. */
+export function useSupportAllocation(scenarioId: string | null) {
+  return useQuery({
+    queryKey: ["target_vs_plan", "support", scenarioId],
+    enabled: !!scenarioId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("support_allocation", {
+        _scenario_id: scenarioId!,
+      });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        unitId: r.unit_id,
+        share: Number(r.share ?? 0),
+        cost: Number(r.support_cost ?? 0),
+        basis: r.basis,
+      }));
+    },
+  });
+}
+
+/** Critérios digitados pelo financeiro (peso de cada unidade no apoio). */
+export function useSupportShares(scenarioId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["target_vs_plan", "support_shares", scenarioId],
+    enabled: !!scenarioId && enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("support_shares")
+        .select("unit_id, share")
+        .eq("scenario_id", scenarioId!);
+      if (error) throw error;
+      return new Map((data ?? []).map((r) => [r.unit_id, Number(r.share)]));
+    },
+  });
+}
+
 export function useGuardrailMutations(scenarioId: string | null) {
   const queryClient = useQueryClient();
   const refresh = () =>
@@ -184,6 +227,23 @@ export function useGuardrailMutations(scenarioId: string | null) {
       const { error } = await supabase
         .from("guardrail_settings")
         .upsert({ scenario_id: scenarioId!, ...patch }, { onConflict: "scenario_id" });
+      await refresh();
+      return fail(error);
+    },
+    /** Peso da unidade no apoio; vazio tira o critério dela. */
+    async saveSupportShare(unitId: string, share: number | null) {
+      const { error } = share
+        ? await supabase
+            .from("support_shares")
+            .upsert(
+              { scenario_id: scenarioId!, unit_id: unitId, share },
+              { onConflict: "scenario_id,unit_id" },
+            )
+        : await supabase
+            .from("support_shares")
+            .delete()
+            .eq("scenario_id", scenarioId!)
+            .eq("unit_id", unitId);
       await refresh();
       return fail(error);
     },

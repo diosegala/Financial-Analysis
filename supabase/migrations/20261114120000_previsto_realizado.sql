@@ -360,3 +360,47 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
 $$;
 REVOKE EXECUTE ON FUNCTION public.ai_runtime_config() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.ai_runtime_config() TO service_role;
+
+-- ───────────── Peso das áreas de apoio nas unidades de negócio ─────────────
+-- A parte de cada unidade no custo líquido do apoio segue, nesta ordem: o critério digitado pelo financeiro, a receita
+-- planejada, a receita-compromisso; sem nada disso, divide por igual. O diretor vê só o total da própria unidade, depois de
+-- publicado; os custos de cada área de apoio continuam só para a gestão.
+CREATE OR REPLACE FUNCTION public.support_allocation(_scenario_id UUID)
+RETURNS TABLE (unit_id UUID, share NUMERIC, support_cost NUMERIC, basis TEXT)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  WITH sc AS (SELECT version_id FROM public.scenarios WHERE id = _scenario_id),
+  plan AS (
+    SELECT p.unit_id,
+      SUM(CASE p.bucket WHEN 'receita' THEN p.amount WHEN 'variavel' THEN -p.amount ELSE -p.amount END) AS result,
+      SUM(p.amount) FILTER (WHERE p.bucket = 'receita') AS revenue
+    FROM sc CROSS JOIN LATERAL public.plan_split(sc.version_id, _scenario_id) p GROUP BY p.unit_id
+  ),
+  business AS (
+    SELECT u.id, GREATEST(COALESCE(ss.share, 0), 0) AS custom, GREATEST(COALESCE(pl.revenue, 0), 0) AS revenue,
+      GREATEST(COALESCE(g.floor_amount,
+        (COALESCE(g.floor_actual, 0) + COALESCE(g.floor_projected, 0)) * (1 + COALESCE(st.floor_adjust_pct, 0))), 0) AS floor
+    FROM public.units u
+    LEFT JOIN public.support_shares ss ON ss.scenario_id = _scenario_id AND ss.unit_id = u.id
+    LEFT JOIN plan pl ON pl.unit_id = u.id
+    LEFT JOIN public.guardrail_units g ON g.scenario_id = _scenario_id AND g.unit_id = u.id
+    LEFT JOIN public.guardrail_settings st ON st.scenario_id = _scenario_id
+    WHERE u.active AND u.kind = 'negocio'
+  ),
+  totals AS (SELECT SUM(custom) AS c, SUM(revenue) AS r, SUM(floor) AS f, COUNT(*) AS n FROM business),
+  support AS (
+    SELECT COALESCE(-SUM(pl.result), 0) AS cost FROM public.units u JOIN plan pl ON pl.unit_id = u.id
+    WHERE u.active AND u.kind <> 'negocio'
+  ),
+  shares AS (
+    SELECT b.id,
+      CASE WHEN t.c > 0 THEN b.custom / t.c WHEN t.r > 0 THEN b.revenue / t.r WHEN t.f > 0 THEN b.floor / t.f
+           ELSE 1.0 / NULLIF(t.n, 0) END AS share,
+      CASE WHEN t.c > 0 THEN 'criterio' WHEN t.r > 0 THEN 'receita' WHEN t.f > 0 THEN 'compromisso' ELSE 'igual' END AS basis
+    FROM business b CROSS JOIN totals t
+  )
+  SELECT s.id, s.share, s.share * sup.cost, s.basis
+  FROM shares s CROSS JOIN support sup
+  WHERE public.has_any_role(auth.uid(), ARRAY['financeiro', 'vp', 'ceo']::public.app_role[])
+     OR (public.has_unit(auth.uid(), s.id) AND public.guardrails_published(_scenario_id))
+$$;
+REVOKE EXECUTE ON FUNCTION public.support_allocation(UUID) FROM anon;

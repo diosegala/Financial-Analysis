@@ -3038,6 +3038,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      support_allocation: {
+        Args: { _scenario_id: string }
+        Returns: {
+          basis: string
+          share: number
+          support_cost: number
+          unit_id: string
+        }[]
+      }
       sync_person_benefits: { Args: { _person_id: string }; Returns: undefined }
       target_gap: {
         Args: { _scenario_id: string }
