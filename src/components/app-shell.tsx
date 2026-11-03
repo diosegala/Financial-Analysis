@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardList, Eye, LayoutDashboard, LogOut, Settings } from "lucide-react";
+import { ClipboardList, Eye, LayoutDashboard, LineChart, LogOut, Settings } from "lucide-react";
 
 interface NavItem {
   to: string;
@@ -31,6 +31,7 @@ interface NavItem {
 const NAV_ITEMS: (NavItem & { also?: string[] })[] = [
   { to: "/plano", label: "Plano CUPOLA", icon: LayoutDashboard, management: true },
   { to: "/planejamento", label: "Planejamento", icon: ClipboardList },
+  { to: "/acompanhamento", label: "Acompanhamento", icon: LineChart },
   {
     to: "/configuracoes",
     label: "Configurações",
@@ -75,6 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   });
   const directorView = asDirector && !!user?.isFinanceiro;
   const planningPage = pathname.startsWith("/planejamento");
+  const unitPage = planningPage || pathname.startsWith("/acompanhamento");
   function chooseView(next: boolean) {
     setAsDirector(next);
     try {
@@ -212,7 +214,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-wrap items-center gap-4 border-b border-border bg-card px-6 py-3">
-            {planningPage && visibleUnits.length > 1 && (
+            {unitPage && visibleUnits.length > 1 && (
               <HeaderSelect
                 label="Unidade"
                 value={unit?.id}

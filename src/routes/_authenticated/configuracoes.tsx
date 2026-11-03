@@ -38,6 +38,7 @@ import { Field, OptionSelect } from "@/components/form-fields";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AiSettingsTab } from "@/components/ai-settings";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({
   head: pageHead(
@@ -93,6 +94,7 @@ function ConfiguracoesPage() {
           <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
           <TabsTrigger value="tipos">Tipos de receita</TabsTrigger>
           <TabsTrigger value="clientes">Clientes</TabsTrigger>
+          <TabsTrigger value="ia">IA</TabsTrigger>
           <TabsTrigger value="avancado">Avançado</TabsTrigger>
         </TabsList>
         <TabsContent value="versoes">
@@ -112,6 +114,9 @@ function ConfiguracoesPage() {
         </TabsContent>
         <TabsContent value="clientes">
           <ClientsTab />
+        </TabsContent>
+        <TabsContent value="ia">
+          <AiSettingsTab />
         </TabsContent>
         <TabsContent value="avancado">
           <AdvancedTab />
