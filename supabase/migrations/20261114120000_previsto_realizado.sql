@@ -88,24 +88,37 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
     SELECT DISTINCT ON (public.norm_text(p.name)) public.norm_text(p.name) AS name, p.unit_id
     FROM public.people p WHERE p.version_id = _version_id ORDER BY public.norm_text(p.name), p.id
   ),
+  ex AS MATERIALIZED (SELECT x.* FROM v CROSS JOIN LATERAL public.omie_expense_attribution(v.year) x),
+  re AS MATERIALIZED (SELECT r.* FROM v CROSS JOIN LATERAL public.omie_revenue_attribution(v.year) r),
+  -- A conta de cada categoria é procurada uma vez só: a busca é cara e há centenas de linhas por categoria.
+  ex_acc AS MATERIALIZED (
+    SELECT c.category_name, acc.id, acc.unit_ids, acc.kind, acc.dre_line_id, dl.kind AS line_kind
+    FROM (SELECT DISTINCT category_name FROM ex) c CROSS JOIN v
+    CROSS JOIN LATERAL public.account_for_category(c.category_name, v.year) acc
+    JOIN public.dre_lines dl ON dl.id = acc.dre_line_id
+    WHERE acc.treatment <> 'fora_dre' AND public.category_in_year(c.category_name, v.year)
+  ),
+  re_acc AS MATERIALIZED (
+    SELECT c.category_name, acc.id, acc.unit_ids, acc.dre_line_id
+    FROM (SELECT DISTINCT category_name FROM re) c CROSS JOIN v
+    CROSS JOIN LATERAL public.revenue_account_for_category(c.category_name, v.year) acc
+    WHERE acc.treatment <> 'fora_dre' AND public.category_in_year(c.category_name, v.year)
+  ),
   exp AS (
     SELECT COALESCE(public.owner_unit(x.unit_id, acc.unit_ids),
              CASE WHEN acc.kind = 'folha' THEN w.unit_id END) AS unit_id,
-      acc.id AS account_id, acc.dre_line_id, acc.kind, dl.kind AS line_kind, k AS month, x.paid[k] AS amount
-    FROM v CROSS JOIN LATERAL public.omie_expense_attribution(v.year) x
-    CROSS JOIN LATERAL public.account_for_category(x.category_name, v.year) acc
-    JOIN public.dre_lines dl ON dl.id = acc.dre_line_id
+      acc.id AS account_id, acc.dre_line_id, acc.kind, acc.line_kind, k AS month, x.paid[k] AS amount
+    FROM ex x JOIN ex_acc acc ON acc.category_name = x.category_name
     LEFT JOIN who w ON w.name = public.norm_text(x.supplier_name)
     CROSS JOIN generate_series(1, 12) k
-    WHERE acc.treatment <> 'fora_dre' AND public.category_in_year(x.category_name, v.year) AND x.paid[k] <> 0
+    WHERE x.paid[k] <> 0
   ),
   rev AS (
     SELECT public.owner_unit(r.unit_id, acc.unit_ids) AS unit_id, acc.id AS account_id, acc.dre_line_id, k AS month,
       r.received[k] AS amount
-    FROM v CROSS JOIN LATERAL public.omie_revenue_attribution(v.year) r
-    CROSS JOIN LATERAL public.revenue_account_for_category(r.category_name, v.year) acc
+    FROM re r JOIN re_acc acc ON acc.category_name = r.category_name
     CROSS JOIN generate_series(1, 12) k
-    WHERE acc.treatment <> 'fora_dre' AND public.category_in_year(r.category_name, v.year) AND r.received[k] <> 0
+    WHERE r.received[k] <> 0
   ),
   folha_share AS (
     SELECT p.unit_id, p.month, p.amount / NULLIF(SUM(p.amount) OVER (PARTITION BY p.month), 0) AS share
@@ -249,17 +262,25 @@ REVOKE EXECUTE ON FUNCTION public.account_compare(UUID, UUID, UUID[]) FROM anon;
 CREATE OR REPLACE FUNCTION public.actual_unmatched(_version_id UUID)
 RETURNS TABLE (issue TEXT, category_name TEXT, amount NUMERIC)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  WITH v AS (SELECT year FROM public.budget_versions WHERE id = _version_id)
+  WITH v AS (SELECT year FROM public.budget_versions WHERE id = _version_id),
+  ex AS MATERIALIZED (SELECT x.* FROM v CROSS JOIN LATERAL public.omie_expense_attribution(v.year) x),
+  re AS MATERIALIZED (SELECT r.* FROM v CROSS JOIN LATERAL public.omie_revenue_attribution(v.year) r),
+  ex_acc AS MATERIALIZED (
+    SELECT c.category_name, a.id FROM (SELECT DISTINCT category_name FROM ex) c CROSS JOIN v
+    LEFT JOIN LATERAL public.account_for_category(c.category_name, v.year) a ON true
+  ),
+  re_acc AS MATERIALIZED (
+    SELECT c.category_name, a.id, a.unit_ids FROM (SELECT DISTINCT category_name FROM re) c CROSS JOIN v
+    LEFT JOIN LATERAL public.revenue_account_for_category(c.category_name, v.year) a ON true
+  )
   SELECT 'Despesa sem conta', x.category_name, SUM((SELECT COALESCE(SUM(e), 0) FROM unnest(x.paid) e))
-  FROM v CROSS JOIN LATERAL public.omie_expense_attribution(v.year) x
-  LEFT JOIN LATERAL public.account_for_category(x.category_name, v.year) acc ON true
+  FROM ex x JOIN ex_acc acc ON acc.category_name = x.category_name
   WHERE acc.id IS NULL AND public.has_role(auth.uid(), 'financeiro') GROUP BY 2
   HAVING SUM((SELECT COALESCE(SUM(e), 0) FROM unnest(x.paid) e)) <> 0
   UNION ALL
   SELECT CASE WHEN acc.id IS NULL THEN 'Receita sem conta' ELSE 'Receita sem unidade' END, r.category_name,
     SUM((SELECT COALESCE(SUM(e), 0) FROM unnest(r.received) e))
-  FROM v CROSS JOIN LATERAL public.omie_revenue_attribution(v.year) r
-  LEFT JOIN LATERAL public.revenue_account_for_category(r.category_name, v.year) acc ON true
+  FROM re r JOIN re_acc acc ON acc.category_name = r.category_name
   WHERE (acc.id IS NULL OR public.owner_unit(r.unit_id, acc.unit_ids) IS NULL) AND public.has_role(auth.uid(), 'financeiro')
   GROUP BY 1, 2
   HAVING SUM((SELECT COALESCE(SUM(e), 0) FROM unnest(r.received) e)) <> 0
