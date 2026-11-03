@@ -1,6 +1,6 @@
 -- Receita-compromisso e limite de custos por unidade, referência do ano base, quem vê e quem altera.
 BEGIN;
-SELECT plan(21);
+SELECT plan(23);
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT ON ids TO authenticated;
@@ -79,6 +79,8 @@ SELECT is((SELECT SUM(amount) FROM unit_reference(pg_temp.id('versao'), pg_temp.
   'Referência de despesa da unidade');
 SELECT is((SELECT array_agg(supplier) FROM unit_reference_suppliers(pg_temp.id('versao'), pg_temp.id('agencia'), pg_temp.id('despesa'))),
   ARRAY['Fornecedor A'], 'Fornecedores do ano base, para consulta');
+SELECT is(owner_unit(pg_temp.id('agencia'), ARRAY[pg_temp.id('rh')]), pg_temp.id('rh'), 'Conta de outra unidade: a conta manda');
+SELECT is(owner_unit(NULL, ARRAY[pg_temp.id('rh')]), pg_temp.id('rh'), 'Sem unidade no Omie: vale a da conta');
 SELECT is(load_reference(pg_temp.id('versao'), pg_temp.id('agencia')), 1, 'Carrega uma linha por categoria');
 SELECT is((SELECT SUM(v.amount) FROM plan_values v JOIN plan_lines l ON l.id = v.line_id
            WHERE l.unit_id = pg_temp.id('agencia') AND l.account_id = pg_temp.id('despesa')), 12000::NUMERIC, 'Com os valores do ano base');

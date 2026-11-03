@@ -22,16 +22,11 @@ describe("helpers da grade", () => {
 });
 
 describe("valor do ano nos meses", () => {
-  const total = (m: number[]) => Math.round(m.reduce((a, v) => a + v, 0) * 100) / 100;
-  it("sem meses, divide por igual e fecha exato", () => {
-    const m = spreadYear(Array(12).fill(0), 1000);
+  it("divide por igual nos 12 meses e fecha exato", () => {
+    const m = spreadYear(1000);
+    expect(m).toHaveLength(12);
     expect(m[0]).toBe(83.33);
-    expect(total(m)).toBe(1000);
-  });
-  it("com meses, mantém a proporção e os meses vazios", () => {
-    const m = spreadYear([100, 0, 300, ...Array(9).fill(0)], 200);
-    expect(m.slice(0, 3)).toEqual([50, 0, 150]);
-    expect(total(m)).toBe(200);
+    expect(Math.round(m.reduce((a, v) => a + v, 0) * 100) / 100).toBe(1000);
   });
 });
 

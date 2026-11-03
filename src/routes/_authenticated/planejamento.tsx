@@ -27,8 +27,8 @@ type Step = 1 | 2 | 3 | 4;
 
 const STEP_HELP: Record<Step, string> = {
   1: "A folha da unidade já vem carregada. Ajuste salários, saídas, entradas e benefícios: o custo com encargos, 13º e férias é calculado sozinho.",
-  2: "Cada categoria mostra o gasto do ano anterior e o limite com o corte. Ajuste o valor de 2027. Pode passar em uma categoria se sobrar em outra: o que vale é o total.",
-  3: "Lance a receita da unidade por categoria e mês, com o recebido no ano anterior ao lado. Dá para colar da planilha.",
+  2: "Cada categoria mostra o gasto do ano anterior e o limite com o corte. Ajuste o valor de 2027: ele é dividido igualmente pelos 12 meses (para valores diferentes, use Mês a mês). Pode passar em uma categoria se sobrar em outra: o que vale é o total.",
+  3: "Lance a receita por categoria, com o recebido no ano anterior ao lado. Dentro de cada categoria, adicione um cliente por linha, com o valor por mês e o período.",
   4: "Este é o resultado final da unidade, como será apresentado. Confira e envie para aprovação.",
 };
 
@@ -95,7 +95,7 @@ function ReviewStep() {
     (user?.isFinanceiro || (user?.isLider && user.unitIds.includes(unit.id)));
   return (
     <div className="space-y-4">
-      <DreTable unitIds={unitId ? [unitId] : []} title={unit?.name ?? "unidade"} />
+      <DreTable unitIds={unitId ? [unitId] : []} title={unit?.name ?? "unidade"} hideEmpty />
       {canSend && (
         <section className="space-y-2 rounded-md border border-border bg-card p-4">
           <h2 className="font-semibold">Enviar para aprovação</h2>

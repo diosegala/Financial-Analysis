@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useAccounts, useContractTypes } from "@/lib/catalog";
 import {
   plannedCosts,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/guardrails";
 import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
 import {
+  monthRange,
   spreadYear,
   usePlanLines,
   usePlanMutations,
@@ -20,7 +21,7 @@ import {
 import { usePlanning } from "@/lib/planning";
 import { MoneyCell } from "@/components/money-cell";
 import { NumberCell } from "@/components/number-cell";
-import { Field, OptionSelect } from "@/components/form-fields";
+import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -51,9 +52,14 @@ interface Row {
 
 const sum = (values: Iterable<number>) => [...values].reduce((a, v) => a + v, 0);
 
+/** A categoria abre em lançamentos quando tem mais de um ou quando o único tem nome (ex.: um cliente). */
+const opensLines = (row: Row) =>
+  row.lines.length > 1 || (row.lines.length === 1 && !!row.lines[0]?.description);
+
 /** Situação da categoria contra o limite: o que passou, a folga ou nada, enquanto não houver plano. */
-export function Situation({ planned, limit }: { planned: number; limit: number }) {
+export function Situation({ planned, limit }: { planned: number; limit: number | null }) {
   if (planned === 0) return <span className="text-muted-foreground">A preencher</span>;
+  if (limit === null) return <span className="text-muted-foreground">Novo: entra no total</span>;
   const diff = planned - limit;
   return diff > 0 ? (
     <span className="font-medium text-destructive">{fmtBRL(diff)} acima</span>
@@ -83,7 +89,7 @@ export function CategoryGrid({
   const { data: reference } = useUnitReference(versionId, unitId);
   const { data: settings } = useGuardrailSettings(scenarioId);
   const { data: guardrails } = useGuardrails(scenarioId);
-  const { setValues, addLine, deleteLine } = usePlanMutations();
+  const { setValues, addLine, updateLine, deleteLine } = usePlanMutations();
   const { loadReference } = useGuardrailMutations(scenarioId);
   const [monthly, setMonthly] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -91,8 +97,10 @@ export function CategoryGrid({
   const [cutting, setCutting] = useState<Row | null>(null);
   const [suppliers, setSuppliers] = useState<Row | null>(null);
   const [removing, setRemoving] = useState<Row | null>(null);
+  const [addingLine, setAddingLine] = useState<Row | null>(null);
 
   const isCost = kind === "despesa";
+  const lineWord = kind === "receita" ? "cliente" : "item";
   const showBase = kind !== "folha";
   const baseCol = showBase && !monthly;
   const costCol = isCost && !monthly;
@@ -147,10 +155,9 @@ export function CategoryGrid({
     return addLine({ version_id: versionId!, unit_id: unitId!, account_id: row.accountId }, values);
   }
 
-  /** Valor do ano digitado: redistribui nos meses, na proporção que já existe ou por igual. */
+  /** Valor do ano digitado: dividido igualmente pelos 12 meses. */
   function setYear(row: Row, line: PlanLine | undefined, total: number) {
-    const current = line ? MONTHS.map((_, i) => line.values.get(i + 1) ?? 0) : row.months;
-    const values = spreadYear(current, total).map((amount, i) => ({ month: i + 1, amount }));
+    const values = spreadYear(total).map((amount, i) => ({ month: i + 1, amount }));
     return line ? setValues(line.id, values) : commit(row, values);
   }
 
@@ -178,7 +185,7 @@ export function CategoryGrid({
   }
 
   function pasteBlock(start: number, month: number, block: string[][]) {
-    const direct = rows.filter((r) => r.lines.length <= 1);
+    const direct = rows.filter((r) => !opensLines(r));
     block.forEach((cells, i) => {
       const row = direct[start + i];
       if (!row) return;
@@ -282,7 +289,7 @@ export function CategoryGrid({
               </tr>
             )}
             {rows.map((row) => {
-              const many = row.lines.length > 1;
+              const many = opensLines(row);
               const isOpen = open.has(row.accountId);
               if (!many) directIndex++;
               const r = directIndex;
@@ -311,7 +318,8 @@ export function CategoryGrid({
                           )}
                           {row.name}
                           <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">
-                            ({row.lines.length} lançamentos)
+                            ({row.lines.length} {lineWord}
+                            {row.lines.length === 1 ? "" : kind === "receita" ? "s" : "ns"})
                           </span>
                         </button>
                       ) : (
@@ -325,7 +333,7 @@ export function CategoryGrid({
                     )}
                     {costCol && (
                       <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
-                        {fmtBRL(limitOf(row.refTotal))}
+                        {row.refTotal ? fmtBRL(limitOf(row.refTotal)) : "—"}
                       </td>
                     )}
                     <td className="px-2 py-1 text-right">
@@ -345,7 +353,10 @@ export function CategoryGrid({
                     </td>
                     {costCol && (
                       <td className="px-2 py-1 text-right">
-                        <Situation planned={row.total} limit={limitOf(row.refTotal)} />
+                        <Situation
+                          planned={row.total}
+                          limit={row.refTotal ? limitOf(row.refTotal) : null}
+                        />
                       </td>
                     )}
                     {monthly &&
@@ -379,6 +390,11 @@ export function CategoryGrid({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          {canEdit && (
+                            <DropdownMenuItem onClick={() => setAddingLine(row)}>
+                              Adicionar {lineWord}…
+                            </DropdownMenuItem>
+                          )}
                           {canEdit && !many && row.reference && (
                             <DropdownMenuItem onClick={() => void bringBase(row)}>
                               Trazer valores de {baseYear}
@@ -409,12 +425,52 @@ export function CategoryGrid({
                       </DropdownMenu>
                     </td>
                   </tr>
+                  {many && isOpen && canEdit && (
+                    <tr className="border-b border-border/50 bg-muted/20 text-xs">
+                      <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-7 pr-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 gap-1 px-2 text-xs"
+                          onClick={() => setAddingLine(row)}
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Adicionar {lineWord}
+                        </Button>
+                      </td>
+                      <td colSpan={colSpan - 1} />
+                    </tr>
+                  )}
                   {many &&
                     isOpen &&
                     row.lines.map((l) => (
                       <tr key={l.id} className="border-b border-border/50 bg-muted/20 text-xs">
-                        <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-9 pr-3">
-                          {l.description || "Sem descrição"}
+                        <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-7 pr-2">
+                          <div className="flex items-center gap-1">
+                            <Input
+                              key={l.description ?? ""}
+                              aria-label={`Nome do ${lineWord}`}
+                              defaultValue={l.description ?? ""}
+                              placeholder={`Nome do ${lineWord}`}
+                              disabled={!canEdit}
+                              className="h-7 text-xs"
+                              onBlur={(e) => {
+                                const name = e.target.value.trim();
+                                if (name !== (l.description ?? ""))
+                                  void updateLine(l.id, { description: name || null });
+                              }}
+                            />
+                            {canEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0"
+                                aria-label={`Excluir ${l.description ?? lineWord}`}
+                                onClick={() => void deleteLine(l.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                         {baseCol && <td />}
                         {costCol && <td />}
@@ -508,6 +564,28 @@ export function CategoryGrid({
           }}
         />
       )}
+      {addingLine && (
+        <AddLineDialog
+          row={addingLine}
+          word={lineWord}
+          onClose={() => setAddingLine(null)}
+          onAdd={async (description, values) => {
+            const ok = await addLine(
+              {
+                version_id: versionId!,
+                unit_id: unitId!,
+                account_id: addingLine.accountId,
+                description,
+              },
+              values,
+            );
+            if (ok) {
+              setOpen((o) => new Set(o).add(addingLine.accountId));
+              setAddingLine(null);
+            }
+          }}
+        />
+      )}
       {cutting && (
         <CutDialog
           row={cutting}
@@ -565,8 +643,9 @@ function AddCategoryDialog({
         <DialogHeader>
           <DialogTitle>Adicionar categoria</DialogTitle>
           <DialogDescription>
-            Ela entra na grade para você lançar os meses. Sem gasto no ano anterior, o limite dela é
-            zero: o valor precisa caber na folga das outras.
+            Ela entra na grade para você lançar o valor. Sem gasto no ano anterior, ela não tem
+            limite próprio: o valor conta no total da unidade. As categorias que já aparecem na
+            grade não estão nesta lista.
           </DialogDescription>
         </DialogHeader>
         <Field label="Categoria">
@@ -577,6 +656,86 @@ function AddCategoryDialog({
             Cancelar
           </Button>
           <Button disabled={!accountId} onClick={() => accountId && onAdd(accountId)}>
+            Adicionar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AddLineDialog({
+  row,
+  word,
+  onAdd,
+  onClose,
+}: {
+  row: Row;
+  word: string;
+  onAdd: (description: string, values: { month: number; amount: number }[]) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [from, setFrom] = useState<number | null>(1);
+  const [to, setTo] = useState<number | null>(12);
+  const value = parseNum(amount) ?? 0;
+  const months = from && to && from <= to ? monthRange(from, to - from + 1) : [];
+  const valid = name.trim() !== "" && value > 0 && months.length > 0;
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            Adicionar {word} em {row.name}
+          </DialogTitle>
+          <DialogDescription>
+            {valid
+              ? `${months.length} ${months.length === 1 ? "mês" : "meses"}: ${fmtBRL(value * months.length)} no ano.`
+              : "Informe o nome, o valor por mês e o período."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Field label={word === "cliente" ? "Cliente" : "Item"}>
+              <Input
+                aria-label={`Nome do novo ${word}`}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
+            </Field>
+          </div>
+          <div className="col-span-2">
+            <Field label="Valor por mês">
+              <Input
+                aria-label="Valor por mês"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="font-mono"
+              />
+            </Field>
+          </div>
+          <Field label="De">
+            <MonthSelect value={from} onChange={setFrom} />
+          </Field>
+          <Field label="Até">
+            <MonthSelect value={to} onChange={setTo} />
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={!valid}
+            onClick={() =>
+              onAdd(
+                name.trim(),
+                months.map((month) => ({ month, amount: value })),
+              )
+            }
+          >
             Adicionar
           </Button>
         </DialogFooter>

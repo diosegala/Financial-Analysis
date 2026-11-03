@@ -1,5 +1,7 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Database, Lock, Unlock } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { usePlanning } from "@/lib/planning";
@@ -67,6 +69,18 @@ function PlanoPage() {
   const { data: rows } = useGuardrailUnits(scenarioId);
   const { data: guardrails } = useGuardrails(scenarioId);
   const { data: submissions } = useSubmissions(versionId);
+  const { data: lastSync } = useQuery({
+    queryKey: ["omie_last_sync"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("omie_actuals")
+        .select("synced_at")
+        .order("synced_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data?.synced_at ?? null;
+    },
+  });
   const setUnitStatus = useSetUnitStatus();
   const m = useGuardrailMutations(scenarioId);
   const [busy, setBusy] = useState(false);
@@ -123,7 +137,7 @@ function PlanoPage() {
                 disabled={busy || published}
                 onClick={() => void run(m.suggest)}
               >
-                <Database className="h-4 w-4" /> Atualizar com o Omie
+                <Database className="h-4 w-4" /> Calcular com o realizado de 2026
               </Button>
               <Button
                 variant="outline"
@@ -157,7 +171,7 @@ function PlanoPage() {
             onSave={(v) => void m.saveSettings({ result_target: v ?? 0 })}
           />
         </Field>
-        <Field label="Corte de custos definido pelo CEO (%)">
+        <Field label="Corte de custos (%)">
           <NumberCell
             className="w-full"
             percent
@@ -168,9 +182,11 @@ function PlanoPage() {
           />
         </Field>
         <p className="text-xs text-muted-foreground sm:col-span-2">
+          {lastSync &&
+            `Omie lido pela última vez em ${new Date(lastSync).toLocaleDateString("pt-BR")}. `}
           {settings?.suggested_at
             ? `Ano base ${settings.base_year}: realizado do Omie até o último mês fechado, com os meses que faltam projetados. Limite = custo-base × (1 − corte). Custo-base = despesas no Omie + custo atual da folha. Para um caso especial, digite o limite ou a receita da unidade; vazio volta para o cálculo.`
-            : "Clique em Atualizar com o Omie para calcular a receita e o custo-base de cada unidade."}
+            : "Clique em Calcular com o realizado de 2026 para obter a receita e o custo-base de cada unidade."}
           {Number(settings?.unassigned_revenue ?? 0) > 0 &&
             ` Há ${fmtBRL(Number(settings?.unassigned_revenue))} de receita do Omie sem unidade: distribua digitando a receita das unidades.`}
         </p>
@@ -351,7 +367,7 @@ function PlanoPage() {
             {list.length === 0 && (
               <tr>
                 <td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">
-                  Clique em Atualizar com o Omie para começar.
+                  Clique em Calcular com o realizado de 2026 para começar.
                 </td>
               </tr>
             )}

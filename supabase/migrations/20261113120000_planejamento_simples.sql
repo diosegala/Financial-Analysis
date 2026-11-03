@@ -76,6 +76,14 @@ UPDATE public.guardrail_settings SET cost_cut_pct = support_cut_pct;
 ALTER TABLE public.guardrail_units ADD COLUMN base_expense NUMERIC, ADD COLUMN base_payroll NUMERIC;
 
 -- ───────────── Referência do ano base, por unidade, conta e mês ─────────────
+-- A unidade de um valor do Omie: a da atribuição, a menos que a conta seja de outra unidade (a conta manda).
+CREATE OR REPLACE FUNCTION public.owner_unit(_attributed UUID, _account_units UUID[]) RETURNS UUID
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE WHEN _account_units IS NOT NULL AND array_length(_account_units, 1) > 0
+                AND (_attributed IS NULL OR NOT _attributed = ANY (_account_units))
+              THEN _account_units[1] ELSE _attributed END
+$$;
+
 -- Meses fechados: pago ou recebido (com o que ficou em aberto). Meses que faltam: o que já está em aberto ou a média dos 3
 -- últimos meses fechados, o maior dos dois. Categoria com o ano no nome (edição de evento) não é projetada.
 CREATE OR REPLACE FUNCTION public.reference_rows(_year INT)
@@ -88,25 +96,26 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   ), shared AS (
     SELECT NULLIF(value, '')::UUID AS id FROM public.app_settings WHERE key = 'shared_cost_unit_id'
   ), src AS (
-    SELECT COALESCE(x.unit_id, (SELECT id FROM shared)) AS unit_id, acc.id AS account_id, acc.kind, acc.unit_ids,
-      x.category_name, x.paid AS got, x.open
+    SELECT COALESCE(public.owner_unit(x.unit_id, acc.unit_ids), (SELECT id FROM shared)) AS unit_id,
+      acc.id AS account_id, acc.kind, x.category_name, x.paid AS got, x.open
     FROM public.omie_expense_attribution(_year) x
     CROSS JOIN LATERAL public.account_for_category(x.category_name, _year + 1) acc
     WHERE acc.treatment = 'lancavel' AND acc.kind = 'despesa' AND public.category_in_year(x.category_name, _year)
     UNION ALL
-    SELECT r.unit_id, acc.id, acc.kind, acc.unit_ids, r.category_name, r.received, r.open
+    SELECT public.owner_unit(r.unit_id, acc.unit_ids), acc.id, acc.kind, r.category_name, r.received, r.open
     FROM public.omie_revenue_attribution(_year) r
     CROSS JOIN LATERAL public.revenue_account_for_category(r.category_name, _year + 1) acc
-    WHERE acc.treatment = 'lancavel' AND r.unit_id IS NOT NULL AND public.category_in_year(r.category_name, _year)
+    WHERE acc.treatment = 'lancavel' AND public.category_in_year(r.category_name, _year)
   ), months AS (
     SELECT s.unit_id, s.account_id, s.kind, k AS month,
-      CASE WHEN k <= c.m THEN s.got[k] + s.open[k]
+      -- Receita em aberto de mês fechado não entrou: conta só o recebido.
+      CASE WHEN k <= c.m THEN s.got[k] + CASE WHEN s.kind = 'despesa' THEN s.open[k] ELSE 0 END
            WHEN s.category_name ~ '20\d{2}' THEN s.open[k]
            ELSE GREATEST(s.open[k], COALESCE(
              (SELECT SUM(x) FROM unnest(s.got[GREATEST(c.m - 2, 1):c.m]) x) / NULLIF(LEAST(c.m, 3), 0), 0))
       END AS amount
     FROM src s CROSS JOIN closed c CROSS JOIN generate_series(1, 12) k
-    WHERE s.unit_id IS NOT NULL AND (s.unit_ids IS NULL OR s.unit_id = ANY (s.unit_ids))
+    WHERE s.unit_id IS NOT NULL
   )
   SELECT m.unit_id, m.account_id, m.kind, m.month, round(SUM(m.amount), 2)
   FROM months m GROUP BY m.unit_id, m.account_id, m.kind, m.month
@@ -135,7 +144,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   CROSS JOIN LATERAL public.omie_expense_attribution(bv.year - 1) x
   CROSS JOIN LATERAL public.account_for_category(x.category_name, bv.year) acc
   WHERE bv.id = _version_id AND acc.id = _account_id AND public.has_unit(auth.uid(), _unit_id)
-    AND COALESCE(x.unit_id, (SELECT NULLIF(value, '')::UUID FROM public.app_settings WHERE key = 'shared_cost_unit_id')) = _unit_id
+    AND COALESCE(public.owner_unit(x.unit_id, acc.unit_ids),
+                 (SELECT NULLIF(value, '')::UUID FROM public.app_settings WHERE key = 'shared_cost_unit_id')) = _unit_id
   GROUP BY 1 ORDER BY 2 DESC
 $$;
 REVOKE EXECUTE ON FUNCTION public.unit_reference_suppliers(UUID, UUID, UUID) FROM anon;
@@ -197,12 +207,13 @@ BEGIN
   CREATE TEMP TABLE IF NOT EXISTS _gr_rev (unit_id UUID, actual NUMERIC, last3 NUMERIC) ON COMMIT DROP;
   TRUNCATE _gr_rev;
   INSERT INTO _gr_rev
-  SELECT a.unit_id,
+  SELECT public.owner_unit(a.unit_id, acc.unit_ids),
     SUM((SELECT COALESCE(SUM(x), 0) FROM unnest(a.received[1:_closed]) x)),
     SUM((SELECT COALESCE(SUM(x), 0) FROM unnest(a.received[GREATEST(_closed - 2, 1):_closed]) x))
       / NULLIF(LEAST(_closed, 3), 0)
   FROM public.omie_revenue_attribution(_year) a
-  GROUP BY a.unit_id;
+  LEFT JOIN LATERAL public.revenue_account_for_category(a.category_name, _year + 1) acc ON true
+  GROUP BY 1;
 
   SELECT COALESCE(SUM(actual + COALESCE(last3, 0) * (12 - _closed)), 0) INTO _unassigned FROM _gr_rev WHERE unit_id IS NULL;
   UPDATE public.guardrail_settings SET base_year = _year, base_closed_month = _closed,
@@ -280,3 +291,10 @@ BEGIN
 END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.guardrails(UUID) FROM anon;
+
+-- ───────────── Despesas de produtos: só onde há produtos ─────────────
+-- Contas exclusivas de outras unidades (consultoria, Imobi Report) passam para a linha Despesas. Editável em Configurações.
+UPDATE public.accounts a SET dre_line_id = (SELECT id FROM public.dre_lines WHERE code = 'despesas')
+WHERE a.kind = 'despesa' AND a.unit_ids IS NOT NULL
+  AND a.dre_line_id = (SELECT id FROM public.dre_lines WHERE code = 'despesas_produtos')
+  AND NOT (SELECT id FROM public.units WHERE name = 'Educação') = ANY (a.unit_ids);

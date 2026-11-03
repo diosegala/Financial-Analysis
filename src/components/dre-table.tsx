@@ -7,7 +7,16 @@ import { usePlanning } from "@/lib/planning";
 import { Button } from "@/components/ui/button";
 
 /** A DRE no formato final, por mês e total do ano, de uma unidade ou da empresa. */
-export function DreTable({ unitIds, title }: { unitIds: string[]; title: string }) {
+export function DreTable({
+  unitIds,
+  title,
+  hideEmpty = false,
+}: {
+  unitIds: string[];
+  title: string;
+  /** Tira as linhas sem valor no ano (ex.: despesas de produtos numa unidade que não tem). Subtotais ficam. */
+  hideEmpty?: boolean;
+}) {
   const { versionId, scenarioId } = usePlanning();
   const { data: lines } = useDreLines();
   const { data: values, isLoading } = useDreReport(versionId, scenarioId, unitIds);
@@ -39,38 +48,46 @@ export function DreTable({ unitIds, title }: { unitIds: string[]; title: string 
             </tr>
           </thead>
           <tbody>
-            {active.map((line) => {
-              const strong =
-                line.kind === "subtotal" || line.kind === "percentual" || line.sign > 0;
-              const signed = line.kind === "subtotal" || line.kind === "percentual";
-              return (
-                <Fragment key={line.id}>
-                  <tr
-                    className={`border-b border-border ${strong ? "bg-muted/30 font-semibold" : ""}`}
-                  >
-                    <td
-                      className={`sticky left-0 z-10 px-3 py-1.5 ${strong ? "bg-muted" : "bg-card"}`}
+            {active
+              .filter(
+                (line) =>
+                  !hideEmpty ||
+                  line.kind === "subtotal" ||
+                  line.kind === "percentual" ||
+                  dreValue(values, line.id, 0) !== 0,
+              )
+              .map((line) => {
+                const strong =
+                  line.kind === "subtotal" || line.kind === "percentual" || line.sign > 0;
+                const signed = line.kind === "subtotal" || line.kind === "percentual";
+                return (
+                  <Fragment key={line.id}>
+                    <tr
+                      className={`border-b border-border ${strong ? "bg-muted/30 font-semibold" : ""}`}
                     >
-                      {lineLabel(line)}
-                    </td>
-                    {[...MONTHS.keys(), 12].map((i) => {
-                      const month = i === 12 ? 0 : i + 1;
-                      const v = dreValue(values, line.id, month);
-                      return (
-                        <td
-                          key={i}
-                          className={`px-2 py-1.5 text-right font-mono tabular-nums ${
-                            signed && v < 0 ? "text-destructive" : ""
-                          } ${month === 0 ? "font-semibold" : ""}`}
-                        >
-                          {fmtLine(line, v)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </Fragment>
-              );
-            })}
+                      <td
+                        className={`sticky left-0 z-10 px-3 py-1.5 ${strong ? "bg-muted" : "bg-card"}`}
+                      >
+                        {lineLabel(line)}
+                      </td>
+                      {[...MONTHS.keys(), 12].map((i) => {
+                        const month = i === 12 ? 0 : i + 1;
+                        const v = dreValue(values, line.id, month);
+                        return (
+                          <td
+                            key={i}
+                            className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+                              signed && v < 0 ? "text-destructive" : ""
+                            } ${month === 0 ? "font-semibold" : ""}`}
+                          >
+                            {fmtLine(line, v)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </Fragment>
+                );
+              })}
           </tbody>
         </table>
       </div>
