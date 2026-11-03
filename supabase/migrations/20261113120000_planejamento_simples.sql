@@ -95,17 +95,24 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
                 ELSE 0 END AS m
   ), shared AS (
     SELECT NULLIF(value, '')::UUID AS id FROM public.app_settings WHERE key = 'shared_cost_unit_id'
+  ), ex AS MATERIALIZED (SELECT * FROM public.omie_expense_attribution(_year)
+  ), re AS MATERIALIZED (SELECT * FROM public.omie_revenue_attribution(_year)
+  -- A conta de cada categoria é procurada uma vez só: a busca é cara e há centenas de linhas por categoria.
+  ), ex_acc AS MATERIALIZED (
+    SELECT c.category_name, acc.* FROM (SELECT DISTINCT category_name FROM ex) c
+    CROSS JOIN LATERAL public.account_for_category(c.category_name, _year + 1) acc
+    WHERE acc.treatment = 'lancavel' AND acc.kind = 'despesa' AND public.category_in_year(c.category_name, _year)
+  ), re_acc AS MATERIALIZED (
+    SELECT c.category_name, acc.* FROM (SELECT DISTINCT category_name FROM re) c
+    CROSS JOIN LATERAL public.revenue_account_for_category(c.category_name, _year + 1) acc
+    WHERE acc.treatment = 'lancavel' AND public.category_in_year(c.category_name, _year)
   ), src AS (
     SELECT COALESCE(public.owner_unit(x.unit_id, acc.unit_ids), (SELECT id FROM shared)) AS unit_id,
       acc.id AS account_id, acc.kind, x.category_name, x.paid AS got, x.open
-    FROM public.omie_expense_attribution(_year) x
-    CROSS JOIN LATERAL public.account_for_category(x.category_name, _year + 1) acc
-    WHERE acc.treatment = 'lancavel' AND acc.kind = 'despesa' AND public.category_in_year(x.category_name, _year)
+    FROM ex x JOIN ex_acc acc ON acc.category_name = x.category_name
     UNION ALL
     SELECT public.owner_unit(r.unit_id, acc.unit_ids), acc.id, acc.kind, r.category_name, r.received, r.open
-    FROM public.omie_revenue_attribution(_year) r
-    CROSS JOIN LATERAL public.revenue_account_for_category(r.category_name, _year + 1) acc
-    WHERE acc.treatment = 'lancavel' AND public.category_in_year(r.category_name, _year)
+    FROM re r JOIN re_acc acc ON acc.category_name = r.category_name
   ), months AS (
     SELECT s.unit_id, s.account_id, s.kind, k AS month,
       -- Receita em aberto de mês fechado não entrou: conta só o recebido.
@@ -142,8 +149,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
     round(SUM((SELECT COALESCE(SUM(v), 0) FROM unnest(x.paid) v) + (SELECT COALESCE(SUM(v), 0) FROM unnest(x.open) v)), 2)
   FROM public.budget_versions bv
   CROSS JOIN LATERAL public.omie_expense_attribution(bv.year - 1) x
-  CROSS JOIN LATERAL public.account_for_category(x.category_name, bv.year) acc
-  WHERE bv.id = _version_id AND acc.id = _account_id AND public.has_unit(auth.uid(), _unit_id)
+  JOIN LATERAL (SELECT a.id, a.unit_ids FROM public.accounts a WHERE a.id = _account_id) acc
+    ON (public.account_for_category(x.category_name, bv.year)).id = acc.id
+  WHERE bv.id = _version_id AND public.has_unit(auth.uid(), _unit_id)
     AND COALESCE(public.owner_unit(x.unit_id, acc.unit_ids),
                  (SELECT NULLIF(value, '')::UUID FROM public.app_settings WHERE key = 'shared_cost_unit_id')) = _unit_id
   GROUP BY 1 ORDER BY 2 DESC
@@ -164,8 +172,11 @@ BEGIN
     RAISE EXCEPTION 'Você não lança nesta unidade.';
   END IF;
   SELECT year - 1 INTO _year FROM public.budget_versions WHERE id = _version_id;
+  CREATE TEMP TABLE IF NOT EXISTS _ref_load (unit_id UUID, account_id UUID, kind TEXT, month INT, amount NUMERIC) ON COMMIT DROP;
+  TRUNCATE _ref_load;
+  INSERT INTO _ref_load SELECT * FROM public.reference_rows(_year) x WHERE x.unit_id = _unit_id;
   FOR r IN
-    SELECT x.account_id FROM public.reference_rows(_year) x
+    SELECT x.account_id FROM _ref_load x
     WHERE x.unit_id = _unit_id AND x.kind = 'despesa' AND (_account_id IS NULL OR x.account_id = _account_id)
       AND NOT EXISTS (SELECT 1 FROM public.plan_lines l WHERE l.version_id = _version_id AND l.unit_id = _unit_id
                       AND l.account_id = x.account_id)
@@ -174,8 +185,7 @@ BEGIN
     INSERT INTO public.plan_lines (version_id, unit_id, account_id, origin, created_by)
     VALUES (_version_id, _unit_id, r.account_id, 'gerada', auth.uid()) RETURNING id INTO _line;
     INSERT INTO public.plan_values (line_id, month, amount)
-    SELECT _line, x.month, x.amount FROM public.reference_rows(_year) x
-    WHERE x.unit_id = _unit_id AND x.account_id = r.account_id;
+    SELECT _line, x.month, x.amount FROM _ref_load x WHERE x.account_id = r.account_id;
     _lines := _lines + 1;
   END LOOP;
   RETURN _lines;
@@ -207,12 +217,16 @@ BEGIN
   CREATE TEMP TABLE IF NOT EXISTS _gr_rev (unit_id UUID, actual NUMERIC, last3 NUMERIC) ON COMMIT DROP;
   TRUNCATE _gr_rev;
   INSERT INTO _gr_rev
+  WITH re AS MATERIALIZED (SELECT * FROM public.omie_revenue_attribution(_year)),
+  acc AS MATERIALIZED (
+    SELECT c.category_name, ac.unit_ids FROM (SELECT DISTINCT category_name FROM re) c
+    LEFT JOIN LATERAL public.revenue_account_for_category(c.category_name, _year + 1) ac ON true
+  )
   SELECT public.owner_unit(a.unit_id, acc.unit_ids),
     SUM((SELECT COALESCE(SUM(x), 0) FROM unnest(a.received[1:_closed]) x)),
     SUM((SELECT COALESCE(SUM(x), 0) FROM unnest(a.received[GREATEST(_closed - 2, 1):_closed]) x))
       / NULLIF(LEAST(_closed, 3), 0)
-  FROM public.omie_revenue_attribution(_year) a
-  LEFT JOIN LATERAL public.revenue_account_for_category(a.category_name, _year + 1) acc ON true
+  FROM re a JOIN acc ON acc.category_name = a.category_name
   GROUP BY 1;
 
   SELECT COALESCE(SUM(actual + COALESCE(last3, 0) * (12 - _closed)), 0) INTO _unassigned FROM _gr_rev WHERE unit_id IS NULL;
@@ -220,13 +234,20 @@ BEGIN
     unassigned_revenue = _unassigned, suggested_at = now()
   WHERE scenario_id = _scenario_id;
 
+  CREATE TEMP TABLE IF NOT EXISTS _gr_exp (unit_id UUID, amount NUMERIC) ON COMMIT DROP;
+  TRUNCATE _gr_exp;
+  INSERT INTO _gr_exp SELECT x.unit_id, SUM(x.amount) FROM public.reference_rows(_year) x WHERE x.kind = 'despesa' GROUP BY x.unit_id;
+  CREATE TEMP TABLE IF NOT EXISTS _gr_pay (unit_id UUID, amount NUMERIC) ON COMMIT DROP;
+  TRUNCATE _gr_pay;
+  INSERT INTO _gr_pay SELECT p.unit_id, SUM(p.amount) FROM public.plan_split(_version, _scenario_id) p WHERE p.bucket = 'folha' GROUP BY p.unit_id;
+
   INSERT INTO public.guardrail_units (scenario_id, unit_id, floor_actual, floor_projected, base_expense, base_payroll)
   SELECT _scenario_id, u.id,
     CASE WHEN u.kind = 'negocio' THEN COALESCE(r.actual, 0) END,
     CASE WHEN u.kind = 'negocio' THEN COALESCE(r.last3, 0) * (12 - _closed) END,
-    COALESCE((SELECT SUM(x.amount) FROM public.reference_rows(_year) x WHERE x.unit_id = u.id AND x.kind = 'despesa'), 0),
-    COALESCE((SELECT SUM(p.amount) FROM public.plan_split(_version, _scenario_id) p WHERE p.unit_id = u.id AND p.bucket = 'folha'), 0)
+    COALESCE(e.amount, 0), COALESCE(f.amount, 0)
   FROM public.units u LEFT JOIN _gr_rev r ON r.unit_id = u.id
+  LEFT JOIN _gr_exp e ON e.unit_id = u.id LEFT JOIN _gr_pay f ON f.unit_id = u.id
   WHERE u.active
   ON CONFLICT (scenario_id, unit_id) DO UPDATE
     SET floor_actual = EXCLUDED.floor_actual, floor_projected = EXCLUDED.floor_projected,
