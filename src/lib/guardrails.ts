@@ -169,8 +169,8 @@ export function useReferenceSuppliers(
 export const SUPPORT_BASIS_LABELS: Record<string, string> = {
   criterio: "pelo critério digitado",
   receita: "pela receita planejada",
-  compromisso: "pela receita-compromisso",
-  igual: "por igual, enquanto não há receita",
+  compromisso: "pela receita-compromisso, até todas as unidades lançarem a receita",
+  igual: "por igual, até o cálculo da receita-compromisso",
 };
 
 /** Parte de cada unidade de negócio no custo das áreas de apoio. O diretor recebe só a dele, depois de publicado. */

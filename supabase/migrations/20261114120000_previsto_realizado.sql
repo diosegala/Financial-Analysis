@@ -362,8 +362,9 @@ REVOKE EXECUTE ON FUNCTION public.ai_runtime_config() FROM PUBLIC, anon, authent
 GRANT EXECUTE ON FUNCTION public.ai_runtime_config() TO service_role;
 
 -- ───────────── Peso das áreas de apoio nas unidades de negócio ─────────────
--- A parte de cada unidade no custo líquido do apoio segue, nesta ordem: o critério digitado pelo financeiro, a receita
--- planejada, a receita-compromisso; sem nada disso, divide por igual. O diretor vê só o total da própria unidade, depois de
+-- A parte de cada unidade no custo líquido do apoio segue, nesta ordem: o critério digitado pelo financeiro; a receita
+-- planejada, quando todas as unidades já lançaram (senão quem lança primeiro leva todo o apoio); a receita-compromisso; sem
+-- nada disso, divide por igual. O diretor vê só o total da própria unidade, depois de
 -- publicado; os custos de cada área de apoio continuam só para a gestão.
 CREATE OR REPLACE FUNCTION public.support_allocation(_scenario_id UUID)
 RETURNS TABLE (unit_id UUID, share NUMERIC, support_cost NUMERIC, basis TEXT)
@@ -386,7 +387,10 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
     LEFT JOIN public.guardrail_settings st ON st.scenario_id = _scenario_id
     WHERE u.active AND u.kind = 'negocio'
   ),
-  totals AS (SELECT SUM(custom) AS c, SUM(revenue) AS r, SUM(floor) AS f, COUNT(*) AS n FROM business),
+  totals AS (
+    SELECT SUM(custom) AS c, CASE WHEN bool_and(revenue > 0) THEN SUM(revenue) ELSE 0 END AS r, SUM(floor) AS f, COUNT(*) AS n
+    FROM business
+  ),
   support AS (
     SELECT COALESCE(-SUM(pl.result), 0) AS cost FROM public.units u JOIN plan pl ON pl.unit_id = u.id
     WHERE u.active AND u.kind <> 'negocio'

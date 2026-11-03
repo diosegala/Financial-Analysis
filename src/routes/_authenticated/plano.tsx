@@ -402,7 +402,7 @@ function PlanoPage() {
             As áreas de apoio custam {fmtBRL(supportTotal)} no plano, divididos{" "}
             {SUPPORT_BASIS_LABELS[allocation?.[0]?.basis ?? "igual"]}.
             {isFin &&
-              " Digite o percentual em Critério para mudar a divisão; vazio em todas volta para a receita."}
+              " Digite o percentual em Critério para mudar a divisão; vazio em todas volta para o cálculo pela receita."}
           </p>
         </div>
         <div className="overflow-x-auto rounded-md border border-border bg-card">
