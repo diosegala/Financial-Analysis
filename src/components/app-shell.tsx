@@ -5,12 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser, type CurrentUser } from "@/lib/auth";
 import { useScenarios, useUnits, useVersions, type Version } from "@/lib/catalog";
 import { PlanningProvider, type PlanningState } from "@/lib/planning";
-import {
-  SUBMISSION_LABELS,
-  useSetUnitStatus,
-  useSubmissions,
-  type SubmissionStatus,
-} from "@/lib/submissions";
+import { SUBMISSION_LABELS, useSubmissions, type SubmissionStatus } from "@/lib/submissions";
 import {
   Select,
   SelectContent,
@@ -20,34 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  LayoutDashboard,
-  TrendingUp,
-  Users,
-  Receipt,
-  SlidersHorizontal,
-  Database,
-  Target,
-  Layers,
-  FileBarChart,
-  UserCog,
-  History,
-  LogOut,
-  CalendarDays,
-  Settings,
-  Send,
-  Bell,
-} from "lucide-react";
+import { ClipboardList, Eye, LayoutDashboard, LogOut, Settings } from "lucide-react";
 
 interface NavItem {
   to: string;
@@ -59,38 +27,20 @@ interface NavItem {
   management?: boolean;
 }
 
-// Menu enxuto, por tarefa. O líder vê Início, Receitas, Despesas, Eventos e DRE; Produtos abre de Receitas e Eventos.
-const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
-  { label: null, items: [{ to: "/inicio", label: "Início", icon: LayoutDashboard }] },
+// O menu inteiro. Parâmetros, usuários, realizado e auditoria abrem de Configurações.
+const NAV_ITEMS: (NavItem & { also?: string[] })[] = [
+  { to: "/plano", label: "Plano CUPOLA", icon: LayoutDashboard, management: true },
+  { to: "/planejamento", label: "Planejamento", icon: ClipboardList },
   {
-    label: "Planejar",
-    items: [
-      { to: "/receitas", label: "Receitas", icon: TrendingUp },
-      { to: "/despesas", label: "Despesas", icon: Receipt },
-      { to: "/folha", label: "Folha", icon: Users, management: true },
-      { to: "/eventos", label: "Eventos", icon: CalendarDays },
-    ],
-  },
-  {
-    label: "Resultado",
-    items: [
-      { to: "/dre", label: "DRE prevista", icon: FileBarChart },
-      { to: "/metas", label: "Metas", icon: Target, financeiro: true },
-      { to: "/cenarios", label: "Cenários", icon: Layers, management: true },
-      { to: "/alertas", label: "Alertas", icon: Bell },
-    ],
-  },
-  {
-    label: "Administração",
-    items: [
-      { to: "/realizado", label: "Realizado Omie", icon: Database, financeiro: true },
-      { to: "/parametros", label: "Parâmetros", icon: SlidersHorizontal, financeiro: true },
-      { to: "/configuracoes", label: "Configurações", icon: Settings, financeiro: true },
-      { to: "/usuarios", label: "Usuários", icon: UserCog, financeiro: true },
-      { to: "/auditoria", label: "Auditoria", icon: History, management: true },
-    ],
+    to: "/configuracoes",
+    label: "Configurações",
+    icon: Settings,
+    financeiro: true,
+    also: ["/parametros", "/usuarios", "/realizado", "/auditoria"],
   },
 ];
+
+const VIEW_KEY = "ver.como.diretor";
 
 /** Why the user cannot enter values in this unit/version right now (null = can edit). */
 function lockReasonFor(
@@ -105,8 +55,8 @@ function lockReasonFor(
   if (user.isFinanceiro) return null;
   if (!user.unitIds.includes(unitId)) return "Você não lança nesta unidade.";
   if (version.status !== "em_coleta") return "A versão não está aberta para lançamentos.";
-  if (status === "enviado" || status === "aprovado")
-    return `Unidade ${SUBMISSION_LABELS[status].toLowerCase()}.`;
+  if (status === "enviado") return "Unidade enviada: aguardando o financeiro.";
+  if (status === "aprovado") return "Unidade aprovada.";
   return null;
 }
 
@@ -116,7 +66,27 @@ export function AppShell({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const search = useSearch({ from: "/_authenticated" });
-  const [confirmSend, setConfirmSend] = useState(false);
+  const [asDirector, setAsDirector] = useState(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === "1";
+    } catch {
+      return false; // sem armazenamento: começa no modo normal
+    }
+  });
+  const directorView = asDirector && !!user?.isFinanceiro;
+  const planningPage = pathname.startsWith("/planejamento");
+  function chooseView(next: boolean) {
+    setAsDirector(next);
+    try {
+      localStorage.setItem(VIEW_KEY, next ? "1" : "0");
+    } catch {
+      // sem armazenamento: vale só nesta tela
+    }
+    navigate({
+      to: next ? "/planejamento" : "/plano",
+      search: (prev: Record<string, unknown>) => prev,
+    });
+  }
 
   const { data: units } = useUnits();
   const { data: versions } = useVersions();
@@ -140,7 +110,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { data: submissions } = useSubmissions(version?.id ?? null);
   const submissionStatus = ((submissions ?? []).find((s) => s.unit_id === unit?.id)?.status ??
     "rascunho") as SubmissionStatus;
-  const setUnitStatus = useSetUnitStatus();
 
   const setSearch = (patch: Record<string, string | undefined>) =>
     navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, ...patch }) });
@@ -157,17 +126,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     submissionStatus,
     canEdit: lockReason === null,
     lockReason,
+    isAdmin: !!user?.isFinanceiro && !directorView,
     setUnitId: (id) => setSearch({ u: id }),
     setVersionId: (id) => setSearch({ v: id, s: undefined }),
     setScenarioId: (id) => setSearch({ s: id }),
   };
-
-  const canSend =
-    !!unit &&
-    !!version &&
-    version.status === "em_coleta" &&
-    (submissionStatus === "rascunho" || submissionStatus === "devolvido") &&
-    (user?.isFinanceiro || (user?.isLider && user.unitIds.includes(unit.id)));
 
   async function handleSignOut() {
     await queryClient.cancelQueries();
@@ -204,37 +167,30 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="mt-1 text-xs text-sidebar-foreground/60">Planejamento financeiro</div>
           </div>
           <nav className="flex-1 space-y-0.5 p-2">
-            {NAV_GROUPS.map((group) => {
-              const items = group.items.filter((item) =>
-                item.financeiro ? user?.isFinanceiro : item.management ? user?.isManagement : true,
-              );
-              if (items.length === 0) return null;
+            {NAV_ITEMS.filter((item) =>
+              directorView
+                ? !item.financeiro && !item.management
+                : item.financeiro
+                  ? user?.isFinanceiro
+                  : item.management
+                    ? user?.isManagement
+                    : true,
+            ).map((item) => {
+              const active = [item.to, ...(item.also ?? [])].some((p) => pathname.startsWith(p));
               return (
-                <div key={group.label ?? "inicio"} className="pb-2">
-                  {group.label && (
-                    <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-sidebar-foreground/40">
-                      {group.label}
-                    </div>
-                  )}
-                  {items.map((item) => {
-                    const active = pathname.startsWith(item.to);
-                    return (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        search={(prev: Record<string, unknown>) => prev}
-                        className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                          active
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
-                        }`}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  search={(prev: Record<string, unknown>) => prev}
+                  className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
+                  }`}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
               );
             })}
           </nav>
@@ -256,34 +212,29 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-wrap items-center gap-4 border-b border-border bg-card px-6 py-3">
-            <HeaderSelect
-              label="Unidade"
-              value={unit?.id}
-              onChange={planning.setUnitId}
-              options={visibleUnits.map((u) => ({ value: u.id, label: u.name }))}
-            />
-            <HeaderSelect
-              label="Versão"
-              value={version?.id}
-              onChange={planning.setVersionId}
-              options={(versions ?? []).map((v) => ({ value: v.id, label: v.name }))}
-            />
-            <HeaderSelect
-              label="Cenário"
-              value={scenario?.id}
-              onChange={planning.setScenarioId}
-              options={scenarios.map((s) => ({
-                value: s.id,
-                label: s.name + (s.is_official ? " (oficial)" : ""),
-              }))}
-            />
+            {planningPage && visibleUnits.length > 1 && (
+              <HeaderSelect
+                label="Unidade"
+                value={unit?.id}
+                onChange={planning.setUnitId}
+                options={visibleUnits.map((u) => ({ value: u.id, label: u.name }))}
+              />
+            )}
             <div className="ml-auto flex items-center gap-2">
-              <Badge variant={submissionStatus === "aprovado" ? "default" : "secondary"}>
-                {SUBMISSION_LABELS[submissionStatus]}
-              </Badge>
-              {canSend && (
-                <Button size="sm" className="gap-1.5" onClick={() => setConfirmSend(true)}>
-                  <Send className="h-4 w-4" /> Enviar para aprovação
+              {planningPage && (
+                <Badge variant={submissionStatus === "aprovado" ? "default" : "secondary"}>
+                  {SUBMISSION_LABELS[submissionStatus]}
+                </Badge>
+              )}
+              {user?.isFinanceiro && (
+                <Button
+                  size="sm"
+                  variant={directorView ? "default" : "outline"}
+                  className="gap-1.5"
+                  onClick={() => chooseView(!directorView)}
+                >
+                  <Eye className="h-4 w-4" />
+                  {directorView ? "Voltar ao financeiro" : "Ver como diretor"}
                 </Button>
               )}
             </div>
@@ -291,26 +242,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main className="min-w-0 flex-1 p-6">{children}</main>
         </div>
       </div>
-
-      <AlertDialog open={confirmSend} onOpenChange={setConfirmSend}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Enviar {unit?.name} para aprovação?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Depois de enviar, os lançamentos da unidade ficam bloqueados até o financeiro aprovar
-              ou devolver para ajuste.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => unit && version && setUnitStatus(version.id, unit.id, "enviado")}
-            >
-              Enviar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </PlanningProvider>
   );
 }

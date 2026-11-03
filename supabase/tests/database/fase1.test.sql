@@ -118,9 +118,9 @@ $$, 'Líder lança despesa na própria unidade');
 SELECT throws_ok($$
   SELECT launch_line(pg_temp.id('versao'), pg_temp.id('agencia'), pg_temp.acc('Marketing'), 'x', NULL, NULL, NULL)
 $$, 'P0001', NULL, 'Líder não lança em outra unidade');
-SELECT throws_ok($$
+SELECT lives_ok($$
   SELECT launch_line(pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Rescisões'), 'x', NULL, NULL, NULL)
-$$, 'P0001', NULL, 'Líder não lança folha');
+$$, 'Diretor lança folha na própria unidade');
 SELECT throws_ok($$ SELECT set_official_scenario(pg_temp.id('conservador')) $$, 'P0001', NULL,
   'Líder não define o cenário oficial');
 

@@ -723,6 +723,7 @@ export type Database = {
         Row: {
           base_closed_month: number | null
           base_year: number | null
+          cost_cut_pct: number
           created_at: string
           distribution: string
           floor_adjust_pct: number
@@ -738,6 +739,7 @@ export type Database = {
         Insert: {
           base_closed_month?: number | null
           base_year?: number | null
+          cost_cut_pct?: number
           created_at?: string
           distribution?: string
           floor_adjust_pct?: number
@@ -753,6 +755,7 @@ export type Database = {
         Update: {
           base_closed_month?: number | null
           base_year?: number | null
+          cost_cut_pct?: number
           created_at?: string
           distribution?: string
           floor_adjust_pct?: number
@@ -777,6 +780,8 @@ export type Database = {
       }
       guardrail_units: {
         Row: {
+          base_expense: number | null
+          base_payroll: number | null
           ceiling_amount: number | null
           floor_actual: number | null
           floor_amount: number | null
@@ -789,6 +794,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          base_expense?: number | null
+          base_payroll?: number | null
           ceiling_amount?: number | null
           floor_actual?: number | null
           floor_amount?: number | null
@@ -801,6 +808,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          base_expense?: number | null
+          base_payroll?: number | null
           ceiling_amount?: number | null
           floor_actual?: number | null
           floor_amount?: number | null
@@ -2411,18 +2420,18 @@ export type Database = {
       guardrails: {
         Args: { _scenario_id: string }
         Returns: {
+          base_expense: number
+          base_payroll: number
           ceiling: number
           ceiling_suggested: number
-          conditional_expense: number
-          contribution: number
           floor_amount: number
           floor_net: number
           floor_suggested: number
           kind: string
           planned_expense: number
+          planned_payroll: number
           planned_revenue: number
           planned_variable: number
-          share: number
           unit_id: string
           variable_rate: number
         }[]
@@ -2493,6 +2502,10 @@ export type Database = {
           _version_id: string
         }
         Returns: string
+      }
+      load_reference: {
+        Args: { _account_id?: string; _unit_id: string; _version_id: string }
+        Returns: number
       }
       mark_alert_seen: { Args: { _id: string }; Returns: undefined }
       norm_text: { Args: { _s: string }; Returns: string }
@@ -2644,6 +2657,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reference_rows: {
+        Args: { _year: number }
+        Returns: {
+          account_id: string
+          amount: number
+          kind: string
+          month: number
+          unit_id: string
+        }[]
+      }
       revenue_account_for_category: {
         Args: { _name: string; _plan_year: number }
         Returns: {
@@ -2780,6 +2803,22 @@ export type Database = {
         }[]
       }
       tax_constant: { Args: { _key: string; _ref: string }; Returns: number }
+      unit_reference: {
+        Args: { _unit_id: string; _version_id: string }
+        Returns: {
+          account_id: string
+          amount: number
+          kind: string
+          month: number
+        }[]
+      }
+      unit_reference_suppliers: {
+        Args: { _account_id: string; _unit_id: string; _version_id: string }
+        Returns: {
+          amount: number
+          supplier: string
+        }[]
+      }
       unit_variable_rate: {
         Args: { _scenario_id: string; _unit_id: string }
         Returns: number

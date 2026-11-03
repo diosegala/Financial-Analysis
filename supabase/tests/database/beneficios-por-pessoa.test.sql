@@ -87,9 +87,10 @@ SELECT is((SELECT amount FROM person_benefits WHERE person_id = pg_temp.person('
 
 RESET ROLE;
 SELECT pg_temp.login('lid');
-SELECT throws_ok($$ INSERT INTO person_benefits (person_id, account_id, amount)
-                    VALUES (pg_temp.person('Caio'), pg_temp.id('saude'), 1) $$, '42501', NULL,
-  'Líder não lança benefício por pessoa');
+SELECT lives_ok($$ INSERT INTO person_benefits (person_id, account_id, amount)
+                   VALUES (pg_temp.person('Caio'), pg_temp.id('saude'), 1)
+                   ON CONFLICT (person_id, account_id) DO UPDATE SET amount = person_benefits.amount $$,
+  'Diretor lança benefício de pessoa da própria unidade');
 
 RESET ROLE;
 SELECT pg_temp.login('fin');

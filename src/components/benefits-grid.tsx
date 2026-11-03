@@ -38,7 +38,7 @@ import {
  * O valor vale nos meses em que a pessoa tem salário. As contas são as marcadas como "Benefício por pessoa".
  */
 export function BenefitsGrid({ people, canEdit }: { people: PersonLine[]; canEdit: boolean }) {
-  const { versionId, unitId } = usePlanning();
+  const { versionId, unitId, isAdmin } = usePlanning();
   const { data: accounts } = useAccounts();
   const { data: benefits } = usePersonBenefits(versionId, unitId);
   const { data: bases } = useBenefitBases(versionId, unitId);
@@ -105,15 +105,13 @@ export function BenefitsGrid({ people, canEdit }: { people: PersonLine[]; canEdi
         <div>
           <h2 className="text-lg font-semibold">Benefícios por pessoa</h2>
           <p className="text-sm text-muted-foreground">
-            Valor mensal de cada benefício; vale nos meses em que a pessoa tem salário. O reajuste
-            (última linha) vale para todas as pessoas a partir do mês escolhido. Cole da planilha
-            (ex.: fatura da Unimed por beneficiário). Quando a unidade passa a ter o valor por
-            pessoa, a linha da base do Omie daquela conta sai e fica como referência.
+            Valor mensal de cada pessoa, nos meses em que ela tem salário. Dá para colar da
+            planilha.
           </p>
         </div>
         {canEdit && (
           <div className="flex flex-wrap gap-2">
-            {dreLineId && (
+            {dreLineId && isAdmin && (
               <Button size="sm" variant="outline" onClick={() => setNewName("")}>
                 + Novo benefício
               </Button>
@@ -197,7 +195,7 @@ export function BenefitsGrid({ people, canEdit }: { people: PersonLine[]; canEdi
                     <AdjustmentCell
                       name={c.name}
                       value={adjustments?.get(c.id)}
-                      canEdit={canEdit}
+                      canEdit={canEdit && isAdmin}
                       onChange={(month, pct) => void setAdjustment(versionId!, c.id, month, pct)}
                     />
                   </td>

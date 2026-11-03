@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adjustFrom, monthRange } from "./plan-data";
+import { adjustFrom, monthRange, spreadYear } from "./plan-data";
 import { groupBreakdown, type PayrollDetailRow } from "./payroll";
 
 describe("helpers da grade", () => {
@@ -18,6 +18,20 @@ describe("helpers da grade", () => {
       { month: 6, amount: 110 },
       { month: 7, amount: 220 },
     ]);
+  });
+});
+
+describe("valor do ano nos meses", () => {
+  const total = (m: number[]) => Math.round(m.reduce((a, v) => a + v, 0) * 100) / 100;
+  it("sem meses, divide por igual e fecha exato", () => {
+    const m = spreadYear(Array(12).fill(0), 1000);
+    expect(m[0]).toBe(83.33);
+    expect(total(m)).toBe(1000);
+  });
+  it("com meses, mantém a proporção e os meses vazios", () => {
+    const m = spreadYear([100, 0, 300, ...Array(9).fill(0)], 200);
+    expect(m.slice(0, 3)).toEqual([50, 0, 150]);
+    expect(total(m)).toBe(200);
   });
 });
 

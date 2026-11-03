@@ -1,6 +1,6 @@
--- O líder lança linhas e eventos novos; alterar ou excluir o que já foi lançado é do financeiro.
+-- O diretor responde pela unidade: lança, altera e exclui linhas dela até enviar. Eventos seguem só com o financeiro.
 BEGIN;
-SELECT plan(16);
+SELECT plan(20);
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT ON ids TO authenticated;
@@ -41,20 +41,38 @@ SELECT throws_ok($$
   SELECT launch_event(pg_temp.id('versao'), pg_temp.id('agencia'), NULL, 'Evento alheio', 5)
 $$, 'P0001', NULL, 'Líder não lança evento de outra unidade');
 
--- ───────────── Líder não escreve direto nem edita ─────────────
-SELECT throws_ok($$
+-- ───────────── Diretor edita tudo da própria unidade, e só dela ─────────────
+SELECT lives_ok($$
   INSERT INTO plan_lines (version_id, unit_id, account_id, description)
   VALUES (pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Marketing'), 'direto')
-$$, '42501', NULL, 'Líder não grava linha direto na tabela');
-UPDATE plan_values SET amount = 1 WHERE amount = 5000;
-SELECT is((SELECT count(*)::INT FROM plan_values WHERE amount = 5000), 2, 'Líder não altera valor já lançado');
-SELECT throws_ok($$
+$$, 'Diretor grava linha da própria unidade');
+UPDATE plan_values SET amount = 7000 WHERE amount = 5000 AND month = 4;
+SELECT is((SELECT count(*)::INT FROM plan_values WHERE amount = 7000), 1, 'Diretor altera valor já lançado');
+SELECT lives_ok($$
   INSERT INTO plan_values (line_id, month, amount) SELECT id, 6, 1 FROM plan_lines WHERE description = 'Contrato A'
-$$, '42501', NULL, 'Líder não acrescenta mês a uma linha já lançada');
-UPDATE plan_lines SET description = 'Renomeada' WHERE description = 'Contrato A';
-SELECT is((SELECT count(*)::INT FROM plan_lines WHERE description = 'Contrato A'), 1, 'Líder não edita a linha');
-DELETE FROM plan_lines WHERE description = 'Contrato A';
-SELECT is((SELECT count(*)::INT FROM plan_lines WHERE description = 'Contrato A'), 1, 'Líder não exclui a linha');
+$$, 'Diretor acrescenta mês a uma linha');
+UPDATE plan_lines SET description = 'Renomeada' WHERE description = 'direto';
+SELECT is((SELECT count(*)::INT FROM plan_lines WHERE description = 'Renomeada'), 1, 'Diretor edita a linha');
+DELETE FROM plan_lines WHERE description = 'Renomeada';
+SELECT is((SELECT count(*)::INT FROM plan_lines WHERE description = 'Renomeada'), 0, 'Diretor exclui a linha');
+-- Pessoas: edita na própria unidade, não em outra; depois de enviar, a unidade trava.
+SELECT lives_ok($$
+  INSERT INTO people (version_id, unit_id, name, contract_type_id, base_salary)
+  VALUES (pg_temp.id('versao'), pg_temp.id('consultoria'), 'Pessoa da unidade', (SELECT id FROM contract_types WHERE name = 'CLT'), 1000)
+$$, 'Diretor adiciona pessoa na própria unidade');
+SELECT throws_ok($$
+  INSERT INTO people (version_id, unit_id, name, contract_type_id, base_salary)
+  VALUES (pg_temp.id('versao'), pg_temp.id('agencia'), 'Pessoa de fora', (SELECT id FROM contract_types WHERE name = 'CLT'), 1000)
+$$, '42501', NULL, 'Diretor não adiciona pessoa em outra unidade');
+SELECT lives_ok($$ SELECT set_unit_status(pg_temp.id('versao'), pg_temp.id('consultoria'), 'enviado') $$, 'Diretor envia');
+SELECT throws_ok($$
+  SELECT launch_line(pg_temp.id('versao'), pg_temp.id('consultoria'), pg_temp.acc('Marketing'), 'tarde', NULL, NULL, NULL)
+$$, 'P0001', NULL, 'Depois de enviar, o diretor não lança');
+RESET ROLE;
+SELECT pg_temp.login('fin');
+SELECT set_unit_status(pg_temp.id('versao'), pg_temp.id('consultoria'), 'rascunho');
+RESET ROLE;
+SELECT pg_temp.login('lid');
 UPDATE events SET name = 'Renomeado' WHERE name = 'Workshop';
 SELECT is((SELECT count(*)::INT FROM events WHERE name = 'Workshop'), 1, 'Líder não edita o evento');
 DELETE FROM events WHERE name = 'Workshop';

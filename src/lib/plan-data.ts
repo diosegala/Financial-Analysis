@@ -189,3 +189,15 @@ export function adjustFrom(values: Map<number, number>, from: number, pct: numbe
     .filter(([m]) => m >= from)
     .map(([month, amount]) => ({ month, amount: Math.round(amount * (1 + pct) * 100) / 100 }));
 }
+
+/** Distribui o valor do ano nos 12 meses: na proporção dos meses atuais ou, sem nenhum valor, por igual. O total fecha exato. */
+export function spreadYear(current: number[], total: number): number[] {
+  const base = current.reduce((a, v) => a + v, 0);
+  const months = current.map(
+    (v) => Math.round((base > 0 ? (v / base) * total : total / current.length) * 100) / 100,
+  );
+  const rest = Math.round((total - months.reduce((a, v) => a + v, 0)) * 100) / 100;
+  const last = months.reduce((at, v, i) => (v !== 0 || base === 0 ? i : at), months.length - 1);
+  months[last] = Math.round(((months[last] ?? 0) + rest) * 100) / 100;
+  return months;
+}

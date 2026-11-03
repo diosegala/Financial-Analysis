@@ -1,0 +1,661 @@
+import { Fragment, useState } from "react";
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { useAccounts, useContractTypes } from "@/lib/catalog";
+import {
+  plannedCosts,
+  useGuardrailMutations,
+  useGuardrailSettings,
+  useGuardrails,
+  useReferenceSuppliers,
+  useUnitReference,
+} from "@/lib/guardrails";
+import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
+import {
+  spreadYear,
+  usePlanLines,
+  usePlanMutations,
+  type AccountKind,
+  type PlanLine,
+} from "@/lib/plan-data";
+import { usePlanning } from "@/lib/planning";
+import { MoneyCell } from "@/components/money-cell";
+import { NumberCell } from "@/components/number-cell";
+import { Field, OptionSelect } from "@/components/form-fields";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+interface Row {
+  accountId: string;
+  name: string;
+  lines: PlanLine[];
+  reference: Map<number, number> | undefined;
+  refTotal: number;
+  months: number[];
+  total: number;
+}
+
+const sum = (values: Iterable<number>) => [...values].reduce((a, v) => a + v, 0);
+
+/** Situação da categoria contra o limite: o que passou, a folga ou nada, enquanto não houver plano. */
+export function Situation({ planned, limit }: { planned: number; limit: number }) {
+  if (planned === 0) return <span className="text-muted-foreground">A preencher</span>;
+  const diff = planned - limit;
+  return diff > 0 ? (
+    <span className="font-medium text-destructive">{fmtBRL(diff)} acima</span>
+  ) : (
+    <span className="font-medium text-emerald-700 dark:text-emerald-400">
+      {fmtBRL(-diff)} de folga
+    </span>
+  );
+}
+
+/**
+ * A grade do diretor: uma linha por categoria, da maior para a menor. Por ano, mostra o ano base, o limite e a situação ao
+ * lado do valor do ano, que é editável. Mês a mês, mostra os 12 meses. Categoria com vários lançamentos abre para editar cada um.
+ */
+export function CategoryGrid({
+  kind,
+  onOpenPeople,
+}: {
+  kind: AccountKind;
+  /** Despesas: a primeira linha é a folha, que abre o passo Pessoas. */
+  onOpenPeople?: () => void;
+}) {
+  const { versionId, unitId, scenarioId, canEdit, year } = usePlanning();
+  const { data: lines, isLoading } = usePlanLines(versionId, unitId, kind);
+  const { data: accounts } = useAccounts();
+  const { data: contractTypes } = useContractTypes();
+  const { data: reference } = useUnitReference(versionId, unitId);
+  const { data: settings } = useGuardrailSettings(scenarioId);
+  const { data: guardrails } = useGuardrails(scenarioId);
+  const { setValues, addLine, deleteLine } = usePlanMutations();
+  const { loadReference } = useGuardrailMutations(scenarioId);
+  const [monthly, setMonthly] = useState(false);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [cutting, setCutting] = useState<Row | null>(null);
+  const [suppliers, setSuppliers] = useState<Row | null>(null);
+  const [removing, setRemoving] = useState<Row | null>(null);
+
+  const isCost = kind === "despesa";
+  const showBase = kind !== "folha";
+  const baseCol = showBase && !monthly;
+  const costCol = isCost && !monthly;
+  const cut = Number(settings?.cost_cut_pct ?? 0);
+  const limitOf = (ref: number) => ref * (1 - cut);
+  const baseYear = year ? year - 1 : "";
+  const guard = guardrails?.find((g) => g.unitId === unitId);
+
+  const salaryAccounts = new Set((contractTypes ?? []).map((c) => c.account_id));
+  const available = (accounts ?? []).filter(
+    (a) =>
+      a.active &&
+      a.kind === kind &&
+      a.treatment === "lancavel" &&
+      !a.per_person &&
+      !salaryAccounts.has(a.id) &&
+      (!a.unit_ids || (unitId && a.unit_ids.includes(unitId))),
+  );
+  const names = new Map((accounts ?? []).map((a) => [a.id, a.name]));
+  const byAccount = new Map<string, PlanLine[]>();
+  for (const l of lines ?? [])
+    byAccount.set(l.account_id, [...(byAccount.get(l.account_id) ?? []), l]);
+  const refKinds = new Set((accounts ?? []).filter((a) => a.kind === kind).map((a) => a.id));
+  const ids = new Set([
+    ...byAccount.keys(),
+    ...(showBase ? [...(reference?.keys() ?? [])].filter((id) => refKinds.has(id)) : []),
+  ]);
+  const rows: Row[] = [...ids]
+    .map((accountId) => {
+      const ls = byAccount.get(accountId) ?? [];
+      const ref = reference?.get(accountId);
+      const months = MONTHS.map((_, i) => sum(ls.map((l) => l.values.get(i + 1) ?? 0)));
+      return {
+        accountId,
+        name: names.get(accountId) ?? "—",
+        lines: ls,
+        reference: ref,
+        refTotal: ref ? sum(ref.values()) : 0,
+        months,
+        total: sum(months),
+      };
+    })
+    .sort((a, b) => Math.max(b.refTotal, b.total) - Math.max(a.refTotal, a.total));
+  const addable = available.filter((a) => !ids.has(a.id));
+  const emptyPlan = isCost && (lines ?? []).length === 0 && (reference?.size ?? 0) > 0;
+  const colSpan = 3 + (monthly ? 12 : 0) + (baseCol ? 1 : 0) + (costCol ? 2 : 0);
+
+  /** Grava um mês da categoria: cria o lançamento se ainda não houver. */
+  async function commit(row: Row, values: { month: number; amount: number }[]) {
+    const line = row.lines[0];
+    if (line) return setValues(line.id, values);
+    return addLine({ version_id: versionId!, unit_id: unitId!, account_id: row.accountId }, values);
+  }
+
+  /** Valor do ano digitado: redistribui nos meses, na proporção que já existe ou por igual. */
+  function setYear(row: Row, line: PlanLine | undefined, total: number) {
+    const current = line ? MONTHS.map((_, i) => line.values.get(i + 1) ?? 0) : row.months;
+    const values = spreadYear(current, total).map((amount, i) => ({ month: i + 1, amount }));
+    return line ? setValues(line.id, values) : commit(row, values);
+  }
+
+  async function bringBase(row: Row) {
+    if (!row.reference) return;
+    const values = MONTHS.map((_, i) => ({
+      month: i + 1,
+      amount: row.reference?.get(i + 1) ?? 0,
+    }));
+    await commit(row, values);
+  }
+
+  async function applyCut(row: Row, pct: number) {
+    await Promise.all(
+      row.lines.map((l) =>
+        setValues(
+          l.id,
+          [...l.values.entries()].map(([month, amount]) => ({
+            month,
+            amount: Math.round(amount * (1 - pct) * 100) / 100,
+          })),
+        ),
+      ),
+    );
+  }
+
+  function pasteBlock(start: number, month: number, block: string[][]) {
+    const direct = rows.filter((r) => r.lines.length <= 1);
+    block.forEach((cells, i) => {
+      const row = direct[start + i];
+      if (!row) return;
+      const values = cells
+        .map((text, c) => ({ month: month + c, amount: parseNum(text) }))
+        .filter((v): v is { month: number; amount: number } => v.month <= 12 && v.amount !== null);
+      void commit(row, values);
+    });
+  }
+
+  let directIndex = -1;
+  const totals = MONTHS.map((_, i) => sum(rows.map((r) => r.months[i] ?? 0)));
+  const payrollRow = isCost && onOpenPeople && guard;
+  const totalPlanned = sum(totals) + (payrollRow ? guard.plannedPayroll : 0);
+  const totalRef = sum(rows.map((r) => r.refTotal)) + (payrollRow ? guard.basePayroll : 0);
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="mr-auto flex gap-1 rounded-md border border-border bg-card p-1 text-sm">
+          {(
+            [
+              [false, "Por ano"],
+              [true, "Mês a mês"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => setMonthly(value)}
+              className={`rounded px-3 py-1 ${monthly === value ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {canEdit && emptyPlan && (
+          <Button size="sm" onClick={() => void loadReference(versionId!, unitId!)}>
+            Trazer todas as despesas de {baseYear}
+          </Button>
+        )}
+        {canEdit && (
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setAdding(true)}>
+            <Plus className="h-4 w-4" /> Adicionar categoria
+          </Button>
+        )}
+      </div>
+      <div className="overflow-x-auto rounded-md border border-border bg-card">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/50 text-left">
+              <th className="sticky left-0 z-10 min-w-64 bg-muted px-3 py-2 font-medium">
+                Categoria
+              </th>
+              {baseCol && <th className="min-w-28 px-2 py-2 text-right font-medium">{baseYear}</th>}
+              {costCol && <th className="min-w-28 px-2 py-2 text-right font-medium">Limite</th>}
+              <th className="min-w-36 px-2 py-2 text-right font-medium">{year ?? ""}</th>
+              {costCol && <th className="min-w-36 px-2 py-2 text-right font-medium">Situação</th>}
+              {monthly &&
+                MONTHS.map((m) => (
+                  <th key={m} className="min-w-24 px-2 py-2 text-right font-medium">
+                    {m}
+                  </th>
+                ))}
+              <th className="w-10" />
+            </tr>
+          </thead>
+          <tbody>
+            {payrollRow && (
+              <tr
+                className="cursor-pointer border-b border-border bg-muted/20 hover:bg-muted/40"
+                onClick={onOpenPeople}
+              >
+                <td className="sticky left-0 z-10 bg-muted px-3 py-1.5 font-medium">
+                  Pessoas e benefícios
+                  <div className="text-xs font-normal text-muted-foreground">
+                    Edite no passo Pessoas
+                  </div>
+                </td>
+                {baseCol && (
+                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    {fmtBRL(guard.basePayroll)}
+                  </td>
+                )}
+                {costCol && (
+                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    {fmtBRL(limitOf(guard.basePayroll))}
+                  </td>
+                )}
+                <td className="px-2 py-1.5 text-right font-mono font-medium tabular-nums">
+                  {fmtBRL(guard.plannedPayroll)}
+                </td>
+                {costCol && (
+                  <td className="px-2 py-1.5 text-right">
+                    <Situation planned={guard.plannedPayroll} limit={limitOf(guard.basePayroll)} />
+                  </td>
+                )}
+                {monthly && <td colSpan={12} />}
+                <td />
+              </tr>
+            )}
+            {rows.map((row) => {
+              const many = row.lines.length > 1;
+              const isOpen = open.has(row.accountId);
+              if (!many) directIndex++;
+              const r = directIndex;
+              return (
+                <Fragment key={row.accountId}>
+                  <tr className="border-b border-border">
+                    <td className="sticky left-0 z-10 bg-card px-3 py-1 font-medium">
+                      {many ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-left"
+                          aria-expanded={isOpen}
+                          onClick={() =>
+                            setOpen((s) => {
+                              const n = new Set(s);
+                              if (n.has(row.accountId)) n.delete(row.accountId);
+                              else n.add(row.accountId);
+                              return n;
+                            })
+                          }
+                        >
+                          {isOpen ? (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                          {row.name}
+                          <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">
+                            ({row.lines.length} lançamentos)
+                          </span>
+                        </button>
+                      ) : (
+                        row.name
+                      )}
+                    </td>
+                    {baseCol && (
+                      <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
+                        {row.refTotal ? fmtBRL(row.refTotal) : "—"}
+                      </td>
+                    )}
+                    {costCol && (
+                      <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
+                        {fmtBRL(limitOf(row.refTotal))}
+                      </td>
+                    )}
+                    <td className="px-2 py-1 text-right">
+                      {monthly || many ? (
+                        <span className="font-mono font-medium tabular-nums">
+                          {fmtBRL(row.total)}
+                        </span>
+                      ) : (
+                        <NumberCell
+                          className="ml-auto w-32"
+                          label={`${row.name} em ${year ?? ""}`}
+                          value={row.total}
+                          disabled={!canEdit}
+                          onSave={(v) => void setYear(row, row.lines[0], v ?? 0)}
+                        />
+                      )}
+                    </td>
+                    {costCol && (
+                      <td className="px-2 py-1 text-right">
+                        <Situation planned={row.total} limit={limitOf(row.refTotal)} />
+                      </td>
+                    )}
+                    {monthly &&
+                      MONTHS.map((_, i) => (
+                        <td key={i} className="border-l border-border/50 p-0">
+                          {many ? (
+                            <div className="px-2 py-1 text-right font-mono tabular-nums">
+                              {row.months[i] ? fmtBRL(row.months[i]!) : "—"}
+                            </div>
+                          ) : (
+                            <MoneyCell
+                              value={row.months[i] ?? 0}
+                              disabled={!canEdit}
+                              pos={{ grid: `grid-${kind}`, row: r, col: i }}
+                              onCommit={(v) => void commit(row, [{ month: i + 1, amount: v }])}
+                              onPasteBlock={(block) => pasteBlock(r, i + 1, block)}
+                            />
+                          )}
+                        </td>
+                      ))}
+                    <td className="px-1">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={`Ações de ${row.name}`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canEdit && !many && row.reference && (
+                            <DropdownMenuItem onClick={() => void bringBase(row)}>
+                              Trazer valores de {baseYear}
+                            </DropdownMenuItem>
+                          )}
+                          {canEdit && row.total > 0 && (
+                            <DropdownMenuItem onClick={() => setCutting(row)}>
+                              Cortar em %…
+                            </DropdownMenuItem>
+                          )}
+                          {isCost && row.reference && (
+                            <DropdownMenuItem onClick={() => setSuppliers(row)}>
+                              Ver fornecedores de {baseYear}
+                            </DropdownMenuItem>
+                          )}
+                          {canEdit && row.lines.length > 0 && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => setRemoving(row)}
+                              >
+                                Zerar categoria
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                  {many &&
+                    isOpen &&
+                    row.lines.map((l) => (
+                      <tr key={l.id} className="border-b border-border/50 bg-muted/20 text-xs">
+                        <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-9 pr-3">
+                          {l.description || "Sem descrição"}
+                        </td>
+                        {baseCol && <td />}
+                        {costCol && <td />}
+                        <td className="px-2 py-1 text-right">
+                          {monthly ? (
+                            <span className="font-mono tabular-nums">
+                              {fmtBRL(sum(l.values.values()))}
+                            </span>
+                          ) : (
+                            <NumberCell
+                              className="ml-auto w-32"
+                              label={`${l.description ?? row.name} em ${year ?? ""}`}
+                              value={sum(l.values.values())}
+                              disabled={!canEdit}
+                              onSave={(v) => void setYear(row, l, v ?? 0)}
+                            />
+                          )}
+                        </td>
+                        {costCol && <td />}
+                        {monthly &&
+                          MONTHS.map((_, i) => (
+                            <td key={i} className="border-l border-border/50 p-0">
+                              <MoneyCell
+                                value={l.values.get(i + 1) ?? 0}
+                                disabled={!canEdit}
+                                onCommit={(v) =>
+                                  void setValues(l.id, [{ month: i + 1, amount: v }])
+                                }
+                              />
+                            </td>
+                          ))}
+                        <td />
+                      </tr>
+                    ))}
+                </Fragment>
+              );
+            })}
+            {rows.length === 0 && !payrollRow ? (
+              <tr>
+                <td colSpan={colSpan} className="px-3 py-8 text-center text-muted-foreground">
+                  Nenhuma categoria ainda. Use "Adicionar categoria".
+                </td>
+              </tr>
+            ) : (
+              <tr className="border-t border-border bg-muted/30 font-semibold">
+                <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">Total</td>
+                {baseCol && (
+                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    {fmtBRL(totalRef)}
+                  </td>
+                )}
+                {costCol && (
+                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    {guard ? fmtBRL(guard.ceiling) : fmtBRL(limitOf(totalRef))}
+                  </td>
+                )}
+                <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                  {fmtBRL(totalPlanned)}
+                </td>
+                {costCol && (
+                  <td className="px-2 py-1.5 text-right">
+                    {guard ? (
+                      <Situation planned={plannedCosts(guard)} limit={guard.ceiling} />
+                    ) : null}
+                  </td>
+                )}
+                {monthly &&
+                  totals.map((t, i) => (
+                    <td key={i} className="px-2 py-1.5 text-right font-mono tabular-nums">
+                      {fmtBRL(t)}
+                    </td>
+                  ))}
+                <td />
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {adding && (
+        <AddCategoryDialog
+          options={addable.map((a) => ({ value: a.id, label: a.name }))}
+          onClose={() => setAdding(false)}
+          onAdd={async (accountId) => {
+            const ok = await addLine({
+              version_id: versionId!,
+              unit_id: unitId!,
+              account_id: accountId,
+            });
+            if (ok) setAdding(false);
+          }}
+        />
+      )}
+      {cutting && (
+        <CutDialog
+          row={cutting}
+          onClose={() => setCutting(null)}
+          onApply={async (pct) => {
+            await applyCut(cutting, pct);
+            setCutting(null);
+          }}
+        />
+      )}
+      {suppliers && <SuppliersDialog row={suppliers} onClose={() => setSuppliers(null)} />}
+      {removing && (
+        <Dialog open onOpenChange={(o) => !o && setRemoving(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Zerar {removing.name}?</DialogTitle>
+              <DialogDescription>
+                Os valores desta categoria em {year} saem do plano da unidade.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRemoving(null)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  await Promise.all(removing.lines.map((l) => deleteLine(l.id)));
+                  setRemoving(null);
+                }}
+              >
+                Zerar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+function AddCategoryDialog({
+  options,
+  onAdd,
+  onClose,
+}: {
+  options: { value: string; label: string }[];
+  onAdd: (accountId: string) => void;
+  onClose: () => void;
+}) {
+  const [accountId, setAccountId] = useState<string | null>(null);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Adicionar categoria</DialogTitle>
+          <DialogDescription>
+            Ela entra na grade para você lançar os meses. Sem gasto no ano anterior, o limite dela é
+            zero: o valor precisa caber na folga das outras.
+          </DialogDescription>
+        </DialogHeader>
+        <Field label="Categoria">
+          <OptionSelect value={accountId} onChange={setAccountId} options={options} />
+        </Field>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button disabled={!accountId} onClick={() => accountId && onAdd(accountId)}>
+            Adicionar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CutDialog({
+  row,
+  onApply,
+  onClose,
+}: {
+  row: Row;
+  onApply: (pct: number) => void;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState("10");
+  const pct = (parseNum(text) ?? 0) / 100;
+  const valid = pct > 0 && pct <= 1;
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cortar {row.name}</DialogTitle>
+          <DialogDescription>
+            Reduz todos os meses desta categoria. Hoje: {fmtBRL(row.total)}.
+            {valid ? ` Fica em ${fmtBRL(row.total * (1 - pct))}.` : ""}
+          </DialogDescription>
+        </DialogHeader>
+        <Field label="Corte (%)">
+          <Input
+            aria-label="Corte em %"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="font-mono"
+          />
+        </Field>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button disabled={!valid} onClick={() => onApply(pct)}>
+            Aplicar corte
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SuppliersDialog({ row, onClose }: { row: Row; onClose: () => void }) {
+  const { versionId, unitId, year } = usePlanning();
+  const { data, isLoading } = useReferenceSuppliers(versionId, unitId, row.accountId);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{row.name}</DialogTitle>
+          <DialogDescription>
+            Fornecedores em {year ? year - 1 : ""}, só para consulta.
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Carregando…</p>
+        ) : (
+          <div className="max-h-96 overflow-y-auto text-sm">
+            {(data ?? []).map((s) => (
+              <div
+                key={s.supplier}
+                className="flex justify-between gap-3 border-b border-border py-1.5"
+              >
+                <span>{s.supplier}</span>
+                <span className="font-mono tabular-nums">{fmtBRL(s.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
