@@ -16,7 +16,10 @@ export interface Guardrail {
   floorNet: number | null;
   baseExpense: number;
   basePayroll: number;
-  ceilingSuggested: number;
+  expenseLimitAuto: number;
+  payrollLimitAuto: number;
+  expenseLimit: number;
+  payrollLimit: number;
   ceiling: number;
   plannedRevenue: number;
   plannedVariable: number;
@@ -75,7 +78,10 @@ export function useGuardrails(scenarioId: string | null) {
         floorNet: num(r.floor_net),
         baseExpense: Number(r.base_expense ?? 0),
         basePayroll: Number(r.base_payroll ?? 0),
-        ceilingSuggested: Number(r.ceiling_suggested ?? 0),
+        expenseLimitAuto: Number(r.expense_limit_auto ?? 0),
+        payrollLimitAuto: Number(r.payroll_limit_auto ?? 0),
+        expenseLimit: Number(r.expense_limit ?? 0),
+        payrollLimit: Number(r.payroll_limit ?? 0),
         ceiling: Number(r.ceiling ?? 0),
         plannedRevenue: Number(r.planned_revenue ?? 0),
         plannedVariable: Number(r.planned_variable ?? 0),

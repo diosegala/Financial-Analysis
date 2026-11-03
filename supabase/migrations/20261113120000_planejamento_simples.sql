@@ -2,7 +2,7 @@
 -- enviar), e cada unidade recebe receita-compromisso e limite de custos.
 --
 --   custo-base (u) = despesas do ano base no Omie + custo atual da folha da unidade
---   limite (u)     = custo-base × (1 − corte), ou o valor digitado pelo financeiro
+--   limite (u)     = limite de despesas + limite de folha; cada um é a base × (1 − corte), ou o valor digitado
 --
 -- Só acrescenta colunas e funções; nada do que já foi lançado muda.
 
@@ -73,7 +73,10 @@ $$;
 ALTER TABLE public.guardrail_settings
   ADD COLUMN cost_cut_pct NUMERIC NOT NULL DEFAULT 0 CHECK (cost_cut_pct >= 0 AND cost_cut_pct < 1);
 UPDATE public.guardrail_settings SET cost_cut_pct = support_cut_pct;
-ALTER TABLE public.guardrail_units ADD COLUMN base_expense NUMERIC, ADD COLUMN base_payroll NUMERIC;
+ALTER TABLE public.guardrail_units ADD COLUMN base_expense NUMERIC, ADD COLUMN base_payroll NUMERIC,
+  ADD COLUMN expense_limit NUMERIC, ADD COLUMN payroll_limit NUMERIC;
+-- O limite passa a ser por despesas e por folha. O total digitado na regra anterior deixa de valer (fica na auditoria).
+UPDATE public.guardrail_units SET ceiling_amount = NULL WHERE ceiling_amount IS NOT NULL;
 
 -- ───────────── Recebimentos do Omie por unidade, mais rápido ─────────────
 CREATE OR REPLACE FUNCTION public.omie_revenue_attribution(_year INT)
@@ -318,8 +321,8 @@ $$;
 DROP FUNCTION public.guardrails(UUID);
 CREATE FUNCTION public.guardrails(_scenario_id UUID)
 RETURNS TABLE (unit_id UUID, kind TEXT, floor_suggested NUMERIC, floor_amount NUMERIC, variable_rate NUMERIC,
-  floor_net NUMERIC, base_expense NUMERIC, base_payroll NUMERIC, ceiling_suggested NUMERIC, ceiling NUMERIC,
-  planned_revenue NUMERIC, planned_variable NUMERIC, planned_expense NUMERIC, planned_payroll NUMERIC)
+  floor_net NUMERIC, base_expense NUMERIC, base_payroll NUMERIC, expense_limit_auto NUMERIC, payroll_limit_auto NUMERIC,
+  expense_limit NUMERIC, payroll_limit NUMERIC, ceiling NUMERIC, planned_revenue NUMERIC, planned_variable NUMERIC, planned_expense NUMERIC, planned_payroll NUMERIC)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 #variable_conflict use_column
 DECLARE
@@ -345,7 +348,7 @@ BEGIN
     FROM public.plan_split(_version, _scenario_id) p GROUP BY p.unit_id
   ),
   b AS (
-    SELECT u.id, u.kind, g.floor_amount AS floor_typed, g.ceiling_amount AS ceiling_typed,
+    SELECT u.id, u.kind, g.floor_amount AS floor_typed, g.expense_limit AS expense_typed, g.payroll_limit AS payroll_typed,
       COALESCE(g.base_expense, 0) AS base_expense, COALESCE(g.base_payroll, 0) AS base_payroll,
       (COALESCE(g.floor_actual, 0) + COALESCE(g.floor_projected, 0)) * (1 + st.floor_adjust_pct) AS floor_sugg,
       COALESCE(pl.revenue, 0) AS revenue, COALESCE(pl.variable, 0) AS variable,
@@ -362,8 +365,11 @@ BEGIN
     b.vrate,
     CASE WHEN b.kind = 'negocio' THEN COALESCE(b.floor_typed, b.floor_sugg) * (1 - b.vrate) END,
     b.base_expense, b.base_payroll,
-    (b.base_expense + b.base_payroll) * (1 - st.cost_cut_pct),
-    COALESCE(b.ceiling_typed, (b.base_expense + b.base_payroll) * (1 - st.cost_cut_pct)),
+    b.base_expense * (1 - st.cost_cut_pct), b.base_payroll * (1 - st.cost_cut_pct),
+    COALESCE(b.expense_typed, b.base_expense * (1 - st.cost_cut_pct)),
+    COALESCE(b.payroll_typed, b.base_payroll * (1 - st.cost_cut_pct)),
+    COALESCE(b.expense_typed, b.base_expense * (1 - st.cost_cut_pct))
+      + COALESCE(b.payroll_typed, b.base_payroll * (1 - st.cost_cut_pct)),
     b.revenue, b.variable, b.expense, b.payroll
   FROM b
   WHERE public.has_any_role(auth.uid(), ARRAY['financeiro', 'vp', 'ceo']::public.app_role[])

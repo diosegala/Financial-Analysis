@@ -57,7 +57,17 @@ const opensLines = (row: Row) =>
   row.lines.length > 1 || (row.lines.length === 1 && !!row.lines[0]?.description);
 
 /** Situação da categoria contra o limite: o que passou, a folga ou nada, enquanto não houver plano. */
-export function Situation({ planned, limit }: { planned: number; limit: number | null }) {
+export function Situation({
+  planned,
+  limit,
+  pending = false,
+}: {
+  planned: number;
+  limit: number | null;
+  /** O limite ainda não foi calculado no Plano CUPOLA. */
+  pending?: boolean;
+}) {
+  if (pending) return <span className="text-muted-foreground">Limite a definir</span>;
   if (planned === 0) return <span className="text-muted-foreground">A preencher</span>;
   if (limit === null) return <span className="text-muted-foreground">Novo: entra no total</span>;
   const diff = planned - limit;
@@ -108,6 +118,7 @@ export function CategoryGrid({
   const limitOf = (ref: number) => ref * (1 - cut);
   const baseYear = year ? year - 1 : "";
   const guard = guardrails?.find((g) => g.unitId === unitId);
+  const calculated = !!settings?.suggested_at;
 
   const salaryAccounts = new Set((contractTypes ?? []).map((c) => c.account_id));
   const available = (accounts ?? []).filter(
@@ -263,17 +274,17 @@ export function CategoryGrid({
                 <td className="sticky left-0 z-10 bg-muted px-3 py-1.5 font-medium">
                   Pessoas e benefícios
                   <div className="text-xs font-normal text-muted-foreground">
-                    Edite no passo Pessoas
+                    Base: folha atual. Edite no passo Pessoas
                   </div>
                 </td>
                 {baseCol && (
                   <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                    {fmtBRL(guard.basePayroll)}
+                    {calculated ? fmtBRL(guard.basePayroll) : "—"}
                   </td>
                 )}
                 {costCol && (
                   <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                    {fmtBRL(limitOf(guard.basePayroll))}
+                    {calculated ? fmtBRL(guard.payrollLimit) : "—"}
                   </td>
                 )}
                 <td className="px-2 py-1.5 text-right font-mono font-medium tabular-nums">
@@ -281,7 +292,11 @@ export function CategoryGrid({
                 </td>
                 {costCol && (
                   <td className="px-2 py-1.5 text-right">
-                    <Situation planned={guard.plannedPayroll} limit={limitOf(guard.basePayroll)} />
+                    <Situation
+                      planned={guard.plannedPayroll}
+                      limit={guard.payrollLimit}
+                      pending={!calculated}
+                    />
                   </td>
                 )}
                 {monthly && <td colSpan={12} />}
@@ -524,7 +539,7 @@ export function CategoryGrid({
                 )}
                 {costCol && (
                   <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                    {guard ? fmtBRL(guard.ceiling) : fmtBRL(limitOf(totalRef))}
+                    {guard && calculated ? fmtBRL(guard.ceiling) : "—"}
                   </td>
                 )}
                 <td className="px-2 py-1.5 text-right font-mono tabular-nums">
@@ -533,7 +548,11 @@ export function CategoryGrid({
                 {costCol && (
                   <td className="px-2 py-1.5 text-right">
                     {guard ? (
-                      <Situation planned={plannedCosts(guard)} limit={guard.ceiling} />
+                      <Situation
+                        planned={plannedCosts(guard)}
+                        limit={guard.ceiling}
+                        pending={!calculated}
+                      />
                     ) : null}
                   </td>
                 )}

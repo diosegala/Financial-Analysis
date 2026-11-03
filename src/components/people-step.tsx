@@ -4,6 +4,8 @@ import { usePlanning } from "@/lib/planning";
 import { byId, useContractTypes, useUnits } from "@/lib/catalog";
 import { usePersonLines, usePeopleMutations, type Person, type PersonLine } from "@/lib/payroll";
 import { usePlanMutations } from "@/lib/plan-data";
+import { useGuardrailSettings, useGuardrails } from "@/lib/guardrails";
+import { Situation } from "@/components/category-grid";
 import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
 import { parseDate } from "@/lib/people-import";
 import { AdjustDialog, FillDialog } from "@/components/plan-grid";
@@ -92,7 +94,10 @@ function useOpenPeople() {
 
 /** Passo Pessoas: folha, benefícios e outros custos de folha da unidade. */
 export function PeopleStep() {
-  const { versionId, unitId, canEdit, isAdmin } = usePlanning();
+  const { versionId, unitId, scenarioId, canEdit, isAdmin } = usePlanning();
+  const { data: guardrails } = useGuardrails(scenarioId);
+  const { data: limits } = useGuardrailSettings(scenarioId);
+  const guard = guardrails?.find((g) => g.unitId === unitId);
   const { data: items, isLoading } = usePersonLines(versionId, unitId);
   const { data: contractTypes } = useContractTypes();
   const { setValues } = usePlanMutations();
@@ -152,6 +157,27 @@ export function PeopleStep() {
         </div>
       )}
 
+      {guard && (
+        <section className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md border border-border bg-card px-4 py-3 text-sm">
+          <span>
+            <span className="text-muted-foreground">Folha lançada: </span>
+            <span className="font-mono font-semibold tabular-nums">
+              {fmtBRL(guard.plannedPayroll)}
+            </span>
+          </span>
+          <span>
+            <span className="text-muted-foreground">Limite da folha: </span>
+            <span className="font-mono font-semibold tabular-nums">
+              {limits?.suggested_at ? fmtBRL(guard.payrollLimit) : "a definir"}
+            </span>
+          </span>
+          <Situation
+            planned={guard.plannedPayroll}
+            limit={guard.payrollLimit}
+            pending={!limits?.suggested_at}
+          />
+        </section>
+      )}
       {rows.length > 0 && <PayrollSummary yearTotals={breakdown.yearTotals} />}
       {rows.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">

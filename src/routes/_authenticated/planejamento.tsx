@@ -7,7 +7,7 @@ import { useDreLines } from "@/lib/catalog";
 import { boardLines } from "@/lib/board";
 import { dreValue, useDreReport } from "@/lib/dre";
 import { fmtBRL } from "@/lib/format";
-import { plannedCosts, useGuardrails } from "@/lib/guardrails";
+import { plannedCosts, useGuardrailSettings, useGuardrails } from "@/lib/guardrails";
 import { usePersonLines } from "@/lib/payroll";
 import { usePlanLines } from "@/lib/plan-data";
 import { useSetUnitStatus } from "@/lib/submissions";
@@ -38,7 +38,10 @@ function UnitSummary() {
   const { data: guardrails } = useGuardrails(scenarioId);
   const { data: lines } = useDreLines();
   const { data: values } = useDreReport(versionId, scenarioId, unitId ? [unitId] : []);
-  const g = guardrails?.find((r) => r.unitId === unitId);
+  const { data: settings } = useGuardrailSettings(scenarioId);
+  const found = guardrails?.find((r) => r.unitId === unitId);
+  // Sem o cálculo do Plano CUPOLA, ainda não há limite: o topo não acusa nada.
+  const g = settings?.suggested_at ? found : undefined;
   const { revenue, result } = boardLines(lines);
   const costLines = (lines ?? []).filter((l) => l.active && l.kind === "lancada" && l.sign < 0);
   const dreCosts = values ? costLines.reduce((a, l) => a + dreValue(values, l.id, 0), 0) : 0;
@@ -54,7 +57,9 @@ function UnitSummary() {
     {
       label: "Limite de custos",
       value: g ? fmtBRL(g.ceiling) : "—",
-      ...(g ? {} : { hint: "Aparece quando o financeiro publicar" }),
+      ...(g
+        ? { hint: `Despesas ${fmtBRL(g.expenseLimit)} · Folha ${fmtBRL(g.payrollLimit)}` }
+        : { hint: "Aparece quando o financeiro calcular e publicar" }),
     },
     diff !== null && diff > 0
       ? { label: "Falta cortar", value: fmtBRL(diff), bad: true }

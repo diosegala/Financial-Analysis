@@ -928,12 +928,14 @@ export type Database = {
           base_expense: number | null
           base_payroll: number | null
           ceiling_amount: number | null
+          expense_limit: number | null
           floor_actual: number | null
           floor_amount: number | null
           floor_projected: number | null
           id: string
           manual_share: number | null
           note: string | null
+          payroll_limit: number | null
           scenario_id: string
           unit_id: string
           updated_at: string
@@ -942,12 +944,14 @@ export type Database = {
           base_expense?: number | null
           base_payroll?: number | null
           ceiling_amount?: number | null
+          expense_limit?: number | null
           floor_actual?: number | null
           floor_amount?: number | null
           floor_projected?: number | null
           id?: string
           manual_share?: number | null
           note?: string | null
+          payroll_limit?: number | null
           scenario_id: string
           unit_id: string
           updated_at?: string
@@ -956,12 +960,14 @@ export type Database = {
           base_expense?: number | null
           base_payroll?: number | null
           ceiling_amount?: number | null
+          expense_limit?: number | null
           floor_actual?: number | null
           floor_amount?: number | null
           floor_projected?: number | null
           id?: string
           manual_share?: number | null
           note?: string | null
+          payroll_limit?: number | null
           scenario_id?: string
           unit_id?: string
           updated_at?: string
@@ -2690,11 +2696,14 @@ export type Database = {
           base_expense: number
           base_payroll: number
           ceiling: number
-          ceiling_suggested: number
+          expense_limit: number
+          expense_limit_auto: number
           floor_amount: number
           floor_net: number
           floor_suggested: number
           kind: string
+          payroll_limit: number
+          payroll_limit_auto: number
           planned_expense: number
           planned_payroll: number
           planned_revenue: number
