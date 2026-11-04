@@ -11,7 +11,10 @@ import {
   companyResults,
   plannedCosts,
   plannedResult,
+  SUPPORT_BASIS_LABELS,
   useGuardrailMutations,
+  useSupportAllocation,
+  useSupportShares,
   useGuardrailSettings,
   useGuardrailUnits,
   useGuardrails,
@@ -81,6 +84,8 @@ function PlanoPage() {
       return data?.synced_at ?? null;
     },
   });
+  const { data: allocation } = useSupportAllocation(scenarioId);
+  const { data: customShares } = useSupportShares(scenarioId, !!user?.isFinanceiro);
   const setUnitStatus = useSetUnitStatus();
   const m = useGuardrailMutations(scenarioId);
   const [busy, setBusy] = useState(false);
@@ -113,6 +118,11 @@ function PlanoPage() {
     }
   };
   const sumBy = (fn: (g: (typeof list)[number]) => number) => list.reduce((a, g) => a + fn(g), 0);
+  const supportTotal = (allocation ?? []).reduce((t, x) => t + x.cost, 0);
+  const cutOf = (kind: string) =>
+    list
+      .filter((g) => (kind === "negocio" ? g.kind === "negocio" : g.kind !== "negocio"))
+      .reduce((t, g) => t + (g.baseExpense + g.basePayroll - g.ceiling), 0);
   const activeIds = (units ?? []).filter((u) => u.active).map((u) => u.id);
 
   return (
@@ -384,6 +394,87 @@ function PlanoPage() {
           </tbody>
         </table>
       </div>
+
+      <section className="space-y-2">
+        <div>
+          <h2 className="text-lg font-semibold">Peso das áreas de apoio nas unidades</h2>
+          <p className="text-sm text-muted-foreground">
+            As áreas de apoio custam {fmtBRL(supportTotal)} no plano, divididos{" "}
+            {SUPPORT_BASIS_LABELS[allocation?.[0]?.basis ?? "igual"]}.
+            {isFin &&
+              " Digite o percentual em Critério para mudar a divisão; vazio em todas volta para o cálculo pela receita."}
+          </p>
+        </div>
+        <div className="overflow-x-auto rounded-md border border-border bg-card">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/50 text-left">
+                <th className="px-3 py-2 font-medium">Unidade</th>
+                <th className="px-3 py-2 text-right font-medium">Receita lançada</th>
+                <th className="px-3 py-2 text-right font-medium">Resultado direto</th>
+                <th className="px-3 py-2 text-right font-medium">Parte do apoio</th>
+                <th className="px-3 py-2 text-right font-medium">Apoio rateado</th>
+                <th className="px-3 py-2 text-right font-medium">Resultado após apoio</th>
+                <th className="px-3 py-2 text-right font-medium">Apoio / receita</th>
+                {isFin && <th className="px-3 py-2 text-right font-medium">Critério (%)</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {list
+                .filter((g) => g.kind === "negocio")
+                .map((g) => {
+                  const a = allocation?.find((x) => x.unitId === g.unitId);
+                  const name = unitMap.get(g.unitId)?.name ?? "—";
+                  const after = plannedResult(g) - (a?.cost ?? 0);
+                  return (
+                    <tr key={g.unitId} className="border-b border-border last:border-0">
+                      <td className="px-3 py-1.5 font-medium">{name}</td>
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {fmtBRL(g.plannedRevenue)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {fmtBRL(plannedResult(g))}
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {fmtPct(a?.share ?? 0)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {fmtBRL(a?.cost ?? 0)}
+                      </td>
+                      <td
+                        className={`px-3 py-1.5 text-right font-mono font-semibold tabular-nums ${after < 0 ? "text-destructive" : ""}`}
+                      >
+                        {fmtBRL(after)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {g.plannedRevenue ? fmtPct((a?.cost ?? 0) / g.plannedRevenue) : "—"}
+                      </td>
+                      {isFin && (
+                        <td className="px-3 py-1.5 text-right">
+                          <NumberCell
+                            className="ml-auto w-24"
+                            percent
+                            label={`Critério de ${name}`}
+                            value={customShares?.get(g.unitId) ?? null}
+                            disabled={locked}
+                            onSave={(v) => void m.saveSupportShare(g.unitId, v)}
+                          />
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Big
+            label="O corte nas unidades de negócio representa"
+            value={fmtBRL(cutOf("negocio"))}
+          />
+          <Big label="O corte nas áreas de apoio representa" value={fmtBRL(cutOf("apoio"))} />
+        </div>
+      </section>
 
       <div className="space-y-2">
         <Button variant="outline" size="sm" onClick={() => setShowDre(!showDre)}>

@@ -7,7 +7,12 @@ import { useDreLines } from "@/lib/catalog";
 import { boardLines } from "@/lib/board";
 import { dreValue, useDreReport } from "@/lib/dre";
 import { fmtBRL } from "@/lib/format";
-import { plannedCosts, useGuardrailSettings, useGuardrails } from "@/lib/guardrails";
+import {
+  plannedCosts,
+  useGuardrailSettings,
+  useGuardrails,
+  useSupportAllocation,
+} from "@/lib/guardrails";
 import { usePersonLines } from "@/lib/payroll";
 import { usePlanLines } from "@/lib/plan-data";
 import { useSetUnitStatus } from "@/lib/submissions";
@@ -39,6 +44,8 @@ function UnitSummary() {
   const { data: lines } = useDreLines();
   const { data: values } = useDreReport(versionId, scenarioId, unitId ? [unitId] : []);
   const { data: settings } = useGuardrailSettings(scenarioId);
+  const { data: allocation } = useSupportAllocation(scenarioId);
+  const support = allocation?.find((a) => a.unitId === unitId);
   const found = guardrails?.find((r) => r.unitId === unitId);
   // Sem o cálculo do Plano CUPOLA, ainda não há limite: o topo não acusa nada.
   const g = settings?.suggested_at ? found : undefined;
@@ -47,6 +54,7 @@ function UnitSummary() {
   const dreCosts = values ? costLines.reduce((a, l) => a + dreValue(values, l.id, 0), 0) : 0;
   const planned = g ? plannedCosts(g) : dreCosts;
   const diff = g ? planned - g.ceiling : null;
+  const resultValue = result && values ? dreValue(values, result.id, 0) : 0;
   const items: { label: string; value: string; hint?: string; bad?: boolean; good?: boolean }[] = [
     {
       label: "Receita",
@@ -64,13 +72,20 @@ function UnitSummary() {
     diff !== null && diff > 0
       ? { label: "Falta cortar", value: fmtBRL(diff), bad: true }
       : { label: "Folga", value: diff === null ? "—" : fmtBRL(-diff), good: diff !== null },
-    {
-      label: "Resultado da unidade",
-      value: fmtBRL(result && values ? dreValue(values, result.id, 0) : 0),
-    },
+    { label: "Resultado da unidade", value: fmtBRL(resultValue) },
+    ...(support
+      ? [
+          { label: "Apoio rateado", value: fmtBRL(support.cost) },
+          {
+            label: "Resultado após apoio",
+            value: fmtBRL(resultValue - support.cost),
+            bad: resultValue - support.cost < 0,
+          },
+        ]
+      : []),
   ];
   return (
-    <section className="sticky top-0 z-20 grid gap-3 rounded-md border border-border bg-card p-3 sm:grid-cols-3 lg:grid-cols-5">
+    <section className="sticky top-0 z-20 flex flex-wrap gap-x-10 gap-y-3 rounded-md border border-border bg-card p-3">
       {items.map((it) => (
         <div key={it.label}>
           <div className="text-xs text-muted-foreground">{it.label}</div>
