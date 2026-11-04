@@ -6,15 +6,7 @@ import { friendlyError } from "./catalog";
 
 export type GuardrailSettings = Tables<"guardrail_settings">;
 export type GuardrailUnitRow = Tables<"guardrail_units">;
-export type Distribution = "piso" | "margem" | "manual";
-
-export const DISTRIBUTION_LABELS: Record<Distribution, string> = {
-  piso: "Pelo piso de receita (quem vende mais contribui mais)",
-  margem: "Pela margem (piso líquido − despesa lançada)",
-  manual: "Manual (% por unidade)",
-};
-
-/** Contrato de uma unidade no cenário: piso, contribuição e teto, mais o que já está lançado (valores do ano). */
+/** Os números de uma unidade no cenário: compromisso, custo-base, limite e o que já está lançado (valores do ano). */
 export interface Guardrail {
   unitId: string;
   kind: string;
@@ -22,15 +14,17 @@ export interface Guardrail {
   floor: number | null;
   variableRate: number;
   floorNet: number | null;
-  share: number | null;
-  contribution: number | null;
-  ceilingSuggested: number | null;
+  baseExpense: number;
+  basePayroll: number;
+  expenseLimitAuto: number;
+  payrollLimitAuto: number;
+  expenseLimit: number;
+  payrollLimit: number;
   ceiling: number;
   plannedRevenue: number;
   plannedVariable: number;
-  /** Despesa lançada sem as condicionadas (é a que conta na trava). */
   plannedExpense: number;
-  conditionalExpense: number;
+  plannedPayroll: number;
 }
 
 const num = (v: number | null) => (v === null ? null : Number(v));
@@ -66,7 +60,7 @@ export function useGuardrailUnits(scenarioId: string | null) {
   });
 }
 
-/** O contrato calculado no banco. O líder recebe só as unidades dele, e só depois de publicado. */
+/** Calculado no banco. O diretor recebe só a unidade dele, e só depois de publicado. */
 export function useGuardrails(scenarioId: string | null) {
   return useQuery({
     // Debaixo de "target_vs_plan": lançar receita ou despesa atualiza o placar junto.
@@ -82,33 +76,94 @@ export function useGuardrails(scenarioId: string | null) {
         floor: num(r.floor_amount),
         variableRate: Number(r.variable_rate ?? 0),
         floorNet: num(r.floor_net),
-        share: num(r.share),
-        contribution: num(r.contribution),
-        ceilingSuggested: num(r.ceiling_suggested),
+        baseExpense: Number(r.base_expense ?? 0),
+        basePayroll: Number(r.base_payroll ?? 0),
+        expenseLimitAuto: Number(r.expense_limit_auto ?? 0),
+        payrollLimitAuto: Number(r.payroll_limit_auto ?? 0),
+        expenseLimit: Number(r.expense_limit ?? 0),
+        payrollLimit: Number(r.payroll_limit ?? 0),
         ceiling: Number(r.ceiling ?? 0),
         plannedRevenue: Number(r.planned_revenue ?? 0),
         plannedVariable: Number(r.planned_variable ?? 0),
         plannedExpense: Number(r.planned_expense ?? 0),
-        conditionalExpense: Number(r.conditional_expense ?? 0),
+        plannedPayroll: Number(r.planned_payroll ?? 0),
       }));
     },
   });
 }
 
+/** Custos lançados da unidade: despesas e folha. */
+export const plannedCosts = (g: Guardrail) => g.plannedExpense + g.plannedPayroll;
+
+/** Resultado da unidade com o que está lançado: receita menos impostos e comissões menos custos. */
+export const plannedResult = (g: Guardrail) =>
+  g.plannedRevenue - g.plannedVariable - plannedCosts(g);
+
 /**
- * Resultado da empresa em dois cenários:
- * trava = piso líquido das unidades − despesa sem condicionadas (inclui o apoio) + receita líquida do apoio;
- * plano = tudo o que foi lançado (receita planejada, todas as despesas, inclusive condicionadas).
+ * Resultado da empresa:
+ * compromisso = cada unidade cumpre a receita-compromisso e gasta o limite (o apoio entra com a receita lançada);
+ * lancado = o que está no plano agora.
  */
-export function scenarioResults(rows: Guardrail[]) {
-  let trava = 0;
-  let plano = 0;
+export function companyResults(rows: Guardrail[]) {
+  let compromisso = 0;
+  let lancado = 0;
   for (const r of rows) {
-    const net = r.plannedRevenue - r.plannedVariable;
-    plano += net - r.plannedExpense - r.conditionalExpense;
-    trava += (r.kind === "negocio" ? (r.floorNet ?? 0) : net) - r.plannedExpense;
+    lancado += plannedResult(r);
+    const net = r.kind === "negocio" ? (r.floorNet ?? 0) : r.plannedRevenue - r.plannedVariable;
+    compromisso += net - r.ceiling;
   }
-  return { trava, plano };
+  return { compromisso, lancado };
+}
+
+export interface ReferenceRow {
+  account_id: string;
+  kind: string;
+  month: number;
+  amount: number;
+}
+
+/** Realizado do ano base da unidade, por conta e mês: o que o diretor vê ao lado do plano. */
+export function useUnitReference(versionId: string | null, unitId: string | null) {
+  return useQuery({
+    queryKey: ["unit_reference", versionId, unitId],
+    enabled: !!versionId && !!unitId,
+    staleTime: 300_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("unit_reference", {
+        _version_id: versionId!,
+        _unit_id: unitId!,
+      });
+      if (error) throw error;
+      const byAccount = new Map<string, Map<number, number>>();
+      for (const r of data ?? []) {
+        const m = byAccount.get(r.account_id) ?? new Map<number, number>();
+        m.set(r.month, Number(r.amount));
+        byAccount.set(r.account_id, m);
+      }
+      return byAccount;
+    },
+  });
+}
+
+/** Fornecedores do ano base de uma categoria da unidade, só para consulta. */
+export function useReferenceSuppliers(
+  versionId: string | null,
+  unitId: string | null,
+  accountId: string | null,
+) {
+  return useQuery({
+    queryKey: ["unit_reference_suppliers", versionId, unitId, accountId],
+    enabled: !!versionId && !!unitId && !!accountId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("unit_reference_suppliers", {
+        _version_id: versionId!,
+        _unit_id: unitId!,
+        _account_id: accountId!,
+      });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({ supplier: r.supplier, amount: Number(r.amount) }));
+    },
+  });
 }
 
 export function useGuardrailMutations(scenarioId: string | null) {
@@ -117,6 +172,8 @@ export function useGuardrailMutations(scenarioId: string | null) {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["guardrails"] }),
       queryClient.invalidateQueries({ queryKey: ["target_vs_plan"] }),
+      queryClient.invalidateQueries({ queryKey: ["plan_lines"] }),
+      queryClient.invalidateQueries({ queryKey: ["dre"] }),
     ]);
   const fail = (e: { message: string } | null) => {
     if (e) toast.error(friendlyError(e.message));
@@ -143,7 +200,7 @@ export function useGuardrailMutations(scenarioId: string | null) {
     async suggest() {
       const { error } = await supabase.rpc("guardrails_suggest", { _scenario_id: scenarioId! });
       await refresh();
-      if (!error) toast.success("Realizado do Omie atualizado no piso sugerido.");
+      if (!error) toast.success("Ano base atualizado com o Omie.");
       return fail(error);
     },
     async publish(publish: boolean) {
@@ -152,8 +209,22 @@ export function useGuardrailMutations(scenarioId: string | null) {
         _publish: publish,
       });
       await refresh();
-      if (!error) toast.success(publish ? "Piso e teto publicados para os líderes." : "Reaberto.");
+      if (!error) toast.success(publish ? "Publicado para os diretores." : "Reaberto.");
       return fail(error);
+    },
+    /** Traz o ano base para o plano da unidade, só nas categorias sem lançamento. Devolve quantas entraram. */
+    async loadReference(versionId: string, unitId: string, accountId?: string) {
+      const { data, error } = await supabase.rpc("load_reference", {
+        _version_id: versionId,
+        _unit_id: unitId,
+        ...(accountId ? { _account_id: accountId } : {}),
+      });
+      await refresh();
+      if (error) {
+        toast.error(friendlyError(error.message));
+        return null;
+      }
+      return data;
     },
   };
 }

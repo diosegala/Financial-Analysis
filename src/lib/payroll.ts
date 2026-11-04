@@ -63,6 +63,7 @@ export function usePeopleMutations() {
       queryClient.invalidateQueries({ queryKey: ["dre"] }),
       queryClient.invalidateQueries({ queryKey: ["payroll_detail"] }),
       queryClient.invalidateQueries({ queryKey: ["person_benefits"] }),
+      queryClient.invalidateQueries({ queryKey: ["target_vs_plan"] }),
     ]);
   }
   async function run(p: PromiseLike<{ error: { message: string } | null }>) {
@@ -188,7 +189,11 @@ export const PAYROLL_GROUPS: { group: PayrollGroup; label: string; hint: string 
     hint: "13º em parcelas e terço de férias, com encargos",
   },
   { group: "beneficio", label: "Benefícios", hint: "Por pessoa ativa" },
-  { group: "custo_total", label: "Custo total", hint: "Bruto + encargos + provisões + benefícios" },
+  {
+    group: "custo_total",
+    label: "Custo total",
+    hint: "Bruto + encargos + 13º e férias + benefícios",
+  },
 ];
 
 export type BreakdownMode = "grupo" | "item";

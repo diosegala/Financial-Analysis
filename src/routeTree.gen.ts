@@ -23,6 +23,8 @@ import { Route as AuthenticatedFolhaRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedInicioRouteImport } from './routes/_authenticated/inicio'
 import { Route as AuthenticatedMetasRouteImport } from './routes/_authenticated/metas'
 import { Route as AuthenticatedParametrosRouteImport } from './routes/_authenticated/parametros'
+import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
+import { Route as AuthenticatedPlanoRouteImport } from './routes/_authenticated/plano'
 import { Route as AuthenticatedProdutosRouteImport } from './routes/_authenticated/produtos'
 import { Route as AuthenticatedRealizadoRouteImport } from './routes/_authenticated/realizado'
 import { Route as AuthenticatedReceitasRouteImport } from './routes/_authenticated/receitas'
@@ -98,6 +100,17 @@ const AuthenticatedParametrosRoute = AuthenticatedParametrosRouteImport.update({
   path: '/parametros',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPlanejamentoRoute =
+  AuthenticatedPlanejamentoRouteImport.update({
+    id: '/planejamento',
+    path: '/planejamento',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPlanoRoute = AuthenticatedPlanoRouteImport.update({
+  id: '/plano',
+  path: '/plano',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedProdutosRoute = AuthenticatedProdutosRouteImport.update({
   id: '/produtos',
   path: '/produtos',
@@ -133,6 +146,8 @@ export interface FileRoutesByFullPath {
   '/inicio': typeof AuthenticatedInicioRoute
   '/metas': typeof AuthenticatedMetasRoute
   '/parametros': typeof AuthenticatedParametrosRoute
+  '/planejamento': typeof AuthenticatedPlanejamentoRoute
+  '/plano': typeof AuthenticatedPlanoRoute
   '/produtos': typeof AuthenticatedProdutosRoute
   '/realizado': typeof AuthenticatedRealizadoRoute
   '/receitas': typeof AuthenticatedReceitasRoute
@@ -152,6 +167,8 @@ export interface FileRoutesByTo {
   '/inicio': typeof AuthenticatedInicioRoute
   '/metas': typeof AuthenticatedMetasRoute
   '/parametros': typeof AuthenticatedParametrosRoute
+  '/planejamento': typeof AuthenticatedPlanejamentoRoute
+  '/plano': typeof AuthenticatedPlanoRoute
   '/produtos': typeof AuthenticatedProdutosRoute
   '/realizado': typeof AuthenticatedRealizadoRoute
   '/receitas': typeof AuthenticatedReceitasRoute
@@ -173,6 +190,8 @@ export interface FileRoutesById {
   '/_authenticated/inicio': typeof AuthenticatedInicioRoute
   '/_authenticated/metas': typeof AuthenticatedMetasRoute
   '/_authenticated/parametros': typeof AuthenticatedParametrosRoute
+  '/_authenticated/planejamento': typeof AuthenticatedPlanejamentoRoute
+  '/_authenticated/plano': typeof AuthenticatedPlanoRoute
   '/_authenticated/produtos': typeof AuthenticatedProdutosRoute
   '/_authenticated/realizado': typeof AuthenticatedRealizadoRoute
   '/_authenticated/receitas': typeof AuthenticatedReceitasRoute
@@ -194,6 +213,8 @@ export interface FileRouteTypes {
     | '/inicio'
     | '/metas'
     | '/parametros'
+    | '/planejamento'
+    | '/plano'
     | '/produtos'
     | '/realizado'
     | '/receitas'
@@ -213,6 +234,8 @@ export interface FileRouteTypes {
     | '/inicio'
     | '/metas'
     | '/parametros'
+    | '/planejamento'
+    | '/plano'
     | '/produtos'
     | '/realizado'
     | '/receitas'
@@ -233,6 +256,8 @@ export interface FileRouteTypes {
     | '/_authenticated/inicio'
     | '/_authenticated/metas'
     | '/_authenticated/parametros'
+    | '/_authenticated/planejamento'
+    | '/_authenticated/plano'
     | '/_authenticated/produtos'
     | '/_authenticated/realizado'
     | '/_authenticated/receitas'
@@ -345,6 +370,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedParametrosRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/planejamento': {
+      id: '/_authenticated/planejamento'
+      path: '/planejamento'
+      fullPath: '/planejamento'
+      preLoaderRoute: typeof AuthenticatedPlanejamentoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/plano': {
+      id: '/_authenticated/plano'
+      path: '/plano'
+      fullPath: '/plano'
+      preLoaderRoute: typeof AuthenticatedPlanoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/produtos': {
       id: '/_authenticated/produtos'
       path: '/produtos'
@@ -388,6 +427,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedInicioRoute: typeof AuthenticatedInicioRoute
   AuthenticatedMetasRoute: typeof AuthenticatedMetasRoute
   AuthenticatedParametrosRoute: typeof AuthenticatedParametrosRoute
+  AuthenticatedPlanejamentoRoute: typeof AuthenticatedPlanejamentoRoute
+  AuthenticatedPlanoRoute: typeof AuthenticatedPlanoRoute
   AuthenticatedProdutosRoute: typeof AuthenticatedProdutosRoute
   AuthenticatedRealizadoRoute: typeof AuthenticatedRealizadoRoute
   AuthenticatedReceitasRoute: typeof AuthenticatedReceitasRoute
@@ -406,6 +447,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedInicioRoute: AuthenticatedInicioRoute,
   AuthenticatedMetasRoute: AuthenticatedMetasRoute,
   AuthenticatedParametrosRoute: AuthenticatedParametrosRoute,
+  AuthenticatedPlanejamentoRoute: AuthenticatedPlanejamentoRoute,
+  AuthenticatedPlanoRoute: AuthenticatedPlanoRoute,
   AuthenticatedProdutosRoute: AuthenticatedProdutosRoute,
   AuthenticatedRealizadoRoute: AuthenticatedRealizadoRoute,
   AuthenticatedReceitasRoute: AuthenticatedReceitasRoute,

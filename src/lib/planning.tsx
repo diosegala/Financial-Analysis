@@ -13,10 +13,12 @@ export interface PlanningState {
   year: number | null;
   /** Status de envio da unidade na versão. */
   submissionStatus: SubmissionStatus;
-  /** O usuário pode lançar valores (não folha) nesta unidade e versão agora. */
+  /** O usuário pode lançar nesta unidade e versão agora. */
   canEdit: boolean;
   /** Mensagem explicando por que não pode editar, quando canEdit = false. */
   lockReason: string | null;
+  /** Financeiro vendo o app como ele é (false no modo "Ver como diretor"). */
+  isAdmin: boolean;
   setUnitId: (id: string) => void;
   setVersionId: (id: string) => void;
   setScenarioId: (id: string) => void;

@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -68,6 +68,22 @@ function ConfiguracoesPage() {
       <PageHeader
         title="Configurações"
         subtitle="Tudo o que alimenta o planejamento é editável aqui."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {[
+              { to: "/parametros", label: "Parâmetros" },
+              { to: "/realizado", label: "Realizado Omie" },
+              { to: "/usuarios", label: "Usuários" },
+              { to: "/auditoria", label: "Auditoria" },
+            ].map((l) => (
+              <Button key={l.to} asChild size="sm" variant="outline">
+                <Link to={l.to} search={(prev: Record<string, unknown>) => prev}>
+                  {l.label}
+                </Link>
+              </Button>
+            ))}
+          </div>
+        }
       />
       <Tabs defaultValue="versoes">
         <TabsList className="flex h-auto flex-wrap justify-start">
