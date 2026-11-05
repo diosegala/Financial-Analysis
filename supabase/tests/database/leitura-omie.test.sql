@@ -1,6 +1,6 @@
 -- Leitura do Omie pelo app: gravação por empresa, categorias novas viram contas e uma leitura de cada vez.
 BEGIN;
-SELECT plan(11);
+SELECT plan(20);
 
 WITH c AS (INSERT INTO omie_companies (name) VALUES ('Empresa Antiga') RETURNING id)
 INSERT INTO omie_categories (company_id, code, name, is_expense, is_revenue, is_total)
@@ -47,6 +47,37 @@ SELECT is(cardinality(omie_create_new_accounts()), 0, 'Na leitura seguinte, nada
 CREATE TEMP TABLE r AS SELECT omie_sync_start(NULL) AS id;
 SELECT throws_ok($$ SELECT omie_sync_start(NULL) $$, 'Já há uma leitura do Omie em andamento.');
 SELECT lives_ok($$ SELECT omie_sync_finish((SELECT id FROM r)) $$, 'A leitura termina');
+
+-- A execução que morre sem avisar é retomada de onde parou
+CREATE TEMP TABLE r2 AS SELECT omie_sync_start(NULL) AS id;
+SELECT omie_sync_checkpoint((SELECT id FROM r2), 2, 4, 13);
+SELECT is((SELECT resume FROM omie_sync_runs WHERE id = (SELECT id FROM r2)),
+  '{"index": 2, "step": 4, "page": 13}'::JSONB, 'Cada página marca a posição');
+SELECT omie_sync_watchdog();
+SELECT is((SELECT stalls FROM omie_sync_runs WHERE id = (SELECT id FROM r2)), 0, 'Quem está avançando não é mexido');
+
+SELECT vault.create_secret('http://teste.invalid/omie-sync', 'omie_sync_url');
+SELECT vault.create_secret('token-teste', 'omie_sync_token');
+UPDATE omie_sync_runs SET progress_at = now() - interval '8 minutes' WHERE id = (SELECT id FROM r2);
+SELECT omie_sync_watchdog();
+SELECT is((SELECT stalls FROM omie_sync_runs WHERE id = (SELECT id FROM r2)), 1, 'Sem avançar: conta a tentativa');
+SELECT is((SELECT convert_from(body, 'UTF8')::JSONB FROM net.http_request_queue ORDER BY id DESC LIMIT 1) - 'run_id',
+  '{"index": 2, "step": 4, "page": 13}'::JSONB, 'Retoma da posição marcada');
+SELECT omie_sync_checkpoint((SELECT id FROM r2), 2, 4, 14);
+SELECT is((SELECT stalls FROM omie_sync_runs WHERE id = (SELECT id FROM r2)), 0, 'Avançou: zera as tentativas');
+
+-- Empresa terminada passa a posição para a próxima
+SELECT omie_sync_progress((SELECT id FROM r2), 'Empresa Teste', NULL);
+SELECT is((SELECT resume FROM omie_sync_runs WHERE id = (SELECT id FROM r2)),
+  '{"index": 3, "step": 0, "page": 1}'::JSONB, 'A retomada não grava a mesma empresa de novo');
+
+-- Três tentativas sem avançar: termina com erro e libera o botão
+UPDATE omie_sync_runs SET stalls = 3, progress_at = now() - interval '8 minutes' WHERE id = (SELECT id FROM r2);
+INSERT INTO omie_sync_cache (run_id, step, page, rows) SELECT id, 'paid', 1, '[]' FROM r2;
+SELECT omie_sync_watchdog();
+SELECT is((SELECT status FROM omie_sync_runs WHERE id = (SELECT id FROM r2)), 'com_erro', 'Desiste depois de três tentativas');
+SELECT is((SELECT count(*)::INT FROM omie_sync_cache WHERE run_id = (SELECT id FROM r2)), 0, 'Limpa o que estava guardado');
+SELECT lives_ok($$ SELECT omie_sync_start(NULL) $$, 'O botão volta a funcionar');
 
 SET LOCAL ROLE authenticated;
 SELECT throws_ok($$ SELECT omie_create_new_accounts() $$, '42501', NULL, 'Quem está logado não chama a gravação direto');

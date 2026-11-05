@@ -1,6 +1,8 @@
 // Lê o Omie (SOMENTE LEITURA: só métodos Listar*) e grava no banco. Roda pelo botão do financeiro ou pelo agendamento
-// semanal. Cada execução tem tempo limitado, então a leitura anda em partes encadeadas, guardando as páginas em
-// omie_sync_cache. A gravação de cada empresa é uma transação: se falhar, aquela empresa fica como estava. As chaves vêm do secret OMIE_CREDENTIALS, um JSON
+// semanal. Cada execução tem limite de tempo e de processamento, e é encerrada sem aviso ao passar dele. Por isso a
+// leitura anda em partes curtas e encadeadas: as páginas ficam em omie_sync_cache, cada uma marca a posição, e
+// omie_sync_watchdog retoma se uma execução morrer. A gravação de cada empresa é uma transação: se falhar, aquela
+// empresa fica como estava. As chaves vêm do secret OMIE_CREDENTIALS, um JSON
 // [{"app_key": "...", "app_secret": "..."}, ...], e nunca são impressas nem gravadas.
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { aggregateExpenses, aggregateReceipts, type Json, yearsToRead } from "./aggregate.ts";
@@ -11,8 +13,9 @@ declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 const BASE = Deno.env.get("OMIE_BASE_URL") ?? "https://app.omie.com.br/api/v1";
 const SELF = `${Deno.env.get("SUPABASE_URL")}/functions/v1/omie-sync`;
 const CRON_TOKEN = Deno.env.get("OMIE_SYNC_CRON_TOKEN") ?? "";
-// Cada execução tem tempo limitado: passado isto, guarda o que leu e segue numa nova chamada.
-const TIME_BUDGET_MS = Number(Deno.env.get("OMIE_SYNC_TIME_BUDGET_MS") ?? 240_000);
+// Passado qualquer um dos dois, a execução guarda o que leu e segue numa nova chamada.
+const TIME_BUDGET_MS = Number(Deno.env.get("OMIE_SYNC_TIME_BUDGET_MS") ?? 30_000);
+const PAGE_BUDGET = Number(Deno.env.get("OMIE_SYNC_PAGE_BUDGET") ?? 8);
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -256,6 +259,7 @@ function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
     },
     {
       key: "actuals",
+      heavy: true,
       read: async (): Promise<Page> => ({
         rows: aggregateExpenses(
           await cached(admin, runId, "paid"),
@@ -267,6 +271,7 @@ function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
     },
     {
       key: "receipts",
+      heavy: true,
       read: async (): Promise<Page> => ({
         rows: aggregateReceipts(
           await cached(admin, runId, "received"),
@@ -311,18 +316,22 @@ function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
   ];
 }
 
-/** Chama a própria função para seguir de onde parou, com o tempo zerado. */
+/** Chama a própria função para seguir de onde parou. Se a chamada falhar, o vigia retoma pela posição marcada. */
 async function chain(body: Json) {
-  const res = await fetch(SELF, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-omie-sync-token": CRON_TOKEN },
-    body: JSON.stringify(body),
-  });
-  await res.body?.cancel();
-  if (!res.ok) throw new Error("A leitura parou no meio.");
+  try {
+    const res = await fetch(SELF, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-omie-sync-token": CRON_TOKEN },
+      body: JSON.stringify(body),
+    });
+    await res.body?.cancel();
+    if (!res.ok) console.error(`omie-sync: a próxima parte respondeu ${res.status}`);
+  } catch {
+    console.error("omie-sync: não foi possível chamar a próxima parte");
+  }
 }
 
-/** Segue a leitura: lê páginas até o tempo acabar, grava a empresa e passa para a próxima; na última, fecha a leitura. */
+/** Segue a leitura: lê páginas até o limite da execução, grava a empresa e passa para a próxima; na última, fecha a leitura. */
 async function run(runId: string, index: number, step: number, page: number) {
   const startedAt = Date.now();
   const admin = createClient(
@@ -331,22 +340,46 @@ async function run(runId: string, index: number, step: number, page: number) {
   );
   const all = JSON.parse(Deno.env.get("OMIE_CREDENTIALS") ?? "[]") as Creds[];
   const years = yearsToRead(new Date());
+  const mark = async (s: number, p: number) => {
+    const { error } = await admin.rpc("omie_sync_checkpoint", {
+      _run_id: runId,
+      _index: index,
+      _step: s,
+      _page: p,
+    });
+    if (error) throw new Error("Não foi possível marcar a posição da leitura.");
+  };
   let error: string | null = null;
+  // Depois da última empresa, só falta fechar. Uma retomada pode chegar até aqui.
+  if (all.length > 0 && index >= all.length) {
+    await admin.rpc("omie_sync_finish", { _run_id: runId });
+    return;
+  }
   try {
     if (all.length === 0) throw new Error("As chaves do Omie não estão cadastradas.");
+    // Começo de empresa: o que sobrou da anterior não pode entrar na conta desta.
+    if (step === 0 && page === 1) await admin.from("omie_sync_cache").delete().eq("run_id", runId);
     const list = steps(admin, runId, all[index]!, years);
     const ctx: Json = {};
+    let done = 0;
+    const spent = () => done >= PAGE_BUDGET || Date.now() - startedAt > TIME_BUDGET_MS;
     for (; step < list.length; step++, page = 1) {
+      const current = list[step]!;
+      // As contas pesadas rodam sozinhas numa execução.
+      if (current.heavy && done > 0) return await chain({ run_id: runId, index, step, page: 1 });
       for (; ; page++) {
-        const r = await list[step]!.read(page, ctx);
-        await save(admin, runId, list[step]!.key, page, r.rows);
+        const r = await current.read(page, ctx);
+        await save(admin, runId, current.key, page, r.rows);
+        await (r.last ? mark(step + 1, 1) : mark(step, page + 1));
+        done++;
         if (r.last) break;
-        if (Date.now() - startedAt > TIME_BUDGET_MS)
-          return await chain({ run_id: runId, index, step, page: page + 1 });
+        if (spent()) return await chain({ run_id: runId, index, step, page: page + 1 });
       }
-      if (Date.now() - startedAt > TIME_BUDGET_MS && step + 1 < list.length)
+      if (current.heavy || spent())
         return await chain({ run_id: runId, index, step: step + 1, page: 1 });
     }
+    // A gravação também roda sozinha.
+    if (done > 0) return await chain({ run_id: runId, index, step, page: 1 });
     const stored = await admin.rpc("omie_store_company", {
       _name: (await cached(admin, runId, "company"))[0]?.name,
       _years: years,
@@ -368,17 +401,8 @@ async function run(runId: string, index: number, step: number, page: number) {
     _error: error,
   });
   await admin.from("omie_sync_cache").delete().eq("run_id", runId);
-  if (index + 1 < all.length) {
-    try {
-      return await chain({ run_id: runId, index: index + 1, step: 0, page: 1 });
-    } catch {
-      await admin.rpc("omie_sync_progress", {
-        _run_id: runId,
-        _company: "Leitura",
-        _error: "A leitura parou no meio.",
-      });
-    }
-  }
+  if (index + 1 < all.length)
+    return await chain({ run_id: runId, index: index + 1, step: 0, page: 1 });
   await admin.rpc("omie_sync_finish", { _run_id: runId });
 }
 
@@ -399,7 +423,7 @@ Deno.serve(async (req) => {
     const role = await admin.rpc("has_role", { _user_id: userId, _role: "financeiro" });
     if (role.data !== true) return json({ error: "Só o financeiro lê o Omie." }, 403);
   }
-  // Próxima empresa de uma leitura em andamento.
+  // Próxima parte de uma leitura em andamento.
   if (internal && body.run_id) {
     EdgeRuntime.waitUntil(
       run(String(body.run_id), Number(body.index), Number(body.step), Number(body.page)),
