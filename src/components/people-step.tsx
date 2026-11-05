@@ -429,6 +429,11 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
   const irrfValue = irrf.trim() === "" ? null : parseNum(irrf);
   const inssValue = inss.trim() === "" ? null : parseNum(inss);
   const label = name.trim() || (externalId.trim() ? `ID ${externalId.trim()}` : "");
+  const noTable = contractTypes?.find((c) => c.id === contractTypeId)?.withholds === false;
+  const overrideHint = noTable
+    ? "Valor do mês. Soma ao custo da empresa e não vale para o 13º."
+    : "Opcional. Substitui o cálculo pela tabela.";
+  const overridePlaceholder = noTable ? "Sem valor" : "Calculado pela tabela";
   const valid =
     label !== "" &&
     contractTypeId &&
@@ -521,26 +526,20 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
               className="font-mono"
             />
           </Field>
-          <Field
-            label="INSS informado (R$/mês)"
-            hint="Opcional. Sócio: soma ao custo da empresa. Outros vínculos: substitui a tabela."
-          >
+          <Field label="INSS informado (R$/mês)" hint={overrideHint}>
             <Input
               value={inss}
               onChange={(e) => setInss(e.target.value)}
               className="font-mono"
-              placeholder="pela tabela"
+              placeholder={overridePlaceholder}
             />
           </Field>
-          <Field
-            label="IRRF informado (R$/mês)"
-            hint="Opcional. Sócio: soma ao custo da empresa. Outros vínculos: substitui a tabela."
-          >
+          <Field label="IRRF informado (R$/mês)" hint={overrideHint}>
             <Input
               value={irrf}
               onChange={(e) => setIrrf(e.target.value)}
               className="font-mono"
-              placeholder="pela tabela"
+              placeholder={overridePlaceholder}
             />
           </Field>
           {!person && (

@@ -108,6 +108,9 @@ export function CategoryGrid({
   const [suppliers, setSuppliers] = useState<Row | null>(null);
   const [removing, setRemoving] = useState<Row | null>(null);
   const [addingLine, setAddingLine] = useState<Row | null>(null);
+  /** Categorias mexidas nesta tela: continuam à vista mesmo sem valor, para digitar. */
+  const [kept, setKept] = useState<Set<string>>(new Set());
+  const keep = (accountId: string) => setKept((k) => new Set(k).add(accountId));
 
   const isCost = kind === "despesa";
   const lineWord = kind === "receita" ? "cliente" : "item";
@@ -139,7 +142,7 @@ export function CategoryGrid({
     ...byAccount.keys(),
     ...(showBase ? [...(reference?.keys() ?? [])].filter((id) => refKinds.has(id)) : []),
   ]);
-  const rows: Row[] = [...ids]
+  const allRows: Row[] = [...ids]
     .map((accountId) => {
       const ls = byAccount.get(accountId) ?? [];
       const ref = reference?.get(accountId);
@@ -155,12 +158,31 @@ export function CategoryGrid({
       };
     })
     .sort((a, b) => Math.max(b.refTotal, b.total) - Math.max(a.refTotal, a.total));
-  const addable = available.filter((a) => !ids.has(a.id));
+  // Sem valor no plano, a categoria não aparece: fica em "Adicionar categoria" e o ano anterior segue na base do limite.
+  const rows = allRows.filter((r) => r.total !== 0 || kept.has(r.accountId));
+  const shown = new Set(rows.map((r) => r.accountId));
+  const hidden = allRows.filter((r) => !shown.has(r.accountId) && r.refTotal !== 0);
+  const availableIds = new Set(available.map((a) => a.id));
+  const addable = (accounts ?? [])
+    .filter(
+      (a) => !shown.has(a.id) && (availableIds.has(a.id) || (ids.has(a.id) && refKinds.has(a.id))),
+    )
+    .map((a) => {
+      const ref = reference?.get(a.id);
+      const refTotal = ref ? sum(ref.values()) : 0;
+      return {
+        id: a.id,
+        label: refTotal ? `${a.name} · ${baseYear}: ${fmtBRL(refTotal)}` : a.name,
+        refTotal,
+      };
+    })
+    .sort((a, b) => b.refTotal - a.refTotal || a.label.localeCompare(b.label));
   const emptyPlan = isCost && (lines ?? []).length === 0 && (reference?.size ?? 0) > 0;
   const colSpan = 3 + (monthly ? 12 : 0) + (baseCol ? 1 : 0) + (costCol ? 2 : 0);
 
   /** Grava um mês da categoria: cria o lançamento se ainda não houver. */
   async function commit(row: Row, values: { month: number; amount: number }[]) {
+    keep(row.accountId);
     const line = row.lines[0];
     if (line) return setValues(line.id, values);
     return addLine({ version_id: versionId!, unit_id: unitId!, account_id: row.accountId }, values);
@@ -168,6 +190,7 @@ export function CategoryGrid({
 
   /** Valor do ano digitado: dividido igualmente pelos 12 meses. */
   function setYear(row: Row, line: PlanLine | undefined, total: number) {
+    keep(row.accountId);
     const values = spreadYear(total).map((amount, i) => ({ month: i + 1, amount }));
     return line ? setValues(line.id, values) : commit(row, values);
   }
@@ -178,7 +201,18 @@ export function CategoryGrid({
       month: i + 1,
       amount: row.reference?.get(i + 1) ?? 0,
     }));
-    await commit(row, values);
+    if (!opensLines(row)) return void (await commit(row, values));
+    // Com clientes ou itens lançados, o ano anterior entra como mais um item, sem mexer nos outros.
+    const description = `Valores de ${baseYear}`;
+    const line = row.lines.find((l) => l.description === description);
+    keep(row.accountId);
+    setOpen((o) => new Set(o).add(row.accountId));
+    if (line) await setValues(line.id, values);
+    else
+      await addLine(
+        { version_id: versionId!, unit_id: unitId!, account_id: row.accountId, description },
+        values,
+      );
   }
 
   async function applyCut(row: Row, pct: number) {
@@ -211,7 +245,7 @@ export function CategoryGrid({
   const totals = MONTHS.map((_, i) => sum(rows.map((r) => r.months[i] ?? 0)));
   const payrollRow = isCost && onOpenPeople && guard;
   const totalPlanned = sum(totals) + (payrollRow ? guard.plannedPayroll : 0);
-  const totalRef = sum(rows.map((r) => r.refTotal)) + (payrollRow ? guard.basePayroll : 0);
+  const totalRef = sum(allRows.map((r) => r.refTotal)) + (payrollRow ? guard.basePayroll : 0);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
   return (
@@ -410,7 +444,7 @@ export function CategoryGrid({
                               Adicionar {lineWord}…
                             </DropdownMenuItem>
                           )}
-                          {canEdit && !many && row.reference && (
+                          {canEdit && row.reference && (
                             <DropdownMenuItem onClick={() => void bringBase(row)}>
                               Trazer valores de {baseYear}
                             </DropdownMenuItem>
@@ -432,7 +466,7 @@ export function CategoryGrid({
                                 className="text-destructive"
                                 onClick={() => setRemoving(row)}
                               >
-                                Zerar categoria
+                                Excluir categoria
                               </DropdownMenuItem>
                             </>
                           )}
@@ -568,18 +602,33 @@ export function CategoryGrid({
           </tbody>
         </table>
       </div>
+      {hidden.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {hidden.length === 1
+            ? `1 categoria de ${baseYear} sem valor em ${year ?? ""} não aparece`
+            : `${hidden.length} categorias de ${baseYear} sem valor em ${year ?? ""} não aparecem`}{" "}
+          ({fmtBRL(sum(hidden.map((r) => r.refTotal)))} em {baseYear}, somados no total acima). Para
+          lançar, use Adicionar categoria.
+        </p>
+      )}
 
       {adding && (
         <AddCategoryDialog
-          options={addable.map((a) => ({ value: a.id, label: a.name }))}
+          options={addable.map((a) => ({ value: a.id, label: a.label }))}
           onClose={() => setAdding(false)}
           onAdd={async (accountId) => {
-            const ok = await addLine({
-              version_id: versionId!,
-              unit_id: unitId!,
-              account_id: accountId,
-            });
-            if (ok) setAdding(false);
+            // Pode já haver lançamento sem valor: só volta para a tela.
+            const ok =
+              byAccount.has(accountId) ||
+              (await addLine({
+                version_id: versionId!,
+                unit_id: unitId!,
+                account_id: accountId,
+              }));
+            if (ok) {
+              keep(accountId);
+              setAdding(false);
+            }
           }}
         />
       )}
@@ -620,9 +669,11 @@ export function CategoryGrid({
         <Dialog open onOpenChange={(o) => !o && setRemoving(null)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Zerar {removing.name}?</DialogTitle>
+              <DialogTitle>Excluir {removing.name}?</DialogTitle>
               <DialogDescription>
-                Os valores desta categoria em {year} saem do plano da unidade.
+                A categoria e os valores dela em {year} saem do planejamento desta unidade. Ela
+                continua no cadastro e o valor de {baseYear} continua na base do limite. Para usar
+                de novo, clique em Adicionar categoria.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -633,10 +684,15 @@ export function CategoryGrid({
                 variant="destructive"
                 onClick={async () => {
                   await Promise.all(removing.lines.map((l) => deleteLine(l.id)));
+                  setKept((k) => {
+                    const n = new Set(k);
+                    n.delete(removing.accountId);
+                    return n;
+                  });
                   setRemoving(null);
                 }}
               >
-                Zerar
+                Excluir
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -662,9 +718,9 @@ function AddCategoryDialog({
         <DialogHeader>
           <DialogTitle>Adicionar categoria</DialogTitle>
           <DialogDescription>
-            Ela entra na grade para você lançar o valor. Sem gasto no ano anterior, ela não tem
-            limite próprio: o valor conta no total da unidade. As categorias que já aparecem na
-            grade não estão nesta lista.
+            Ela entra na grade para você lançar o valor. As com valor no ano anterior vêm primeiro,
+            com o total ao lado. Sem esse valor, ela não tem limite próprio: o valor conta no total
+            da unidade. Uma categoria nova precisa existir no Omie e ser lida em Configurações.
           </DialogDescription>
         </DialogHeader>
         <Field label="Categoria">
