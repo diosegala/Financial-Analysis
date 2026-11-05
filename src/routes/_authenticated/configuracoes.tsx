@@ -654,7 +654,7 @@ function ContractTypesTab() {
             key: "withholds",
             label: "Desconta INSS e IRRF pela tabela",
             type: "boolean",
-            hint: "Desligado (ex.: sócios), o salário líquido só desconta o INSS e o IRRF informados em cada pessoa.",
+            hint: "Desligado (ex.: sócios), o INSS e o IRRF informados em cada pessoa somam ao custo da empresa.",
           },
           active,
           order,

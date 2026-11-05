@@ -1,8 +1,74 @@
--- INSS informado em cada pessoa, como o IRRF: varia por sócio (valor e percentual). É retenção: reduz o líquido, não o custo.
+-- INSS informado em cada pessoa, ao lado do IRRF: varia por sócio, em valor e em percentual.
+-- Sócio (vínculo sem retenção pela tabela): os dois valores são gasto da empresa, somam ao custo e não mexem no líquido.
+-- Demais vínculos: substituem o cálculo pela tabela e continuam sendo retenção, sem mudar o custo.
 ALTER TABLE public.people ADD COLUMN inss_override NUMERIC CHECK (inss_override >= 0);
-COMMENT ON COLUMN public.people.inss_override IS 'INSS mensal informado à mão; substitui o cálculo pela tabela.';
+COMMENT ON COLUMN public.people.inss_override IS 'INSS mensal informado à mão. Sócio: soma ao custo. Demais vínculos: substitui a tabela.';
+COMMENT ON COLUMN public.people.irrf_override IS 'IRRF mensal informado à mão. Sócio: soma ao custo. Demais vínculos: substitui a tabela.';
 COMMENT ON COLUMN public.contract_types.withholds IS
-  'Desconta INSS e IRRF do empregado pelas tabelas. Desligado (ex.: sócios), só desconta o INSS e o IRRF informados na pessoa.';
+  'Desconta INSS e IRRF do empregado pelas tabelas. Desligado (ex.: sócios), o INSS e o IRRF informados na pessoa somam ao custo.';
+
+CREATE OR REPLACE FUNCTION public.plan_base_rows(_version_id uuid, _scenario_id uuid, _unit_ids uuid[] DEFAULT NULL::uuid[])
+ RETURNS TABLE(unit_id uuid, month integer, row_kind text, account_id uuid, dre_line_id uuid, revenue_type_id uuid, product_id uuid, contract_type_id uuid, amount numeric)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+  WITH s AS (
+    SELECT COALESCE(revenue_variation, 0) AS rv, COALESCE(expense_variation, 0) AS ev,
+           COALESCE(applies_to_payroll, false) AS ap
+    FROM (SELECT 1) one LEFT JOIN public.scenarios ON id = _scenario_id
+  )
+  -- Linhas lançadas nas grades e itens de eventos (a remuneração de pessoas vem abaixo)
+  SELECT l.unit_id, v.month, a.kind, a.id, a.dre_line_id, l.revenue_type_id, l.product_id, NULL::UUID,
+    v.amount * CASE a.kind WHEN 'receita' THEN 1 + s.rv
+                           WHEN 'despesa' THEN 1 + s.ev
+                           ELSE CASE WHEN s.ap THEN 1 + s.ev ELSE 1 END END
+  FROM public.plan_lines l
+  JOIN public.plan_values v ON v.line_id = l.id
+  JOIN public.accounts a ON a.id = l.account_id
+  CROSS JOIN s
+  WHERE l.version_id = _version_id AND (_unit_ids IS NULL OR l.unit_id = ANY (_unit_ids))
+    AND l.person_id IS NULL
+  UNION ALL
+  -- Pessoas: a remuneração é a linha da pessoa
+  SELECT l.unit_id, v.month, 'salario', ct.account_id, a.dre_line_id, NULL::UUID, NULL::UUID, p.contract_type_id,
+    v.amount * CASE WHEN s.ap THEN 1 + s.ev ELSE 1 END
+  FROM public.plan_lines l
+  JOIN public.people p ON p.id = l.person_id
+  JOIN public.plan_values v ON v.line_id = l.id
+  JOIN public.contract_types ct ON ct.id = p.contract_type_id
+  JOIN public.accounts a ON a.id = ct.account_id
+  CROSS JOIN s
+  WHERE l.version_id = _version_id AND (_unit_ids IS NULL OR l.unit_id = ANY (_unit_ids))
+  UNION ALL
+  -- Sócios: INSS e IRRF informados na pessoa são gasto da empresa, nos meses com remuneração
+  SELECT l.unit_id, v.month, 'folha', ct.account_id, a.dre_line_id, NULL::UUID, NULL::UUID, p.contract_type_id,
+    COALESCE(p.inss_override, 0) + COALESCE(p.irrf_override, 0)
+  FROM public.plan_lines l
+  JOIN public.people p ON p.id = l.person_id
+  JOIN public.plan_values v ON v.line_id = l.id AND v.amount > 0
+  JOIN public.contract_types ct ON ct.id = p.contract_type_id AND NOT ct.withholds
+  JOIN public.accounts a ON a.id = ct.account_id
+  WHERE l.version_id = _version_id AND (_unit_ids IS NULL OR l.unit_id = ANY (_unit_ids))
+    AND (p.inss_override IS NOT NULL OR p.irrf_override IS NOT NULL)
+  UNION ALL
+  -- 13º e terço de férias, no mês em que são pagos, na linha da DRE da remuneração
+  SELECT e.unit_id, e.month, 'provisao', e.account_id, a.dre_line_id, NULL::UUID, NULL::UUID, e.contract_type_id, e.amount
+  FROM public.payroll_events(_version_id, _scenario_id, _unit_ids) e
+  JOIN public.accounts a ON a.id = e.account_id
+  UNION ALL
+  -- Base dos encargos sobre o 13º e o terço (não soma na DRE; só alimenta as regras marcadas)
+  SELECT e.unit_id, e.month, 'provisao_base', e.account_id, NULL::UUID, NULL::UUID, NULL::UUID, e.contract_type_id, e.charge_base
+  FROM public.payroll_events(_version_id, _scenario_id, _unit_ids) e
+  WHERE e.charge_base > 0
+  UNION ALL
+  -- Headcount: 1 por pessoa nos meses em que há remuneração (base para benefícios por pessoa)
+  SELECT l.unit_id, v.month, 'headcount', NULL::UUID, NULL::UUID, NULL::UUID, NULL::UUID, p.contract_type_id, 1
+  FROM public.plan_lines l
+  JOIN public.people p ON p.id = l.person_id
+  JOIN public.plan_values v ON v.line_id = l.id AND v.amount > 0
+  WHERE l.version_id = _version_id AND (_unit_ids IS NULL OR l.unit_id = ANY (_unit_ids))
+$function$;
 
 CREATE OR REPLACE FUNCTION public.payroll_detail(_version_id uuid, _scenario_id uuid DEFAULT NULL::uuid, _unit_ids uuid[] DEFAULT NULL::uuid[])
  RETURNS TABLE(person_id uuid, unit_id uuid, month integer, grupo text, item text, amount numeric)
@@ -36,18 +102,23 @@ AS $function$
       AND (_unit_ids IS NULL OR l.unit_id = ANY (_unit_ids))
   ), ret AS (
     SELECT pm.*,
-      CASE WHEN pm.gross <= 0 THEN 0
+      CASE WHEN pm.gross <= 0 OR NOT pm.withholds THEN 0
            WHEN pm.inss_override IS NOT NULL THEN pm.inss_override
-           WHEN pm.withholds THEN public.inss_empregado(pm.gross, pm.ref)
-           ELSE 0 END AS inss
+           ELSE public.inss_empregado(pm.gross, pm.ref) END AS inss
     FROM pm
   ), ret2 AS (
     SELECT ret.*,
-      CASE WHEN ret.gross <= 0 THEN 0
+      CASE WHEN ret.gross <= 0 OR NOT ret.withholds THEN 0
            WHEN ret.irrf_override IS NOT NULL THEN ret.irrf_override
-           WHEN ret.withholds THEN public.irrf(ret.gross, ret.inss, ret.dependents, ret.ref)
-           ELSE 0 END AS ir
+           ELSE public.irrf(ret.gross, ret.inss, ret.dependents, ret.ref) END AS ir
     FROM ret
+  ), informed AS (
+    -- Sócio: o INSS e o IRRF informados são gasto da empresa.
+    SELECT r2.person_id, r2.unit_id, r2.month, 'INSS informado' AS item, r2.inss_override AS amount
+    FROM ret2 r2 WHERE NOT r2.withholds AND r2.gross > 0 AND r2.inss_override IS NOT NULL
+    UNION ALL
+    SELECT r2.person_id, r2.unit_id, r2.month, 'IRRF informado', r2.irrf_override
+    FROM ret2 r2 WHERE NOT r2.withholds AND r2.gross > 0 AND r2.irrf_override IS NOT NULL
   ), rules AS (
     SELECT r2.person_id, r2.unit_id, r2.month, c.payroll_group AS grupo, c.name AS item,
       CASE c.base_kind WHEN 'salario' THEN r2.gross ELSE CASE WHEN r2.gross > 0 THEN 1 ELSE 0 END END
@@ -82,6 +153,7 @@ AS $function$
   ), cost AS (
     SELECT r2.person_id, r2.unit_id, r2.month, r2.gross AS amount FROM ret2 r2
     UNION ALL SELECT x.person_id, x.unit_id, x.month, x.amount FROM rules x
+    UNION ALL SELECT i.person_id, i.unit_id, i.month, i.amount FROM informed i
     UNION ALL SELECT e.person_id, e.unit_id, e.month, e.amount + e.charges FROM ev3 e
     UNION ALL SELECT b.person_id, b.unit_id, b.month, b.amount FROM ben b
   )
@@ -90,6 +162,7 @@ AS $function$
   UNION ALL SELECT person_id, unit_id, month, 'retencao', 'IRRF', ir FROM ret2
   UNION ALL SELECT person_id, unit_id, month, 'liquido', 'Salário líquido', gross - inss - ir FROM ret2
   UNION ALL SELECT person_id, unit_id, month, COALESCE(grupo, 'encargo'), item, amount FROM rules
+  UNION ALL SELECT person_id, unit_id, month, 'encargo', item, amount FROM informed
   UNION ALL SELECT person_id, unit_id, month, 'provisao', label, amount - inss - ir FROM ev3
   UNION ALL SELECT person_id, unit_id, month, 'provisao', label || ' · encargos', charges + inss + ir FROM ev3
     WHERE charge_base > 0

@@ -1,6 +1,6 @@
 -- 13º e terço de férias pelo calendário da folha, retenções por vínculo, INSS e IRRF informados e reajuste de benefício.
 BEGIN;
-SELECT plan(21);
+SELECT plan(26);
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT ON ids TO authenticated;
@@ -62,12 +62,26 @@ UPDATE people SET contract_type_id = pg_temp.ct('Sócio (pró-labore)') WHERE na
 SELECT is(pg_temp.det('Salário líquido', 8), 5000::NUMERIC, 'Sócio: sem INSS e IRRF pela tabela');
 SELECT is(pg_temp.det('13º salário', 12), 1250::NUMERIC, 'Sócio: 2ª parcela do 13º sem descontos');
 SELECT is(pg_temp.det('Férias (1/3)', 10), 0::NUMERIC, 'Sócio não tem férias');
-UPDATE people SET irrf_override = 300 WHERE name = 'Ana';
-SELECT is(pg_temp.det('IRRF', 8), 300::NUMERIC, 'IRRF informado na pessoa substitui a tabela');
-UPDATE people SET inss_override = 400 WHERE name = 'Ana';
-SELECT is(pg_temp.det('INSS do empregado', 8), 400::NUMERIC, 'INSS informado na pessoa aparece na retenção');
-SELECT is(pg_temp.det('Salário líquido', 8), 4300::NUMERIC, 'Líquido desconta o INSS e o IRRF informados');
-SELECT is(pg_temp.det('Custo total para a empresa', 8), 5000::NUMERIC, 'INSS e IRRF informados não mudam o custo');
+CREATE TEMP TABLE folha_antes AS SELECT SUM(amount) AS v FROM plan_split(pg_temp.id('versao'), NULL)
+  WHERE unit_id = pg_temp.id('consultoria') AND month = 8 AND bucket = 'folha';
+UPDATE people SET irrf_override = 300, inss_override = 400 WHERE name = 'Ana';
+SELECT is(pg_temp.det('INSS informado', 8), 400::NUMERIC, 'Sócio: INSS informado aparece como gasto da empresa');
+SELECT is(pg_temp.det('IRRF informado', 8), 300::NUMERIC, 'Sócio: IRRF informado aparece como gasto da empresa');
+SELECT is(pg_temp.det('Salário líquido', 8), 5000::NUMERIC, 'Sócio: o informado não reduz o líquido');
+SELECT is(pg_temp.det('Custo total para a empresa', 8), 5700::NUMERIC, 'Sócio: o informado soma ao custo');
+SELECT is(round(pg_temp.dre_custos() - (SELECT v FROM dre_antes)),
+  round((SELECT SUM(amount) FROM payroll_detail(pg_temp.id('versao')) WHERE item = 'Custo total para a empresa')),
+  'Sócio: a DRE do ano soma o mesmo que o custo da folha');
+SELECT is((SELECT SUM(amount) FROM plan_split(pg_temp.id('versao'), NULL)
+  WHERE unit_id = pg_temp.id('consultoria') AND month = 8 AND bucket = 'folha') - (SELECT v FROM folha_antes),
+  700::NUMERIC, 'Sócio: o informado entra na folha usada no limite');
+
+-- CLT: o informado substitui a tabela e continua sendo retenção
+UPDATE people SET contract_type_id = pg_temp.ct('CLT') WHERE name = 'Ana';
+SELECT is(pg_temp.det('INSS do empregado', 8), 400::NUMERIC, 'CLT: INSS informado substitui a tabela');
+SELECT is(pg_temp.det('Salário líquido', 8), 4300::NUMERIC, 'CLT: o líquido desconta o INSS e o IRRF informados');
+SELECT is(pg_temp.det('Custo total para a empresa', 8), 6740::NUMERIC, 'CLT: o informado não muda o custo');
+UPDATE people SET contract_type_id = pg_temp.ct('Sócio (pró-labore)') WHERE name = 'Ana';
 
 -- Reajuste do benefício: 10% a partir de setembro
 INSERT INTO person_benefits (person_id, account_id, amount)

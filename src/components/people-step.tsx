@@ -523,7 +523,7 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
           </Field>
           <Field
             label="INSS informado (R$/mês)"
-            hint="Opcional. Substitui o cálculo pela tabela (ex.: sócios)."
+            hint="Opcional. Sócio: soma ao custo da empresa. Outros vínculos: substitui a tabela."
           >
             <Input
               value={inss}
@@ -534,7 +534,7 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
           </Field>
           <Field
             label="IRRF informado (R$/mês)"
-            hint="Opcional. Substitui o cálculo pela tabela (ex.: sócios)."
+            hint="Opcional. Sócio: soma ao custo da empresa. Outros vínculos: substitui a tabela."
           >
             <Input
               value={irrf}
