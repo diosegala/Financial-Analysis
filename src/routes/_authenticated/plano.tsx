@@ -1,9 +1,8 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Database, Lock, Unlock } from "lucide-react";
 import { pageHead } from "@/lib/head";
+import { OmieSync } from "@/components/omie-sync";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
 import { byId, useUnits } from "@/lib/catalog";
@@ -72,18 +71,6 @@ function PlanoPage() {
   const { data: rows } = useGuardrailUnits(scenarioId);
   const { data: guardrails } = useGuardrails(scenarioId);
   const { data: submissions } = useSubmissions(versionId);
-  const { data: lastSync } = useQuery({
-    queryKey: ["omie_last_sync"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("omie_actuals")
-        .select("synced_at")
-        .order("synced_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data?.synced_at ?? null;
-    },
-  });
   const { data: allocation } = useSupportAllocation(scenarioId);
   const { data: customShares } = useSupportShares(scenarioId, !!user?.isFinanceiro);
   const setUnitStatus = useSetUnitStatus();
@@ -192,8 +179,6 @@ function PlanoPage() {
           />
         </Field>
         <p className="text-xs text-muted-foreground sm:col-span-2">
-          {lastSync &&
-            `Omie lido pela última vez em ${new Date(lastSync).toLocaleDateString("pt-BR")}. `}
           {settings?.suggested_at
             ? `Ano base ${settings.base_year}: realizado do Omie até o último mês fechado, com os meses que faltam projetados. Limite de despesas = despesas de 2026 no Omie menos o corte. Limite de folha = custo atual da folha menos o corte. Para um caso especial, digite o valor; vazio volta para o cálculo.`
             : "Clique em Calcular com o realizado de 2026 para obter a receita e o custo-base de cada unidade."}
@@ -201,6 +186,8 @@ function PlanoPage() {
             ` Há ${fmtBRL(Number(settings?.unassigned_revenue))} de receita do Omie sem unidade: distribua digitando a receita das unidades.`}
         </p>
       </section>
+
+      <OmieSync />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Big label="Resultado alvo" value={fmtBRL(target)} />
@@ -217,6 +204,10 @@ function PlanoPage() {
         <Big label="Resultado com o que já foi lançado" value={fmtBRL(lancado)} />
       </section>
 
+      <p className="text-sm text-muted-foreground">
+        Os campos de receita-compromisso e de limite vêm calculados. Para fixar outro valor em uma
+        unidade, clique no campo e digite. Vazio, vale o cálculo.
+      </p>
       <div className="overflow-x-auto rounded-md border border-border bg-card">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -264,6 +255,7 @@ function PlanoPage() {
                         label={`Receita-compromisso de ${name}`}
                         value={t?.floor_amount != null ? Number(t.floor_amount) : null}
                         placeholder={fmtBRL(g.floorSuggested ?? 0)}
+                        className="w-32 placeholder:text-foreground"
                         disabled={locked}
                         onSave={(v) => void m.saveUnit(g.unitId, { floor_amount: v })}
                       />
@@ -279,6 +271,7 @@ function PlanoPage() {
                       label={`Limite de despesas de ${name}`}
                       value={t?.expense_limit != null ? Number(t.expense_limit) : null}
                       placeholder={fmtBRL(g.expenseLimitAuto)}
+                      className="w-32 placeholder:text-foreground"
                       disabled={locked}
                       onSave={(v) => void m.saveUnit(g.unitId, { expense_limit: v })}
                     />
@@ -288,6 +281,7 @@ function PlanoPage() {
                       label={`Limite de folha de ${name}`}
                       value={t?.payroll_limit != null ? Number(t.payroll_limit) : null}
                       placeholder={fmtBRL(g.payrollLimitAuto)}
+                      className="w-32 placeholder:text-foreground"
                       disabled={locked}
                       onSave={(v) => void m.saveUnit(g.unitId, { payroll_limit: v })}
                     />

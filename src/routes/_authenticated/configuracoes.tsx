@@ -32,6 +32,7 @@ import { NATURE_OPTIONS } from "@/lib/products";
 import { VERSION_STATUS_LABELS } from "@/lib/submissions";
 import { PageHeader } from "@/components/page-header";
 import { AccountsImport } from "@/components/accounts-import";
+import { OmieSync } from "@/components/omie-sync";
 import { AppSettingField } from "@/components/app-setting-field";
 import { CrudTable, type FieldDef } from "@/components/crud-table";
 import { Field, OptionSelect } from "@/components/form-fields";
@@ -731,9 +732,9 @@ function OmieTab() {
       <p className="text-sm text-muted-foreground">
         O realizado do Omie chega por categoria e quase nunca traz departamento. A unidade de cada
         despesa vem, nesta ordem, do departamento do título, do rateio da categoria, da palavra no
-        nome da categoria, ou fica “a ratear”. A leitura roda com python3 scripts/omie-sync.py
-        (somente leitura).
+        nome da categoria, ou fica “a ratear”. A leitura só consulta o Omie: nada é alterado lá.
       </p>
+      <OmieSync />
       <div className="space-y-2">
         <h2 className="text-lg font-semibold">Compras no cartão</h2>
         <AppSettingField

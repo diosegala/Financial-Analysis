@@ -45,9 +45,28 @@ depois.
 - Categoria do Omie e conta do app são ligadas pelo nome (sem o ano: "… - 2026" encontra "… - 2027"). Categorias de folha,
   encargos e impostos são calculadas pelo app e não viram linha.
 
+## Leitura pelo app
+
+O financeiro clica em **Ler o Omie agora**, no Plano CUPOLA ou em Configurações → Avançado → Omie. A leitura também roda
+sozinha toda segunda, às 6h de Brasília. É a Edge Function `omie-sync`, que usa só métodos `Listar*` e segue as mesmas
+regras de `scripts/omie-sync.py`, mantido para rodar pelo computador.
+
+- Lê o ano atual e o seguinte; até março, também o anterior. Os outros anos ficam como estão no banco.
+- Uma empresa por vez. Se uma falhar, ela fica como estava e a tela avisa.
+- Categoria nova no Omie vira conta lançável, para todas as unidades, e aparece em Adicionar categoria. Ajuste em Plano de
+  contas, se precisar. Não viram conta os grupos, as categorias de período anterior, as que as regras de tratamento dizem
+  que o app calcula ou que ficam fora da DRE, e as que já existiam no Omie quando a leitura pelo app entrou
+  (`omie_known_categories`).
+- A leitura não recalcula os limites: para isso, clique em Calcular no Plano CUPOLA.
+
+Configuração, sem valores no repositório:
+
+- Secrets da função: `OMIE_CREDENTIALS` (JSON `[{"app_key": "...", "app_secret": "..."}]`) e `OMIE_SYNC_CRON_TOKEN`.
+- Vault do banco, para o agendamento: `omie_sync_url` e `omie_sync_token` (o mesmo token do secret).
+
 ## Ainda não feito
 
-Receitas (contas a receber), a leitura pela data de competência do Omie, e a sincronização automática.
+A leitura pela data de competência do Omie.
 
 ## Carga inicial (feita uma vez pelo Dioner)
 
