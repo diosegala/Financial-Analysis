@@ -418,12 +418,16 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
   const [irrf, setIrrf] = useState(
     person?.irrf_override == null ? "" : String(person.irrf_override).replace(".", ","),
   );
+  const [inss, setInss] = useState(
+    person?.inss_override == null ? "" : String(person.inss_override).replace(".", ","),
+  );
   const [salary, setSalary] = useState("");
   const [start, setStart] = useState<number | null>(null);
   const [end, setEnd] = useState<number | null>(null);
   const salaryValue = parseNum(salary);
   const dependentsValue = Number(dependents);
   const irrfValue = irrf.trim() === "" ? null : parseNum(irrf);
+  const inssValue = inss.trim() === "" ? null : parseNum(inss);
   const label = name.trim() || (externalId.trim() ? `ID ${externalId.trim()}` : "");
   const valid =
     label !== "" &&
@@ -432,6 +436,7 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
     Number.isInteger(dependentsValue) &&
     dependentsValue >= 0 &&
     (irrf.trim() === "" || (irrfValue !== null && irrfValue >= 0)) &&
+    (inss.trim() === "" || (inssValue !== null && inssValue >= 0)) &&
     (!!person || (salaryValue !== null && (!start || !end || start <= end)));
 
   async function save() {
@@ -444,6 +449,7 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
       hire_date: hire === "" ? null : parseDate(hire),
       dependents: dependentsValue,
       irrf_override: irrfValue,
+      inss_override: inssValue,
     };
     const ok = person
       ? await updatePerson(person.id, { ...fields, unit_id: personUnitId ?? person.unit_id })
@@ -516,8 +522,19 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
             />
           </Field>
           <Field
+            label="INSS informado (R$/mês)"
+            hint="Opcional. Sócio: soma ao custo da empresa. Outros vínculos: substitui a tabela."
+          >
+            <Input
+              value={inss}
+              onChange={(e) => setInss(e.target.value)}
+              className="font-mono"
+              placeholder="pela tabela"
+            />
+          </Field>
+          <Field
             label="IRRF informado (R$/mês)"
-            hint="Opcional. Substitui o cálculo pela tabela (ex.: sócios)."
+            hint="Opcional. Sócio: soma ao custo da empresa. Outros vínculos: substitui a tabela."
           >
             <Input
               value={irrf}
