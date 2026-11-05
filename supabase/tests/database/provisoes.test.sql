@@ -1,6 +1,6 @@
--- 13º e terço de férias pelo calendário da folha, retenções por vínculo, IRRF informado e reajuste de benefício.
+-- 13º e terço de férias pelo calendário da folha, retenções por vínculo, INSS e IRRF informados e reajuste de benefício.
 BEGIN;
-SELECT plan(17);
+SELECT plan(21);
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT ON ids TO authenticated;
@@ -64,6 +64,10 @@ SELECT is(pg_temp.det('13º salário', 12), 1250::NUMERIC, 'Sócio: 2ª parcela 
 SELECT is(pg_temp.det('Férias (1/3)', 10), 0::NUMERIC, 'Sócio não tem férias');
 UPDATE people SET irrf_override = 300 WHERE name = 'Ana';
 SELECT is(pg_temp.det('IRRF', 8), 300::NUMERIC, 'IRRF informado na pessoa substitui a tabela');
+UPDATE people SET inss_override = 400 WHERE name = 'Ana';
+SELECT is(pg_temp.det('INSS do empregado', 8), 400::NUMERIC, 'INSS informado na pessoa aparece na retenção');
+SELECT is(pg_temp.det('Salário líquido', 8), 4300::NUMERIC, 'Líquido desconta o INSS e o IRRF informados');
+SELECT is(pg_temp.det('Custo total para a empresa', 8), 5000::NUMERIC, 'INSS e IRRF informados não mudam o custo');
 
 -- Reajuste do benefício: 10% a partir de setembro
 INSERT INTO person_benefits (person_id, account_id, amount)
@@ -71,6 +75,13 @@ VALUES ((SELECT id FROM people WHERE name = 'Ana'), pg_temp.id('saude'), 1000);
 INSERT INTO benefit_adjustments (version_id, account_id, month, pct) VALUES (pg_temp.id('versao'), pg_temp.id('saude'), 9, 0.1);
 SELECT is(ARRAY[pg_temp.det('Assistência Médica Teste', 8), pg_temp.det('Assistência Médica Teste', 9)],
   ARRAY[1000, 1100]::NUMERIC[], 'Benefício reajustado a partir do mês do reajuste');
+
+CREATE FUNCTION pg_temp.inss_da_copia() RETURNS NUMERIC LANGUAGE plpgsql AS $$
+DECLARE _nova UUID := copy_version(pg_temp.id('versao'), 'Cópia', 2027);
+BEGIN
+  RETURN (SELECT inss_override FROM people WHERE name = 'Ana' AND version_id = _nova);
+END $$;
+SELECT is(pg_temp.inss_da_copia(), 400::NUMERIC, 'Copiar a versão leva o INSS informado');
 
 SELECT * FROM finish();
 ROLLBACK;

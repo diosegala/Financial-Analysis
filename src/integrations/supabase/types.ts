@@ -1534,6 +1534,7 @@ export type Database = {
           external_id: string | null
           hire_date: string | null
           id: string
+          inss_override: number | null
           irrf_override: number | null
           name: string
           role_title: string | null
@@ -1551,6 +1552,7 @@ export type Database = {
           external_id?: string | null
           hire_date?: string | null
           id?: string
+          inss_override?: number | null
           irrf_override?: number | null
           name: string
           role_title?: string | null
@@ -1568,6 +1570,7 @@ export type Database = {
           external_id?: string | null
           hire_date?: string | null
           id?: string
+          inss_override?: number | null
           irrf_override?: number | null
           name?: string
           role_title?: string | null
