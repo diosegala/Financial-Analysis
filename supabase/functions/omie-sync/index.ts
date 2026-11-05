@@ -5,6 +5,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { aggregateExpenses, aggregateReceipts, type Json, yearsToRead } from "./aggregate.ts";
 
+// Existe no ambiente das Edge Functions: mantém a execução viva depois da resposta.
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
+
 const BASE = Deno.env.get("OMIE_BASE_URL") ?? "https://app.omie.com.br/api/v1";
 const SELF = `${Deno.env.get("SUPABASE_URL")}/functions/v1/omie-sync`;
 const CRON_TOKEN = Deno.env.get("OMIE_SYNC_CRON_TOKEN") ?? "";
@@ -16,7 +19,10 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json" },
+  });
 
 interface Creds {
   app_key: string;
@@ -27,7 +33,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function call(creds: Creds, endpoint: string, method: string, param: Json): Promise<Json> {
   if (!method.startsWith("Listar")) throw new Error("Somente leitura");
-  const body = JSON.stringify({ call: method, app_key: creds.app_key, app_secret: creds.app_secret, param: [param] });
+  const body = JSON.stringify({
+    call: method,
+    app_key: creds.app_key,
+    app_secret: creds.app_secret,
+    param: [param],
+  });
   for (let attempt = 0; attempt < 6; attempt++) {
     const res = await fetch(`${BASE}/${endpoint}/`, {
       method: "POST",
@@ -72,7 +83,14 @@ async function save(admin: Admin, runId: string, step: string, page: number, row
 }
 
 const pick = (o: Json, keys: string[]) => Object.fromEntries(keys.map((k) => [k, o?.[k]]));
-const MOVEMENT_DETAILS = ["dDtPagamento", "cGrupo", "cOrigem", "nCodCliente", "nCodTitulo", "cCodCateg"];
+const MOVEMENT_DETAILS = [
+  "dDtPagamento",
+  "cGrupo",
+  "cOrigem",
+  "nCodCliente",
+  "nCodTitulo",
+  "cCodCateg",
+];
 const TITLE_FIELDS = [
   "codigo_lancamento_omie",
   "codigo_cliente_fornecedor",
@@ -109,11 +127,20 @@ async function listing(
   page: number,
   extra: Json = {},
 ): Promise<Page> {
-  const r = await call(creds, endpoint, method, { pagina: page, registros_por_pagina: 100, ...extra });
+  const r = await call(creds, endpoint, method, {
+    pagina: page,
+    registros_por_pagina: 100,
+    ...extra,
+  });
   return { rows: (r[key] as Json[]) ?? [], last: page >= Number(r.total_de_paginas ?? 1) };
 }
 
-async function movementPage(creds: Creds, years: number[], nature: "P" | "R", page: number): Promise<Page> {
+async function movementPage(
+  creds: Creds,
+  years: number[],
+  nature: "P" | "R",
+  page: number,
+): Promise<Page> {
   const r = await call(creds, "financas/mf", "ListarMovimentos", {
     nPagina: page,
     nRegPorPagina: 500,
@@ -133,7 +160,10 @@ async function movementPage(creds: Creds, years: number[], nature: "P" | "R", pa
 /** Os passos de leitura de uma empresa, na ordem. Cada um devolve uma página por vez. */
 function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
   const company = async (): Promise<Page> => {
-    const r = await call(creds, "geral/empresas", "ListarEmpresas", { pagina: 1, registros_por_pagina: 5 });
+    const r = await call(creds, "geral/empresas", "ListarEmpresas", {
+      pagina: 1,
+      registros_por_pagina: 5,
+    });
     const cad = ((r.empresas_cadastro as Json[]) ?? [{}])[0] ?? {};
     // Mesmo nome que a carga anterior gravou: inicial maiúscula em cada palavra.
     const name = String(cad.nome_fantasia || cad.razao_social || "")
@@ -148,23 +178,40 @@ function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
     {
       key: "departments",
       read: async (page: number) => {
-        const r = await listing(creds, "geral/departamentos", "ListarDepartamentos", "departamentos", page);
+        const r = await listing(
+          creds,
+          "geral/departamentos",
+          "ListarDepartamentos",
+          "departamentos",
+          page,
+        );
         return {
           ...r,
-          rows: r.rows.map((d) => ({ code: d.codigo, name: d.descricao, structure: d.estrutura ?? "" })),
+          rows: r.rows.map((d) => ({
+            code: d.codigo,
+            name: d.descricao,
+            structure: d.estrutura ?? "",
+          })),
         };
       },
     },
     {
       key: "categories",
       read: async (page: number) => {
-        const r = await listing(creds, "geral/categorias", "ListarCategorias", "categoria_cadastro", page);
+        const r = await listing(
+          creds,
+          "geral/categorias",
+          "ListarCategorias",
+          "categoria_cadastro",
+          page,
+        );
         return {
           ...r,
           rows: r.rows.map((c) => ({
             code: c.codigo,
             name: c.descricao,
-            parent_code: c.categoria_superior && c.categoria_superior !== "0" ? c.categoria_superior : null,
+            parent_code:
+              c.categoria_superior && c.categoria_superior !== "0" ? c.categoria_superior : null,
             is_expense: c.conta_despesa === "S",
             is_revenue: c.conta_receita === "S",
             is_total: c.totalizadora === "S",
@@ -177,10 +224,17 @@ function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
       key: "payables",
       read: async (page: number, ctx: Json) => {
         ctx.payable ??= titleFilter(await cached(admin, runId, "paid"), "PAGO", years);
-        const r = await listing(creds, "financas/contapagar", "ListarContasPagar", "conta_pagar_cadastro", page, {
-          apenas_importado_api: "N",
-          exibir_obs: "S",
-        });
+        const r = await listing(
+          creds,
+          "financas/contapagar",
+          "ListarContasPagar",
+          "conta_pagar_cadastro",
+          page,
+          {
+            apenas_importado_api: "N",
+            exibir_obs: "S",
+          },
+        );
         return { ...r, rows: r.rows.filter(ctx.payable).map((t) => pick(t, TITLE_FIELDS)) };
       },
     },
@@ -203,14 +257,22 @@ function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
     {
       key: "actuals",
       read: async (): Promise<Page> => ({
-        rows: aggregateExpenses(await cached(admin, runId, "paid"), await cached(admin, runId, "payables"), years),
+        rows: aggregateExpenses(
+          await cached(admin, runId, "paid"),
+          await cached(admin, runId, "payables"),
+          years,
+        ),
         last: true,
       }),
     },
     {
       key: "receipts",
       read: async (): Promise<Page> => ({
-        rows: aggregateReceipts(await cached(admin, runId, "received"), await cached(admin, runId, "receivables"), years),
+        rows: aggregateReceipts(
+          await cached(admin, runId, "received"),
+          await cached(admin, runId, "receivables"),
+          years,
+        ),
         last: true,
       }),
     },
@@ -220,11 +282,21 @@ function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
         if (!ctx.used) {
           const actuals = await cached(admin, runId, "actuals");
           const receipts = await cached(admin, runId, "receipts");
-          ctx.used = new Set([...actuals.map((r) => r.supplier_code), ...receipts.map((r) => r.client_code)]);
+          ctx.used = new Set([
+            ...actuals.map((r) => r.supplier_code),
+            ...receipts.map((r) => r.client_code),
+          ]);
         }
-        const r = await listing(creds, "geral/clientes", "ListarClientes", "clientes_cadastro", page, {
-          apenas_importado_api: "N",
-        });
+        const r = await listing(
+          creds,
+          "geral/clientes",
+          "ListarClientes",
+          "clientes_cadastro",
+          page,
+          {
+            apenas_importado_api: "N",
+          },
+        );
         return {
           ...r,
           rows: r.rows
@@ -253,7 +325,10 @@ async function chain(body: Json) {
 /** Segue a leitura: lê páginas até o tempo acabar, grava a empresa e passa para a próxima; na última, fecha a leitura. */
 async function run(runId: string, index: number, step: number, page: number) {
   const startedAt = Date.now();
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
   const all = JSON.parse(Deno.env.get("OMIE_CREDENTIALS") ?? "[]") as Creds[];
   const years = yearsToRead(new Date());
   let error: string | null = null;
@@ -266,7 +341,8 @@ async function run(runId: string, index: number, step: number, page: number) {
         const r = await list[step]!.read(page, ctx);
         await save(admin, runId, list[step]!.key, page, r.rows);
         if (r.last) break;
-        if (Date.now() - startedAt > TIME_BUDGET_MS) return await chain({ run_id: runId, index, step, page: page + 1 });
+        if (Date.now() - startedAt > TIME_BUDGET_MS)
+          return await chain({ run_id: runId, index, step, page: page + 1 });
       }
       if (Date.now() - startedAt > TIME_BUDGET_MS && step + 1 < list.length)
         return await chain({ run_id: runId, index, step: step + 1, page: 1 });
@@ -296,7 +372,11 @@ async function run(runId: string, index: number, step: number, page: number) {
     try {
       return await chain({ run_id: runId, index: index + 1, step: 0, page: 1 });
     } catch {
-      await admin.rpc("omie_sync_progress", { _run_id: runId, _company: "Leitura", _error: "A leitura parou no meio." });
+      await admin.rpc("omie_sync_progress", {
+        _run_id: runId,
+        _company: "Leitura",
+        _error: "A leitura parou no meio.",
+      });
     }
   }
   await admin.rpc("omie_sync_finish", { _run_id: runId });
@@ -305,7 +385,10 @@ async function run(runId: string, index: number, step: number, page: number) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const body = await req.json().catch(() => ({}));
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
   const internal = CRON_TOKEN !== "" && req.headers.get("x-omie-sync-token") === CRON_TOKEN;
   let userId: string | null = null;
   if (!internal) {
@@ -318,13 +401,13 @@ Deno.serve(async (req) => {
   }
   // Próxima empresa de uma leitura em andamento.
   if (internal && body.run_id) {
-    // @ts-ignore EdgeRuntime existe no ambiente das Edge Functions
-    EdgeRuntime.waitUntil(run(String(body.run_id), Number(body.index), Number(body.step), Number(body.page)));
+    EdgeRuntime.waitUntil(
+      run(String(body.run_id), Number(body.index), Number(body.step), Number(body.page)),
+    );
     return json({ run_id: body.run_id });
   }
   const start = await admin.rpc("omie_sync_start", { _by: userId });
   if (start.error) return json({ error: start.error.message }, 409);
-  // @ts-ignore EdgeRuntime existe no ambiente das Edge Functions
   EdgeRuntime.waitUntil(run(String(start.data), 0, 0, 1));
   return json({ run_id: start.data });
 });

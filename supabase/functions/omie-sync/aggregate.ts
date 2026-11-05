@@ -2,7 +2,8 @@
 // que aconteceu; "em aberto" são os títulos a vencer ou atrasados, pelo vencimento. Cancelados, baixas repetidas e
 // transferências entre contas ficam de fora. Sem acesso à rede nem ao banco: só contas.
 
-// deno-lint-ignore no-explicit-any
+// O Omie devolve JSON sem tipo.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Json = any;
 
 export interface ExpenseRow {
@@ -39,7 +40,13 @@ export function itemOf(obs: unknown): string {
     .trim();
   text = text.replace(/\s*[-–]\s*[A-Za-z0-9-]*\d[A-Za-z0-9-]*\s*$/, "").trim();
   const low = text.toLowerCase();
-  if (!text || low.startsWith("conta a pagar") || low.startsWith("importad") || low.startsWith("gerad")) return "";
+  if (
+    !text ||
+    low.startsWith("conta a pagar") ||
+    low.startsWith("importad") ||
+    low.startsWith("gerad")
+  )
+    return "";
   return text.slice(0, 80);
 }
 
@@ -51,7 +58,11 @@ export function split(cats: Json[], deps: Json[], value: number): [string, strin
     const part = cats.length > 1 ? (value * num(c.valor)) / base : value;
     for (const dep of deps) {
       const pct = dep.nPerDep === undefined || dep.nPerDep === null ? 100 : num(dep.nPerDep);
-      out.push([c.codigo_categoria || c.cCodCateg || "?", String(dep.cCodDep || ""), (part * pct) / 100]);
+      out.push([
+        c.codigo_categoria || c.cCodCateg || "?",
+        String(dep.cCodDep || ""),
+        (part * pct) / 100,
+      ]);
     }
   }
   return out;
@@ -68,14 +79,36 @@ function yearMonth(date: unknown, years: number[]): [number, number] | null {
 const list = (v: unknown, fallback: Json[]): Json[] =>
   Array.isArray(v) && v.length > 0 ? (v as Json[]) : fallback;
 
-export function aggregateExpenses(movements: Json[], payables: Json[], years: number[]): ExpenseRow[] {
+export function aggregateExpenses(
+  movements: Json[],
+  payables: Json[],
+  years: number[],
+): ExpenseRow[] {
   const titles = new Map(payables.map((t) => [t.codigo_lancamento_omie, t]));
   const agg = new Map<string, ExpenseRow>();
-  const add = (y: number, m: number, cat: string, dep: string, sup: string, item: string, paid: number, open: number) => {
+  const add = (
+    y: number,
+    m: number,
+    cat: string,
+    dep: string,
+    sup: string,
+    item: string,
+    paid: number,
+    open: number,
+  ) => {
     const key = JSON.stringify([y, m, cat, dep, sup, item]);
     const row =
       agg.get(key) ??
-      ({ year: y, month: m, category_code: cat, department_code: dep, supplier_code: sup, item, amount_paid: 0, amount_open: 0 } as ExpenseRow);
+      ({
+        year: y,
+        month: m,
+        category_code: cat,
+        department_code: dep,
+        supplier_code: sup,
+        item,
+        amount_paid: 0,
+        amount_open: 0,
+      } as ExpenseRow);
     row.amount_paid += paid;
     row.amount_open += open;
     agg.set(key, row);
@@ -98,7 +131,8 @@ export function aggregateExpenses(movements: Json[], payables: Json[], years: nu
     } else if (d.cGrupo === "CONTA_CORRENTE_PAG" && d.cOrigem !== "BAXP" && d.cOrigem !== "TRAP") {
       cats = [{ cCodCateg: d.cCodCateg, valor: value }];
     } else continue;
-    for (const [cat, dep, part] of split(cats, deps, value)) add(ym[0], ym[1], cat, dep, supplier, item, part, 0);
+    for (const [cat, dep, part] of split(cats, deps, value))
+      add(ym[0], ym[1], cat, dep, supplier, item, part, 0);
   }
   for (const t of payables) {
     if (t.status_titulo === "PAGO" || t.status_titulo === "CANCELADO") continue;
@@ -109,17 +143,41 @@ export function aggregateExpenses(movements: Json[], payables: Json[], years: nu
     for (const [cat, dep, part] of split(cats, list(t.distribuicao, NO_DEPARTMENT), doc))
       add(ym[0], ym[1], cat, dep, str(t.codigo_cliente_fornecedor), itemOf(t.observacao), 0, part);
   }
-  return [...agg.values()].map((r) => ({ ...r, amount_paid: round2(r.amount_paid), amount_open: round2(r.amount_open) }));
+  return [...agg.values()].map((r) => ({
+    ...r,
+    amount_paid: round2(r.amount_paid),
+    amount_open: round2(r.amount_open),
+  }));
 }
 
-export function aggregateReceipts(movements: Json[], receivables: Json[], years: number[]): ReceiptRow[] {
+export function aggregateReceipts(
+  movements: Json[],
+  receivables: Json[],
+  years: number[],
+): ReceiptRow[] {
   const titles = new Map(receivables.map((t) => [t.codigo_lancamento_omie, t]));
   const agg = new Map<string, ReceiptRow>();
-  const add = (y: number, m: number, cat: string, dep: string, client: string, got: number, open: number) => {
+  const add = (
+    y: number,
+    m: number,
+    cat: string,
+    dep: string,
+    client: string,
+    got: number,
+    open: number,
+  ) => {
     const key = JSON.stringify([y, m, cat, dep, client]);
     const row =
       agg.get(key) ??
-      ({ year: y, month: m, category_code: cat, department_code: dep, client_code: client, amount_received: 0, amount_open: 0 } as ReceiptRow);
+      ({
+        year: y,
+        month: m,
+        category_code: cat,
+        department_code: dep,
+        client_code: client,
+        amount_received: 0,
+        amount_open: 0,
+      } as ReceiptRow);
     row.amount_received += got;
     row.amount_open += open;
     agg.set(key, row);
@@ -140,7 +198,8 @@ export function aggregateReceipts(movements: Json[], receivables: Json[], years:
     } else if (d.cGrupo === "CONTA_CORRENTE_REC" && d.cOrigem !== "BAXR" && d.cOrigem !== "TRAR") {
       cats = [{ cCodCateg: d.cCodCateg, valor: value }];
     } else continue;
-    for (const [cat, dep, part] of split(cats, deps, value)) add(ym[0], ym[1], cat, dep, client, part, 0);
+    for (const [cat, dep, part] of split(cats, deps, value))
+      add(ym[0], ym[1], cat, dep, client, part, 0);
   }
   for (const t of receivables) {
     if (t.status_titulo === "RECEBIDO" || t.status_titulo === "CANCELADO") continue;
@@ -151,7 +210,11 @@ export function aggregateReceipts(movements: Json[], receivables: Json[], years:
     for (const [cat, dep, part] of split(cats, list(t.distribuicao, NO_DEPARTMENT), doc))
       add(ym[0], ym[1], cat, dep, str(t.codigo_cliente_fornecedor), 0, part);
   }
-  return [...agg.values()].map((r) => ({ ...r, amount_received: round2(r.amount_received), amount_open: round2(r.amount_open) }));
+  return [...agg.values()].map((r) => ({
+    ...r,
+    amount_received: round2(r.amount_received),
+    amount_open: round2(r.amount_open),
+  }));
 }
 
 /** Anos da leitura: o atual e o seguinte; até março, também o anterior, para fechar o ano que passou. */
