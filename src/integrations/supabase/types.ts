@@ -2920,6 +2920,21 @@ export type Database = {
         }
         Returns: number
       }
+      payroll_bulk_adjust: {
+        Args: {
+          _apply?: boolean
+          _from_month: number
+          _pct: number
+          _version_id: string
+        }
+        Returns: {
+          amount_after: number
+          amount_before: number
+          person_name: string
+          situation: string
+          unit_name: string
+        }[]
+      }
       payroll_detail: {
         Args: {
           _scenario_id?: string

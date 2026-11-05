@@ -2,6 +2,7 @@ import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Database, Lock, Unlock } from "lucide-react";
 import { pageHead } from "@/lib/head";
+import { BulkAdjustDialog } from "@/components/bulk-adjust";
 import { OmieSync } from "@/components/omie-sync";
 import { usePlanning } from "@/lib/planning";
 import { useCurrentUser } from "@/lib/auth";
@@ -77,6 +78,7 @@ function PlanoPage() {
   const m = useGuardrailMutations(scenarioId);
   const [busy, setBusy] = useState(false);
   const [confirmLoad, setConfirmLoad] = useState(false);
+  const [bulkAdjust, setBulkAdjust] = useState(false);
   const [returning, setReturning] = useState<{ id: string; name: string } | null>(null);
   const [comment, setComment] = useState("");
   const [showDre, setShowDre] = useState(false);
@@ -145,6 +147,14 @@ function PlanoPage() {
                 Trazer despesas do ano anterior
               </Button>
               <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || published || !versionId}
+                onClick={() => setBulkAdjust(true)}
+              >
+                Reajuste em lote
+              </Button>
+              <Button
                 size="sm"
                 className="gap-1.5"
                 disabled={busy || !settings?.suggested_at}
@@ -180,7 +190,7 @@ function PlanoPage() {
         </Field>
         <p className="text-xs text-muted-foreground sm:col-span-2">
           {settings?.suggested_at
-            ? `Ano base ${settings.base_year}: realizado do Omie até o último mês fechado, com os meses que faltam projetados. Limite de despesas = despesas de 2026 no Omie menos o corte. Limite de folha = custo atual da folha menos o corte. Para um caso especial, digite o valor; vazio volta para o cálculo.`
+            ? `Ano base ${settings.base_year}: realizado do Omie até o último mês fechado, com os meses que faltam projetados. Limite de despesas = despesas de 2026 no Omie menos o corte. Limite de folha = custo atual da folha, com o reajuste em lote, menos o corte. Para um caso especial, digite o valor; vazio volta para o cálculo.`
             : "Clique em Calcular com o realizado de 2026 para obter a receita e o custo-base de cada unidade."}
           {Number(settings?.unassigned_revenue ?? 0) > 0 &&
             ` Há ${fmtBRL(Number(settings?.unassigned_revenue))} de receita do Omie sem unidade: distribua digitando a receita das unidades.`}
@@ -476,6 +486,10 @@ function PlanoPage() {
         </Button>
         {showDre && <DreTable unitIds={activeIds} title="CUPOLA" />}
       </div>
+
+      {bulkAdjust && versionId && (
+        <BulkAdjustDialog versionId={versionId} onClose={() => setBulkAdjust(false)} />
+      )}
 
       <Dialog open={confirmLoad} onOpenChange={setConfirmLoad}>
         <DialogContent>
