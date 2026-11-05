@@ -32,8 +32,8 @@ type Step = 1 | 2 | 3 | 4;
 
 const STEP_HELP: Record<Step, string> = {
   1: "A folha da unidade já vem carregada. Ajuste salários, saídas, entradas e benefícios: o custo com encargos, 13º e férias é calculado sozinho.",
-  2: "Cada categoria mostra o gasto do ano anterior e o limite com o corte. Ajuste o valor de 2027: ele é dividido igualmente pelos 12 meses (para valores diferentes, use Mês a mês). Pode passar em uma categoria se sobrar em outra: o que vale é o total.",
-  3: "Lance a receita por categoria, com o recebido no ano anterior ao lado. Dentro de cada categoria, adicione um cliente por linha, com o valor por mês e o período.",
+  2: "Aparecem as categorias com valor em 2027, com o gasto do ano anterior e o limite com o corte. Para lançar outra, use Adicionar categoria. O valor do ano é dividido igualmente pelos 12 meses (para valores diferentes, use Mês a mês). Pode passar em uma categoria se sobrar em outra: o que vale é o total.",
+  3: "Lance a receita por categoria, com o recebido no ano anterior ao lado. Use Adicionar categoria para incluir outra. Dentro de cada categoria, adicione um cliente por linha, com o valor por mês e o período.",
   4: "Este é o resultado final da unidade, como será apresentado. Confira e envie para aprovação.",
 };
 

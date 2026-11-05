@@ -1232,6 +1232,21 @@ export type Database = {
           },
         ]
       }
+      omie_known_categories: {
+        Row: {
+          name_key: string
+          seen_at: string
+        }
+        Insert: {
+          name_key: string
+          seen_at?: string
+        }
+        Update: {
+          name_key?: string
+          seen_at?: string
+        }
+        Relationships: []
+      }
       omie_receipts: {
         Row: {
           amount_open: number
@@ -1301,6 +1316,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      omie_sync_runs: {
+        Row: {
+          automatic: boolean
+          companies_done: string[]
+          errors: string[]
+          finished_at: string | null
+          id: string
+          new_accounts: string[]
+          started_at: string
+          started_by: string | null
+          status: string
+        }
+        Insert: {
+          automatic?: boolean
+          companies_done?: string[]
+          errors?: string[]
+          finished_at?: string | null
+          id?: string
+          new_accounts?: string[]
+          started_at?: string
+          started_by?: string | null
+          status?: string
+        }
+        Update: {
+          automatic?: boolean
+          companies_done?: string[]
+          errors?: string[]
+          finished_at?: string | null
+          id?: string
+          new_accounts?: string[]
+          started_at?: string
+          started_by?: string | null
+          status?: string
+        }
+        Relationships: []
       }
       parameter_definitions: {
         Row: {
@@ -2788,6 +2839,7 @@ export type Database = {
       }
       mark_alert_seen: { Args: { _id: string }; Returns: undefined }
       norm_text: { Args: { _s: string }; Returns: string }
+      omie_create_new_accounts: { Args: never; Returns: string[] }
       omie_expense_attribution: {
         Args: { _year: number }
         Returns: {
@@ -2834,6 +2886,25 @@ export type Database = {
           unit_id: string
         }[]
       }
+      omie_store_company: {
+        Args: {
+          _actuals: Json
+          _categories: Json
+          _departments: Json
+          _name: string
+          _receipts: Json
+          _suppliers: Json
+          _years: number[]
+        }
+        Returns: undefined
+      }
+      omie_sync_finish: { Args: { _run_id: string }; Returns: undefined }
+      omie_sync_fire: { Args: never; Returns: undefined }
+      omie_sync_progress: {
+        Args: { _company: string; _error: string; _run_id: string }
+        Returns: undefined
+      }
+      omie_sync_start: { Args: { _by: string }; Returns: string }
       owner_unit: {
         Args: { _account_units: string[]; _attributed: string }
         Returns: string
