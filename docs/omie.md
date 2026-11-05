@@ -58,6 +58,9 @@ regras de `scripts/omie-sync.py`, mantido para rodar pelo computador.
   que o app calcula ou que ficam fora da DRE, e as que já existiam no Omie quando a leitura pelo app entrou
   (`omie_known_categories`).
 - A leitura não recalcula os limites: para isso, clique em Calcular no Plano CUPOLA.
+- Anda em execuções curtas, porque a Edge Function é encerrada sem aviso ao passar do limite de tempo ou processamento. Cada
+  página marca a posição. Sete minutos sem avançar, o vigia `omie_sync_watchdog` (a cada 5 minutos) retoma dali; depois de três
+  tentativas sem avanço, a leitura termina com erro, o botão volta a funcionar e as empresas já lidas continuam gravadas.
 
 Configuração, sem valores no repositório:
 

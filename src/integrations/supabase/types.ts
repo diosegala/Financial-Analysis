@@ -1325,6 +1325,9 @@ export type Database = {
           finished_at: string | null
           id: string
           new_accounts: string[]
+          progress_at: string
+          resume: Json | null
+          stalls: number
           started_at: string
           started_by: string | null
           status: string
@@ -1336,6 +1339,9 @@ export type Database = {
           finished_at?: string | null
           id?: string
           new_accounts?: string[]
+          progress_at?: string
+          resume?: Json | null
+          stalls?: number
           started_at?: string
           started_by?: string | null
           status?: string
@@ -1347,6 +1353,9 @@ export type Database = {
           finished_at?: string | null
           id?: string
           new_accounts?: string[]
+          progress_at?: string
+          resume?: Json | null
+          stalls?: number
           started_at?: string
           started_by?: string | null
           status?: string
@@ -2898,12 +2907,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      omie_sync_checkpoint: {
+        Args: { _index: number; _page: number; _run_id: string; _step: number }
+        Returns: undefined
+      }
       omie_sync_finish: { Args: { _run_id: string }; Returns: undefined }
       omie_sync_fire: { Args: never; Returns: undefined }
       omie_sync_progress: {
         Args: { _company: string; _error: string; _run_id: string }
         Returns: undefined
       }
+      omie_sync_watchdog: { Args: never; Returns: undefined }
       omie_sync_start: { Args: { _by: string }; Returns: string }
       owner_unit: {
         Args: { _account_units: string[]; _attributed: string }
