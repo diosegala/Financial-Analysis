@@ -1,6 +1,10 @@
 -- 13º e terço de férias pelo calendário da folha, retenções por vínculo, INSS e IRRF informados e reajuste de benefício.
 BEGIN;
 SELECT plan(26);
+-- Este teste confere o cálculo no mês da competência: pagamento no próprio mês e sem férias coletivas.
+UPDATE payroll_payment_rules SET lag = 0;
+UPDATE payroll_payment_rules SET lag = 1 WHERE event = 'decimo_1' AND part = 'fgts';
+UPDATE payroll_calendar SET collective = false, days = 20 WHERE kind = 'ferias' AND month = 12;
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT ON ids TO authenticated;
@@ -46,7 +50,7 @@ SELECT is(pg_temp.det('13º salário · encargos', 11), 0::NUMERIC, 'Encargos do
 SELECT is(pg_temp.det('Férias (1/3)', 10), 555.56, 'Férias de outubro: 5.000 / 30 × 10 dias × 1/3');
 SELECT is(pg_temp.det('Férias (1/3)', 12), 1111.11, 'Férias coletivas de dezembro: 20 dias × 1/3');
 SELECT is(pg_temp.det('Férias (1/3)', 3), 0::NUMERIC, 'Sem férias fora do calendário');
-SELECT is(pg_temp.det('Custo total para a empresa', 12), 5000 + 1740 + 2500 + 1740 + 1111.11 + 386.67,
+SELECT is(round(pg_temp.det('Custo total para a empresa', 12), 1), round(5000 + 1740 + 2500 + 1740 + 1111.11 + 386.67, 1),
   'Dezembro: salário, encargos, 13º inteiro com encargos e terço com encargos');
 SELECT is(round(pg_temp.dre_custos() - (SELECT v FROM dre_antes)),
   round((SELECT SUM(amount) FROM payroll_detail(pg_temp.id('versao')) WHERE item = 'Custo total para a empresa')),

@@ -1,6 +1,10 @@
 -- Folha por pessoa: a remuneração é uma linha editável do plano; importação idempotente pelo ID.
 BEGIN;
 SELECT plan(28);
+-- Este teste confere o cálculo no mês da competência: pagamento no próprio mês e sem férias coletivas.
+UPDATE payroll_payment_rules SET lag = 0;
+UPDATE payroll_payment_rules SET lag = 1 WHERE event = 'decimo_1' AND part = 'fgts';
+UPDATE payroll_calendar SET collective = false, days = 20 WHERE kind = 'ferias' AND month = 12;
 
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);
 GRANT SELECT, INSERT ON ids TO authenticated;

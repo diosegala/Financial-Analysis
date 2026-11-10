@@ -178,6 +178,12 @@ export function PeopleStep() {
           />
         </section>
       )}
+      {rows.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          A grade é o salário de cada mês. O custo, abaixo de cada pessoa e nos totais, aparece no
+          mês em que é pago: o salário no mês seguinte, e em janeiro o que ficou do ano anterior.
+        </p>
+      )}
       {rows.length > 0 && <PayrollSummary yearTotals={breakdown.yearTotals} />}
       {rows.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">

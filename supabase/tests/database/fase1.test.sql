@@ -2,6 +2,10 @@
 -- Rodar com: supabase test db
 BEGIN;
 SELECT plan(32);
+-- Este teste confere o cálculo no mês da competência: pagamento no próprio mês e sem férias coletivas.
+UPDATE payroll_payment_rules SET lag = 0;
+UPDATE payroll_payment_rules SET lag = 1 WHERE event = 'decimo_1' AND part = 'fgts';
+UPDATE payroll_calendar SET collective = false, days = 20 WHERE kind = 'ferias' AND month = 12;
 
 -- ───────────── Fixtures (como postgres, sem RLS) ─────────────
 CREATE TEMP TABLE ids (k TEXT PRIMARY KEY, id UUID);

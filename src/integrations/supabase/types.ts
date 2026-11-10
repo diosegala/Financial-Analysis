@@ -570,6 +570,7 @@ export type Database = {
           name: string
           on_provisions: boolean
           parameter_definition_id: string
+          payment_component: string | null
           payroll_group: string | null
           revenue_type_ids: string[] | null
           sort_order: number
@@ -587,6 +588,7 @@ export type Database = {
           name: string
           on_provisions?: boolean
           parameter_definition_id: string
+          payment_component?: string | null
           payroll_group?: string | null
           revenue_type_ids?: string[] | null
           sort_order?: number
@@ -604,6 +606,7 @@ export type Database = {
           name?: string
           on_provisions?: boolean
           parameter_definition_id?: string
+          payment_component?: string | null
           payroll_group?: string | null
           revenue_type_ids?: string[] | null
           sort_order?: number
@@ -1317,6 +1320,35 @@ export type Database = {
           },
         ]
       }
+      omie_sync_cache: {
+        Row: {
+          page: number
+          rows: Json
+          run_id: string
+          step: string
+        }
+        Insert: {
+          page: number
+          rows: Json
+          run_id: string
+          step: string
+        }
+        Update: {
+          page?: number
+          rows?: Json
+          run_id?: string
+          step?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "omie_sync_cache_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "omie_sync_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       omie_sync_runs: {
         Row: {
           automatic: boolean
@@ -1487,33 +1519,75 @@ export type Database = {
       }
       payroll_calendar: {
         Row: {
+          collective: boolean
           created_at: string
           days: number | null
+          days_next_year: number | null
           id: string
           kind: string
           month: number
+          next_salary_days: number | null
           note: string | null
+          salary_days: number | null
           share: number | null
           updated_at: string
         }
         Insert: {
+          collective?: boolean
           created_at?: string
           days?: number | null
+          days_next_year?: number | null
           id?: string
           kind: string
           month: number
+          next_salary_days?: number | null
           note?: string | null
+          salary_days?: number | null
           share?: number | null
           updated_at?: string
         }
         Update: {
+          collective?: boolean
           created_at?: string
           days?: number | null
+          days_next_year?: number | null
           id?: string
           kind?: string
           month?: number
+          next_salary_days?: number | null
           note?: string | null
+          salary_days?: number | null
           share?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payroll_payment_rules: {
+        Row: {
+          created_at: string
+          event: string
+          id: string
+          lag: number
+          note: string | null
+          part: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event: string
+          id?: string
+          lag: number
+          note?: string | null
+          part: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event?: string
+          id?: string
+          lag?: number
+          note?: string | null
+          part?: string
           updated_at?: string
         }
         Relationships: []
@@ -2917,8 +2991,8 @@ export type Database = {
         Args: { _company: string; _error: string; _run_id: string }
         Returns: undefined
       }
-      omie_sync_watchdog: { Args: never; Returns: undefined }
       omie_sync_start: { Args: { _by: string }; Returns: string }
+      omie_sync_watchdog: { Args: never; Returns: undefined }
       owner_unit: {
         Args: { _account_units: string[]; _attributed: string }
         Returns: string
@@ -2947,6 +3021,24 @@ export type Database = {
           person_name: string
           situation: string
           unit_name: string
+        }[]
+      }
+      payroll_cash: {
+        Args: {
+          _scenario_id?: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          account_id: string
+          amount: number
+          contract_type_id: string
+          month: number
+          part: string
+          person_id: string
+          prior: boolean
+          source: string
+          unit_id: string
         }[]
       }
       payroll_detail: {
@@ -2981,6 +3073,7 @@ export type Database = {
           unit_id: string
         }[]
       }
+      payroll_lag: { Args: { _event: string; _part: string }; Returns: number }
       plan_base_rows: {
         Args: {
           _scenario_id: string
@@ -3114,6 +3207,15 @@ export type Database = {
           months_active: number
           year_total: number
         }[]
+      }
+      rule_matches: {
+        Args: {
+          _on_provisions: boolean
+          _row_kind: string
+          _rule_base_kind: string
+          _rule_component: string
+        }
+        Returns: boolean
       }
       seed_person_line: {
         Args: { _person_id: string; _reset?: boolean }
