@@ -158,8 +158,9 @@ export function CategoryGrid({
       };
     })
     .sort((a, b) => Math.max(b.refTotal, b.total) - Math.max(a.refTotal, a.total));
-  // Sem valor no plano, a categoria não aparece: fica em "Adicionar categoria" e o ano anterior segue na base do limite.
-  const rows = allRows.filter((r) => r.total !== 0 || kept.has(r.accountId));
+  // Aparece a categoria lançada na unidade, mesmo zerada: o valor pode vir depois. A que só existe no ano anterior fica em
+  // "Adicionar categoria", e o ano anterior segue na base do limite.
+  const rows = allRows.filter((r) => r.total !== 0 || r.lines.length > 0 || kept.has(r.accountId));
   const shown = new Set(rows.map((r) => r.accountId));
   const hidden = allRows.filter((r) => !shown.has(r.accountId) && r.refTotal !== 0);
   const availableIds = new Set(available.map((a) => a.id));
@@ -367,8 +368,13 @@ export function CategoryGrid({
                           )}
                           {row.name}
                           <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">
-                            ({row.lines.length} {lineWord}
-                            {row.lines.length === 1 ? "" : kind === "receita" ? "s" : "ns"})
+                            ({row.lines.length}{" "}
+                            {row.lines.length === 1
+                              ? lineWord
+                              : lineWord === "item"
+                                ? "itens"
+                                : `${lineWord}s`}
+                            )
                           </span>
                         </button>
                       ) : (
