@@ -17,6 +17,7 @@ import {
   useOmieKeywordUnits,
   usePayrollBrackets,
   usePayrollCalendar,
+  usePaymentRules,
   usePayrollConstants,
   useClients,
   useContractTypes,
@@ -628,6 +629,7 @@ function ContractTypesTab() {
   const { data: types } = useContractTypes();
   const { data: accounts } = useAccounts();
   const { data: calendar } = usePayrollCalendar();
+  const { data: paymentRules } = usePaymentRules();
   return (
     <div className="space-y-8">
       <CrudTable
@@ -667,7 +669,7 @@ function ContractTypesTab() {
         <CrudTable
           table="payroll_calendar"
           rows={calendar ?? []}
-          description="Em que mês a folha paga o 13º e o terço de férias. 13º: cada linha é uma parcela, em fração do 13º do ano (0,5 = metade); as parcelas somam 1, e os descontos e encargos do 13º saem na última. Férias: cada linha é um período, em dias; entra o terço sobre esses dias no mês (o resto é salário adiantado). Quem recebe cada um, por vínculo, fica em Parâmetros (13º salário e Terço de férias)."
+          description="Em que mês a folha paga o 13º e as férias. 13º: cada linha é uma parcela, em fração do 13º do ano (0,5 = metade); as parcelas somam 1, e o INSS e o IRRF do 13º saem na última. Férias individuais: entra o terço sobre os dias no mês. Férias coletivas: os dias e o terço são pagos no mês, e o salário do mês e o de janeiro seguinte ficam com os dias de salário informados. Quem recebe cada um, por vínculo, fica em Parâmetros (13º salário e Terço de férias)."
           fields={[
             {
               key: "kind",
@@ -688,9 +690,73 @@ function ContractTypesTab() {
             },
             { key: "share", label: "Parcela do 13º (fração)", type: "number" },
             { key: "days", label: "Dias de férias", type: "number", integer: true },
+            {
+              key: "collective",
+              label: "Férias coletivas",
+              type: "boolean",
+              hint: "Pagas inteiras no mês (dias + terço) e descontadas dos salários pelos dias abaixo.",
+            },
+            {
+              key: "days_next_year",
+              label: "Dias no ano seguinte",
+              type: "number",
+              integer: true,
+              hint: "Dos dias das férias coletivas, quantos caem em janeiro.",
+            },
+            {
+              key: "salary_days",
+              label: "Dias de salário no mês",
+              type: "number",
+              integer: true,
+              hint: "Férias coletivas: dias de salário na folha do mês das férias.",
+            },
+            {
+              key: "next_salary_days",
+              label: "Dias de salário em janeiro",
+              type: "number",
+              integer: true,
+              hint: "Férias coletivas: dias de salário na folha de janeiro seguinte.",
+            },
             { key: "note", label: "Observação", type: "text" },
           ]}
-          defaults={{ kind: "decimo_terceiro" }}
+          defaults={{ kind: "decimo_terceiro", collective: false }}
+        />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Quando cada valor é pago</h2>
+        <CrudTable
+          table="payroll_payment_rules"
+          rows={paymentRules ?? []}
+          description="O plano mostra a folha no mês em que é paga. Para cada pagamento, quantos meses depois do mês de competência cada parte sai: 0 = no próprio mês, 1 = no mês seguinte. O que passa de dezembro fica para o ano seguinte, e janeiro recebe o que o ano anterior deixou, calculado pelo salário de janeiro de cada pessoa. INSS vale para o do empregado e o patronal (RAT e terceiros incluídos)."
+          fields={[
+            {
+              key: "event",
+              label: "Pagamento",
+              type: "select",
+              required: true,
+              options: [
+                { value: "salario", label: "Salário" },
+                { value: "decimo_1", label: "13º, 1ª parcela" },
+                { value: "decimo_2", label: "13º, última parcela" },
+                { value: "ferias_coletivas", label: "Férias coletivas" },
+              ],
+            },
+            {
+              key: "part",
+              label: "Parte",
+              type: "select",
+              required: true,
+              options: [
+                { value: "liquido", label: "Valor pago à pessoa" },
+                { value: "fgts", label: "FGTS" },
+                { value: "inss", label: "INSS" },
+                { value: "irrf", label: "IRRF" },
+              ],
+            },
+            { key: "lag", label: "Meses depois", type: "number", integer: true, required: true },
+            { key: "note", label: "Observação", type: "text" },
+          ]}
+          defaults={{ event: "salario", part: "liquido", lag: 1 }}
         />
       </div>
     </div>
@@ -896,6 +962,18 @@ function CalcRulesTab() {
             { value: "beneficio", label: "Benefício" },
           ],
           hint: "Só para bases de remuneração e pessoas ativas: define onde o valor aparece no detalhe por colaborador.",
+        },
+        {
+          key: "payment_component",
+          label: "Pago junto com",
+          type: "select",
+          noneLabel: "INSS",
+          hideInTable: true,
+          options: [
+            { value: "fgts", label: "FGTS" },
+            { value: "inss", label: "INSS" },
+          ],
+          hint: "Só para encargos sobre a remuneração: o mês do pagamento segue a tabela Quando cada valor é pago (Vínculos).",
         },
         {
           key: "on_provisions",
