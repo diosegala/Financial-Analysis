@@ -6,7 +6,7 @@ WITH c AS (INSERT INTO omie_companies (name) VALUES ('Empresa Antiga') RETURNING
 INSERT INTO omie_categories (company_id, code, name, is_expense, is_revenue, is_total)
 SELECT c.id, '9.99', 'Categoria Antiga Teste', true, false, false FROM c;
 -- A que já existia não vira conta. A marcação foi feita na migration; aqui, igual.
-INSERT INTO omie_known_categories (name_key) VALUES (norm_text('Categoria Antiga Teste'));
+INSERT INTO omie_known_categories (name_key) VALUES (omie_category_key('Categoria Antiga Teste', 'despesa'));
 
 CREATE FUNCTION pg_temp.guardar() RETURNS VOID LANGUAGE sql AS $$
   SELECT omie_store_company('Empresa Teste', ARRAY[2026],
