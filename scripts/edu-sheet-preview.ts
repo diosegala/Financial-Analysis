@@ -43,65 +43,54 @@ const brl = (n: number) => (n ? n.toLocaleString("pt-BR", { maximumFractionDigit
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
 
-function tabHtml(p: ParsedTab) {
-  if (p.error)
-    return `<section><h2>${esc(p.tab)}</h2><p class="err">Não lida: ${esc(p.error)}</p></section>`;
-  const sign = (k: string) => (k === "receita" ? 1 : -1);
-  const rows = p.blocks
-    .map(
-      (b) =>
-        `<tr><td>${KIND[b.kind]}</td><td>${esc(b.label)} <small>(linha ${b.row})</small></td>${b.months
-          .map((v) => `<td class="n">${brl(v)}</td>`)
-          .join(
-            "",
-          )}<td class="n b">${brl(sum(b.months))}</td><td class="n">${brl(b.outside)}</td></tr>`,
-    )
-    .join("");
-  const net = Array.from({ length: 12 }, (_, i) =>
-    p.blocks.reduce((a, b) => a + sign(b.kind) * b.months[i]!, 0),
+const line = (name: string, v: number[], cls = "") =>
+  `<tr class="${cls}"><td>${name}</td>${v.map((x) => `<td class="n">${brl(x)}</td>`).join("")}<td class="n b">${brl(sum(v))}</td></tr>`;
+const byMonth = (p: ParsedTab, kinds: string[]) =>
+  Array.from({ length: 12 }, (_, i) =>
+    p.blocks.filter((b) => kinds.includes(b.kind)).reduce((a, b) => a + b.months[i]!, 0),
   );
+const head = (first: string) =>
+  `<thead><tr><th>${first}</th>${MONTHS.map((m) => `<th>${m}</th>`).join("")}<th>${year}</th></tr></thead>`;
+
+/** Um produto: receitas e despesas por mês; o detalhe por bloco fica recolhido. */
+function tabHtml(p: ParsedTab) {
+  const rec = byMonth(p, ["receita"]);
+  const desp = byMonth(p, ["taxa", "imposto", "custo", "despesa"]);
+  const detail = p.blocks
+    .map((b) => line(`${KIND[b.kind]} · ${esc(b.label)} <small>(linha ${b.row})</small>`, b.months))
+    .join("");
+  const outside = p.blocks.reduce((a, b) => a + b.outside, 0);
   return `<section><h2>${esc(p.tab)} <small>${esc(p.title)}</small></h2>
   ${p.byPosition ? `<p class="warn">Linha 2 sem as datas de ${year}: lida pela posição (F = janeiro), só nesta prévia.</p>` : ""}
   ${p.warnings.map((w) => `<p class="warn">${esc(w)}</p>`).join("")}
-  <table><thead><tr><th>Tipo</th><th>Bloco</th>${MONTHS.map((m) => `<th>${m}</th>`).join("")}<th>${year}</th><th>Fora de ${year}</th></tr></thead>
-  <tbody>${rows}
-  <tr class="b"><td></td><td>Resultado do produto (app)</td>${net.map((v) => `<td class="n">${brl(v)}</td>`).join("")}<td class="n">${brl(sum(net))}</td><td></td></tr>
-  <tr><td></td><td>Contribuição Líquida (planilha)</td>${p.contribution.map((v) => `<td class="n">${brl(v)}</td>`).join("")}<td class="n">${brl(sum(p.contribution))}</td><td></td></tr>
-  </tbody></table></section>`;
+  <table>${head("")}<tbody>
+  ${line("Receitas", rec)}
+  ${line("Despesas <small>(taxas, impostos, custos e despesas)</small>", desp)}
+  ${line(
+    "Resultado",
+    rec.map((v, i) => v - desp[i]!),
+    "b",
+  )}
+  </tbody></table>
+  ${outside ? `<p class="note">Fora de ${year}: ${brl(outside)} (receitas e despesas do ano seguinte, não entram neste plano).</p>` : ""}
+  <details><summary>Ver por bloco da planilha</summary><table>${head("Bloco")}<tbody>${detail}
+  ${line("Contribuição Líquida da aba", p.contribution, "b")}</tbody></table></details></section>`;
 }
 
-const ok = parsed.filter((p) => !p.error);
-const total = (k: string[]) =>
-  Array.from({ length: 12 }, (_, i) =>
-    ok.reduce(
-      (a, p) =>
-        a + p.blocks.filter((b) => k.includes(b.kind)).reduce((x, b) => x + b.months[i]!, 0),
-      0,
-    ),
-  );
-const rec = total(["receita"]);
-const ded = total(["taxa", "imposto"]);
-const cus = total(["custo", "despesa"]);
-const line = (name: string, v: number[]) =>
-  `<tr><td>${name}</td>${v.map((x) => `<td class="n">${brl(x)}</td>`).join("")}<td class="n b">${brl(sum(v))}</td></tr>`;
+const ok = parsed.filter((p) => !p.error && p.blocks.some((b) => b.months.some((v) => v !== 0)));
+const skipped = parsed.filter((p) => !ok.includes(p));
 
 writeFileSync(
   out,
   `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Prévia da planilha de Educação</title>
-<style>body{font:13px system-ui,sans-serif;margin:24px;color:#222}table{border-collapse:collapse;margin:8px 0 24px}
-td,th{border-bottom:1px solid #ddd;padding:3px 6px;white-space:nowrap}th{background:#f3f3f3;text-align:left}
-.n{text-align:right;font-variant-numeric:tabular-nums}.b{font-weight:600}.err{color:#b00}.warn{color:#8a5a00;margin:2px 0}
-small{color:#777;font-weight:400}</style></head><body>
+<style>body{font:13px system-ui,sans-serif;margin:24px;color:#222}table{border-collapse:collapse;margin:8px 0 8px}
+section{margin-bottom:28px}td,th{border-bottom:1px solid #ddd;padding:3px 6px;white-space:nowrap}th{background:#f3f3f3;text-align:left}
+.n{text-align:right;font-variant-numeric:tabular-nums}.b{font-weight:600}.warn{color:#8a5a00;margin:2px 0}.note{color:#555;margin:2px 0}
+small{color:#777;font-weight:400}summary{cursor:pointer;color:#555}</style></head><body>
 <h1>Prévia da planilha de Educação · ${year}</h1>
-<p>Nada foi gravado no app. ${ok.length} de ${parsed.length} abas lidas.</p>
-<h2>O que entraria no plano da Educação (todas as abas lidas)</h2>
-<table><thead><tr><th></th>${MONTHS.map((m) => `<th>${m}</th>`).join("")}<th>${year}</th></tr></thead><tbody>
-${line("Receita bruta", rec)}${line("Taxas e impostos", ded)}${line("Custos e despesas dos produtos", cus)}
-${line(
-  "Resultado dos produtos",
-  rec.map((v, i) => v - ded[i]! - cus[i]!),
-)}</tbody></table>
-${parsed.map(tabHtml).join("\n")}
+<p>Por produto, receitas e despesas de cada mês. Nada foi gravado no app.</p>
+${ok.map(tabHtml).join("\n")}
+${skipped.length ? `<p class="note">Abas não lidas: ${skipped.map((p) => `${esc(p.tab)} (${esc(p.error ?? "sem valores")})`).join("; ")}.</p>` : ""}
 </body></html>`,
 );
 for (const p of parsed)
