@@ -2973,6 +2973,7 @@ export type Database = {
         Args: { _name: string; _year: number }
         Returns: boolean
       }
+      category_period: { Args: { _name: string }; Returns: string }
       clear_ai_key: { Args: never; Returns: undefined }
       compute_targets: {
         Args: { _scenario_id: string }
@@ -3187,6 +3188,10 @@ export type Database = {
       }
       mark_alert_seen: { Args: { _id: string }; Returns: undefined }
       norm_text: { Args: { _s: string }; Returns: string }
+      omie_category_key: {
+        Args: { _kind: string; _name: string }
+        Returns: string
+      }
       omie_create_new_accounts: { Args: never; Returns: string[] }
       omie_expense_attribution: {
         Args: { _year: number }
