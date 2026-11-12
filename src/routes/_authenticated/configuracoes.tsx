@@ -22,6 +22,9 @@ import {
   useClients,
   useContractTypes,
   useDreLines,
+  useEduSheetSettings,
+  useEduSheetTabs,
+  useProducts,
   useParameterDefinitions,
   useRevenueTypes,
   useUnits,
@@ -34,6 +37,7 @@ import { VERSION_STATUS_LABELS } from "@/lib/submissions";
 import { PageHeader } from "@/components/page-header";
 import { AccountsImport } from "@/components/accounts-import";
 import { OmieSync } from "@/components/omie-sync";
+import { EduSheetSync } from "@/components/edu-sheet-sync";
 import { AppSettingField } from "@/components/app-setting-field";
 import { CrudTable, type FieldDef } from "@/components/crud-table";
 import { Field, OptionSelect } from "@/components/form-fields";
@@ -96,6 +100,7 @@ function ConfiguracoesPage() {
           <TabsTrigger value="vinculos">Vínculos</TabsTrigger>
           <TabsTrigger value="tipos">Tipos de receita</TabsTrigger>
           <TabsTrigger value="clientes">Clientes</TabsTrigger>
+          <TabsTrigger value="planilha-edu">Planilha de Educação</TabsTrigger>
           <TabsTrigger value="ia">IA</TabsTrigger>
           <TabsTrigger value="avancado">Avançado</TabsTrigger>
         </TabsList>
@@ -116,6 +121,9 @@ function ConfiguracoesPage() {
         </TabsContent>
         <TabsContent value="clientes">
           <ClientsTab />
+        </TabsContent>
+        <TabsContent value="planilha-edu">
+          <EduSheetTab />
         </TabsContent>
         <TabsContent value="ia">
           <AiSettingsTab />
@@ -757,6 +765,78 @@ function ContractTypesTab() {
             { key: "note", label: "Observação", type: "text" },
           ]}
           defaults={{ event: "salario", part: "liquido", lag: 1 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EduSheetTab() {
+  const { data: settings } = useEduSheetSettings();
+  const { data: tabs } = useEduSheetTabs();
+  const { data: units } = useUnits();
+  const { data: versions } = useVersions();
+  const { data: accounts } = useAccounts();
+  const { data: products } = useProducts();
+  const unitId = settings?.[0]?.unit_id;
+  const deductionAccounts = (accounts ?? []).filter(
+    (a) => a.kind === "despesa" && a.treatment === "calculada",
+  );
+  return (
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Planilha</h2>
+        <CrudTable
+          table="edu_sheet_settings"
+          rows={settings ?? []}
+          description="A planilha de produtos de Educação (Google Sheets) alimenta o plano da unidade. Cole o link da planilha e compartilhe-a, como leitora, com o e-mail da conta de serviço do Google. Com a versão aberta, cada leitura troca os lançamentos dos produtos; com a versão travada, só a previsão do Acompanhamento muda."
+          fields={[
+            { key: "spreadsheet_id", label: "Link ou id da planilha", type: "text" },
+            { key: "unit_id", label: "Unidade", type: "select", options: opts(units) },
+            {
+              key: "version_id",
+              label: "Versão",
+              type: "select",
+              options: (versions ?? []).map((v) => ({ value: v.id, label: v.name })),
+            },
+            {
+              key: "fee_account_id",
+              label: "Conta das taxas",
+              type: "select",
+              options: opts(deductionAccounts),
+              hint: "Taxas sobre ROB (cartão, plataforma), na linha de impostos sobre a receita.",
+            },
+            {
+              key: "tax_account_id",
+              label: "Conta dos impostos",
+              type: "select",
+              options: opts(deductionAccounts),
+              hint: "Impostos sobre ROB da planilha. As regras de imposto do app não incidem sobre a receita da planilha.",
+            },
+          ]}
+        />
+        <EduSheetSync />
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold">Abas e produtos</h2>
+        <CrudTable
+          table="edu_sheet_tabs"
+          rows={tabs ?? []}
+          description="Cada aba é um produto. As abas aparecem aqui na primeira leitura. Ligue a aba ao produto (que precisa ter conta de receita e conta de custo) e marque Ligada: na próxima leitura, os valores entram no plano e substituem o que havia sido lançado à mão nessas contas do produto. Aba não ligada é ignorada."
+          fields={[
+            { key: "tab_name", label: "Aba", type: "text", required: true },
+            { key: "title", label: "Título na aba", type: "text", hideInTable: true },
+            {
+              key: "product_id",
+              label: "Produto",
+              type: "select",
+              options: opts((products ?? []).filter((p) => !unitId || p.unit_id === unitId)),
+            },
+            { key: "active", label: "Ligada", type: "boolean" },
+            { key: "last_error", label: "Problema na última leitura", type: "text" },
+            { key: "warnings", label: "Avisos", type: "tags", hideInTable: true },
+          ]}
+          defaults={{ active: false }}
         />
       </div>
     </div>

@@ -20,6 +20,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { CategoryGrid } from "@/components/category-grid";
 import { DreTable } from "@/components/dre-table";
 import { PeopleStep } from "@/components/people-step";
+import { EduSheetSync } from "@/components/edu-sheet-sync";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -181,6 +182,7 @@ function PlanejamentoPage() {
         ))}
       </nav>
       <p className="text-sm text-muted-foreground">{STEP_HELP[step]}</p>
+      {(step === 2 || step === 3) && <EduSheetSync unitId={unitId} />}
       {step === 1 && <PeopleStep />}
       {step === 2 && <CategoryGrid kind="despesa" onOpenPeople={() => setStep(1)} />}
       {step === 3 && <CategoryGrid kind="receita" />}
