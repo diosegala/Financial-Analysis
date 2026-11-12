@@ -809,6 +809,210 @@ export type Database = {
           },
         ]
       }
+      edu_sheet_forecast: {
+        Row: {
+          account_id: string
+          amount: number
+          month: number
+          read_at: string
+          tab_id: string
+          unit_id: string
+          version_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          month: number
+          read_at?: string
+          tab_id: string
+          unit_id: string
+          version_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          month?: number
+          read_at?: string
+          tab_id?: string
+          unit_id?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edu_sheet_forecast_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edu_sheet_forecast_tab_id_fkey"
+            columns: ["tab_id"]
+            isOneToOne: false
+            referencedRelation: "edu_sheet_tabs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edu_sheet_forecast_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edu_sheet_forecast_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      edu_sheet_runs: {
+        Row: {
+          automatic: boolean
+          errors: string[]
+          finished_at: string | null
+          id: string
+          started_at: string
+          started_by: string | null
+          status: string
+          tabs_read: string[]
+          target: string | null
+        }
+        Insert: {
+          automatic?: boolean
+          errors?: string[]
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          tabs_read?: string[]
+          target?: string | null
+        }
+        Update: {
+          automatic?: boolean
+          errors?: string[]
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          tabs_read?: string[]
+          target?: string | null
+        }
+        Relationships: []
+      }
+      edu_sheet_settings: {
+        Row: {
+          created_at: string
+          fee_account_id: string | null
+          id: string
+          spreadsheet_id: string | null
+          tax_account_id: string | null
+          unit_id: string | null
+          updated_at: string
+          version_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          fee_account_id?: string | null
+          id?: string
+          spreadsheet_id?: string | null
+          tax_account_id?: string | null
+          unit_id?: string | null
+          updated_at?: string
+          version_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          fee_account_id?: string | null
+          id?: string
+          spreadsheet_id?: string | null
+          tax_account_id?: string | null
+          unit_id?: string | null
+          updated_at?: string
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edu_sheet_settings_fee_account_id_fkey"
+            columns: ["fee_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edu_sheet_settings_tax_account_id_fkey"
+            columns: ["tax_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edu_sheet_settings_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "edu_sheet_settings_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      edu_sheet_tabs: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          last_error: string | null
+          last_read_at: string | null
+          product_id: string | null
+          tab_name: string
+          title: string | null
+          updated_at: string
+          warnings: string[]
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_read_at?: string | null
+          product_id?: string | null
+          tab_name: string
+          title?: string | null
+          updated_at?: string
+          warnings?: string[]
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_read_at?: string | null
+          product_id?: string | null
+          tab_name?: string
+          title?: string | null
+          updated_at?: string
+          warnings?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edu_sheet_tabs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           created_at: string
@@ -1797,6 +2001,7 @@ export type Database = {
           product_id: string | null
           revenue_origin: string | null
           revenue_type_id: string | null
+          sheet_tab_id: string | null
           sort_order: number
           unit_id: string
           updated_at: string
@@ -1819,6 +2024,7 @@ export type Database = {
           product_id?: string | null
           revenue_origin?: string | null
           revenue_type_id?: string | null
+          sheet_tab_id?: string | null
           sort_order?: number
           unit_id: string
           updated_at?: string
@@ -1841,6 +2047,7 @@ export type Database = {
           product_id?: string | null
           revenue_origin?: string | null
           revenue_type_id?: string | null
+          sheet_tab_id?: string | null
           sort_order?: number
           unit_id?: string
           updated_at?: string
@@ -1894,6 +2101,13 @@ export type Database = {
             columns: ["revenue_type_id"]
             isOneToOne: false
             referencedRelation: "revenue_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_lines_sheet_tab_id_fkey"
+            columns: ["sheet_tab_id"]
+            isOneToOne: false
+            referencedRelation: "edu_sheet_tabs"
             referencedColumns: ["id"]
           },
           {
@@ -2819,6 +3033,28 @@ export type Database = {
           month: number
           unit_id: string
         }[]
+      }
+      edu_sheet_finish: {
+        Args: {
+          _errors: string[]
+          _run_id: string
+          _tabs: string[]
+          _target: string
+        }
+        Returns: undefined
+      }
+      edu_sheet_fire: { Args: never; Returns: undefined }
+      edu_sheet_start: { Args: { _by: string }; Returns: string }
+      edu_sheet_store: {
+        Args: {
+          _blocks: Json
+          _error: string
+          _run_id: string
+          _tab: string
+          _title: string
+          _warnings: string[]
+        }
+        Returns: string
       }
       generate_expense_base: {
         Args: { _mode?: string; _pct?: number; _version_id: string }

@@ -93,7 +93,9 @@ export function CategoryGrid({
   onOpenPeople?: () => void;
 }) {
   const { versionId, unitId, scenarioId, canEdit, year } = usePlanning();
-  const { data: lines, isLoading } = usePlanLines(versionId, unitId, kind);
+  const { data: allLines, isLoading } = usePlanLines(versionId, unitId, kind);
+  // Taxas e impostos da planilha de Educação ficam na DRE, não nas grades.
+  const lines = allLines?.filter((l) => l.origin !== "planilha_deducao");
   const { data: accounts } = useAccounts();
   const { data: contractTypes } = useContractTypes();
   const { data: reference } = useUnitReference(versionId, unitId);
@@ -340,6 +342,9 @@ export function CategoryGrid({
             )}
             {rows.map((row) => {
               const many = opensLines(row);
+              // Lançamentos da planilha de Educação: corrigem-se na planilha.
+              const fromSheet = row.lines.some((l) => l.sheet_tab_id);
+              const editable = canEdit && !fromSheet;
               const isOpen = open.has(row.accountId);
               if (!many) directIndex++;
               const r = directIndex;
@@ -380,6 +385,14 @@ export function CategoryGrid({
                       ) : (
                         row.name
                       )}
+                      {fromSheet && (
+                        <span
+                          className="ml-1 text-xs font-normal text-muted-foreground"
+                          title="Vem da planilha de Educação. Para mudar, altere a planilha e leia de novo."
+                        >
+                          · da planilha
+                        </span>
+                      )}
                     </td>
                     {baseCol && (
                       <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
@@ -401,7 +414,7 @@ export function CategoryGrid({
                           className="ml-auto w-32"
                           label={`${row.name} em ${year ?? ""}`}
                           value={row.total}
-                          disabled={!canEdit}
+                          disabled={!editable}
                           onSave={(v) => void setYear(row, row.lines[0], v ?? 0)}
                         />
                       )}
@@ -424,7 +437,7 @@ export function CategoryGrid({
                           ) : (
                             <MoneyCell
                               value={row.months[i] ?? 0}
-                              disabled={!canEdit}
+                              disabled={!editable}
                               pos={{ grid: `grid-${kind}`, row: r, col: i }}
                               onCommit={(v) => void commit(row, [{ month: i + 1, amount: v }])}
                               onPasteBlock={(block) => pasteBlock(r, i + 1, block)}
@@ -445,17 +458,17 @@ export function CategoryGrid({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {canEdit && (
+                          {editable && (
                             <DropdownMenuItem onClick={() => setAddingLine(row)}>
                               Adicionar {lineWord}…
                             </DropdownMenuItem>
                           )}
-                          {canEdit && row.reference && (
+                          {editable && row.reference && (
                             <DropdownMenuItem onClick={() => void bringBase(row)}>
                               Trazer valores de {baseYear}
                             </DropdownMenuItem>
                           )}
-                          {canEdit && row.total > 0 && (
+                          {editable && row.total > 0 && (
                             <DropdownMenuItem onClick={() => setCutting(row)}>
                               Cortar em %…
                             </DropdownMenuItem>
@@ -465,7 +478,7 @@ export function CategoryGrid({
                               Ver fornecedores de {baseYear}
                             </DropdownMenuItem>
                           )}
-                          {canEdit && row.lines.length > 0 && (
+                          {editable && row.lines.length > 0 && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -480,7 +493,7 @@ export function CategoryGrid({
                       </DropdownMenu>
                     </td>
                   </tr>
-                  {many && isOpen && canEdit && (
+                  {many && isOpen && editable && (
                     <tr className="border-b border-border/50 bg-muted/20 text-xs">
                       <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-7 pr-2">
                         <Button
@@ -506,7 +519,7 @@ export function CategoryGrid({
                               aria-label={`Nome do ${lineWord}`}
                               defaultValue={l.description ?? ""}
                               placeholder={`Nome do ${lineWord}`}
-                              disabled={!canEdit}
+                              disabled={!canEdit || !!l.sheet_tab_id}
                               className="h-7 text-xs"
                               onBlur={(e) => {
                                 const name = e.target.value.trim();
@@ -514,7 +527,7 @@ export function CategoryGrid({
                                   void updateLine(l.id, { description: name || null });
                               }}
                             />
-                            {canEdit && (
+                            {canEdit && !l.sheet_tab_id && (
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -539,7 +552,7 @@ export function CategoryGrid({
                               className="ml-auto w-32"
                               label={`${l.description ?? row.name} em ${year ?? ""}`}
                               value={sum(l.values.values())}
-                              disabled={!canEdit}
+                              disabled={!canEdit || !!l.sheet_tab_id}
                               onSave={(v) => void setYear(row, l, v ?? 0)}
                             />
                           )}
@@ -550,7 +563,7 @@ export function CategoryGrid({
                             <td key={i} className="border-l border-border/50 p-0">
                               <MoneyCell
                                 value={l.values.get(i + 1) ?? 0}
-                                disabled={!canEdit}
+                                disabled={!canEdit || !!l.sheet_tab_id}
                                 onCommit={(v) =>
                                   void setValues(l.id, [{ month: i + 1, amount: v }])
                                 }

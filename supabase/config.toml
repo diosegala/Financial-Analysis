@@ -1,3 +1,6 @@
 project_id = "ausgdcxhlrgacnmdhscm"
 [functions.omie-sync]
 verify_jwt = false
+
+[functions.edu-sheet-sync]
+verify_jwt = false
