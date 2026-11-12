@@ -2274,6 +2274,7 @@ export type Database = {
           created_at: string
           default_seats: number | null
           duration_months: number | null
+          extra_account_id: string | null
           fixed_cost: number | null
           id: string
           kind: string
@@ -2284,6 +2285,7 @@ export type Database = {
           price_model: string
           revenue_account_id: string | null
           revenue_type_id: string | null
+          sponsor_account_id: string | null
           unit_id: string | null
           updated_at: string
         }
@@ -2294,6 +2296,7 @@ export type Database = {
           created_at?: string
           default_seats?: number | null
           duration_months?: number | null
+          extra_account_id?: string | null
           fixed_cost?: number | null
           id?: string
           kind?: string
@@ -2304,6 +2307,7 @@ export type Database = {
           price_model?: string
           revenue_account_id?: string | null
           revenue_type_id?: string | null
+          sponsor_account_id?: string | null
           unit_id?: string | null
           updated_at?: string
         }
@@ -2314,6 +2318,7 @@ export type Database = {
           created_at?: string
           default_seats?: number | null
           duration_months?: number | null
+          extra_account_id?: string | null
           fixed_cost?: number | null
           id?: string
           kind?: string
@@ -2324,6 +2329,7 @@ export type Database = {
           price_model?: string
           revenue_account_id?: string | null
           revenue_type_id?: string | null
+          sponsor_account_id?: string | null
           unit_id?: string | null
           updated_at?: string
         }
@@ -2331,6 +2337,13 @@ export type Database = {
           {
             foreignKeyName: "products_cost_account_id_fkey"
             columns: ["cost_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_extra_account_id_fkey"
+            columns: ["extra_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]
@@ -2354,6 +2367,13 @@ export type Database = {
             columns: ["revenue_type_id"]
             isOneToOne: false
             referencedRelation: "revenue_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_sponsor_account_id_fkey"
+            columns: ["sponsor_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
           {
@@ -3033,6 +3053,15 @@ export type Database = {
           month: number
           unit_id: string
         }[]
+      }
+      edu_sheet_account: {
+        Args: {
+          _kind: string
+          _label: string
+          p: Database["public"]["Tables"]["products"]["Row"]
+          st: Database["public"]["Tables"]["edu_sheet_settings"]["Row"]
+        }
+        Returns: string
       }
       edu_sheet_finish: {
         Args: {
