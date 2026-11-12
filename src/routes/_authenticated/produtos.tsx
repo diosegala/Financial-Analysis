@@ -346,6 +346,12 @@ function ProductDialog({
   const [costAccountId, setCostAccountId] = useState<string | null>(
     product?.cost_account_id ?? null,
   );
+  const [sponsorAccountId, setSponsorAccountId] = useState<string | null>(
+    product?.sponsor_account_id ?? null,
+  );
+  const [extraAccountId, setExtraAccountId] = useState<string | null>(
+    product?.extra_account_id ?? null,
+  );
   const [active, setActive] = useState(product?.active ?? true);
   const [saving, setSaving] = useState(false);
 
@@ -390,6 +396,8 @@ function ProductDialog({
       fixed_cost: isEvent ? parsed.fixed : null,
       revenue_account_id: revenueAccountId,
       cost_account_id: isEvent ? costAccountId : null,
+      sponsor_account_id: isEvent ? sponsorAccountId : null,
+      extra_account_id: isEvent ? extraAccountId : null,
       line_id: lineId,
       active,
     };
@@ -548,6 +556,28 @@ function ProductDialog({
                   onChange={setCostAccountId}
                   noneLabel="Padrão da unidade"
                   options={accountOptions("despesa")}
+                />
+              </Field>
+              <Field
+                label="Conta do patrocínio"
+                hint="Planilha de Educação: o bloco PATROCÍNIO da aba."
+              >
+                <OptionSelect
+                  value={sponsorAccountId}
+                  onChange={setSponsorAccountId}
+                  noneLabel="Mesma da receita"
+                  options={accountOptions("receita")}
+                />
+              </Field>
+              <Field
+                label="Conta da receita variável"
+                hint="Planilha de Educação: VARIÁVEL e VAGAS EXTRAS."
+              >
+                <OptionSelect
+                  value={extraAccountId}
+                  onChange={setExtraAccountId}
+                  noneLabel="Mesma da receita"
+                  options={accountOptions("receita")}
                 />
               </Field>
             </>

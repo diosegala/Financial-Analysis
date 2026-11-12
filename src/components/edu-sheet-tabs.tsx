@@ -161,18 +161,44 @@ function CreateProductDialog({
       .filter((a) => a.kind === kind)
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
       .map((a) => ({ value: a.id, label: a.name }));
-  // Sugestões: a categoria de despesa que começa com o nome do produto; a receita com o nome da unidade
-  // (ex.: "Receitas Variáveis - Educação") ou, sem ela, a já usada por outro produto da unidade.
-  const guessCost =
-    forUnit.find((a) => a.kind === "despesa" && norm(a.name).startsWith(norm(name)))?.id ?? null;
+  // Sugestões pelo nome do produto, como as categorias do Omie ("ICL Ingressos - 2027", "ICL Patrocínio - 2027",
+  // "ICL - 2027"); o ano mais recente primeiro. Enquanto o usuário não escolhe, a sugestão acompanha o nome.
+  const named = (kind: string, word?: string) =>
+    forUnit
+      .filter(
+        (a) =>
+          a.kind === kind &&
+          norm(a.name).startsWith(norm(name)) &&
+          (!word || norm(a.name).includes(word)),
+      )
+      .sort((a, b) => b.name.localeCompare(a.name, "pt-BR"))[0]?.id ?? null;
   const unitName = norm(units?.find((u) => u.id === unitId)?.name ?? "");
-  const guessRevenue =
-    forUnit.find((a) => a.kind === "receita" && unitName && norm(a.name).includes(unitName))?.id ??
-    (products ?? []).find((p) => p.unit_id === unitId && p.revenue_account_id)
-      ?.revenue_account_id ??
-    null;
-  const [costId, setCostId] = useState<string | null>(guessCost);
-  const [revenueId, setRevenueId] = useState<string | null>(guessRevenue);
+  const guess = {
+    cost:
+      forUnit
+        .filter((a) => a.kind === "despesa" && norm(a.name).startsWith(norm(name)))
+        .sort((a, b) => b.name.localeCompare(a.name, "pt-BR"))[0]?.id ?? null,
+    revenue:
+      named("receita", "ingresso") ??
+      forUnit.find((a) => a.kind === "receita" && unitName && norm(a.name).includes(unitName))
+        ?.id ??
+      (products ?? []).find((p) => p.unit_id === unitId && p.revenue_account_id)
+        ?.revenue_account_id ??
+      null,
+    sponsor: named("receita", "patroc"),
+    extra: null as string | null,
+  };
+  type Pick = Record<keyof typeof guess, string | null | undefined>;
+  const [picked, setPicked] = useState<Pick>({
+    cost: undefined,
+    revenue: undefined,
+    sponsor: undefined,
+    extra: undefined,
+  });
+  const value = (k: keyof Pick) => (picked[k] === undefined ? guess[k] : picked[k]) ?? null;
+  const choose = (k: keyof Pick) => (v: string | null) => setPicked((p) => ({ ...p, [k]: v }));
+  const costId = value("cost");
+  const revenueId = value("revenue");
   const [saving, setSaving] = useState(false);
   const valid = name.trim() !== "" && !!costId && !!revenueId && !!unitId;
 
@@ -187,6 +213,8 @@ function CreateProductDialog({
         kind: "evento",
         price_model: "mensal",
         revenue_account_id: revenueId,
+        sponsor_account_id: value("sponsor"),
+        extra_account_id: value("extra"),
         cost_account_id: costId,
         active: true,
       })
@@ -218,8 +246,8 @@ function CreateProductDialog({
         <DialogHeader>
           <DialogTitle>Criar produto para a aba {tab.tab_name}</DialogTitle>
           <DialogDescription>
-            O produto fica na unidade da planilha, como evento. Use o nome da categoria do evento no
-            Omie, para o realizado casar com o planejado.
+            O produto fica na unidade da planilha, como evento. Escolha as categorias do evento no
+            Omie (ingressos, patrocínio e despesa), para o realizado casar com o planejado.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -227,16 +255,42 @@ function CreateProductDialog({
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field
-            label="Categoria de despesa do evento"
-            hint="A categoria do Omie onde caem os custos deste evento. Precisa ser só deste produto: a leitura substitui o que for lançado à mão nela."
+            label="Receita de ingressos"
+            hint="A categoria do Omie dos ingressos do evento, por exemplo “ICL Ingressos - 2027”."
           >
-            <OptionSelect value={costId} onChange={setCostId} options={options("despesa")} />
+            <OptionSelect
+              value={revenueId}
+              onChange={choose("revenue")}
+              options={options("receita")}
+            />
           </Field>
           <Field
-            label="Conta da receita"
-            hint="Pode ser a mesma para todos os produtos da unidade."
+            label="Receita de patrocínio"
+            hint="O bloco PATROCÍNIO da aba. Sem categoria própria, vai para a de ingressos."
           >
-            <OptionSelect value={revenueId} onChange={setRevenueId} options={options("receita")} />
+            <OptionSelect
+              value={value("sponsor")}
+              onChange={choose("sponsor")}
+              noneLabel="Mesma dos ingressos"
+              options={options("receita")}
+            />
+          </Field>
+          <Field
+            label="Receita variável e vagas extras"
+            hint="Os outros blocos de receita da aba (VARIÁVEL, VAGAS EXTRAS)."
+          >
+            <OptionSelect
+              value={value("extra")}
+              onChange={choose("extra")}
+              noneLabel="Mesma dos ingressos"
+              options={options("receita")}
+            />
+          </Field>
+          <Field
+            label="Despesa do evento"
+            hint="A categoria do Omie onde caem os custos deste evento, por exemplo “ICL - 2027”. Precisa ser só deste produto: a leitura substitui o que for lançado à mão nela."
+          >
+            <OptionSelect value={costId} onChange={choose("cost")} options={options("despesa")} />
           </Field>
         </div>
         <DialogFooter>

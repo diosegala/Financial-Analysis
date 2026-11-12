@@ -22,7 +22,12 @@ Em cada aba ligada a um produto:
 
 ## O que entra no plano
 
-- **Receita:** cada bloco vira uma linha na conta de receita do produto, por exemplo "GPL · Ingressos".
+- **Receita:** cada bloco vira uma linha, por exemplo "GPL · Ingressos". A conta segue o tipo do bloco, como as categorias
+  do Omie:
+  - INGRESSOS vai para a conta da receita do produto (ex.: "GPL Ingressos - 2027");
+  - PATROCÍNIO vai para a conta do patrocínio (ex.: "GPL Patrocínio - 2027");
+  - os outros blocos (VARIÁVEL, VAGAS EXTRAS) vão para a conta da receita variável;
+  - sem a conta do patrocínio ou da variável, o bloco vai para a conta da receita.
 - **Custos e despesas:** cada bloco vira uma linha na conta de custo do produto.
 - **Taxas e impostos:** vão para as contas "Taxas sobre a receita - planilha de Educação" e "Impostos sobre a receita -
   planilha de Educação", na linha de impostos sobre a receita. As regras de imposto e comissão do app não incidem sobre a
@@ -48,7 +53,7 @@ abertos, no lugar do que o produto tinha no plano.
 4. **Link e abas.** Em Configurações → Planilha de Educação:
    - cole o link da planilha;
    - leia uma vez;
-   - ligue cada aba a um produto (com conta de receita e conta de custo) e marque **Ligada**;
+   - em cada aba, escolha o produto ou clique em **Criar produto** (contas de ingressos, patrocínio, variável e despesa);
    - leia de novo.
 
 A leitura diária usa o endereço e o token do agendamento do Omie (`omie_sync_url` e `omie_sync_token`, no Vault).
