@@ -38,6 +38,7 @@ import { PageHeader } from "@/components/page-header";
 import { AccountsImport } from "@/components/accounts-import";
 import { OmieSync } from "@/components/omie-sync";
 import { EduSheetSync } from "@/components/edu-sheet-sync";
+import { ProductsLink } from "@/components/products-link";
 import { AppSettingField } from "@/components/app-setting-field";
 import { CrudTable, type FieldDef } from "@/components/crud-table";
 import { Field, OptionSelect } from "@/components/form-fields";
@@ -818,7 +819,15 @@ function EduSheetTab() {
         <EduSheetSync />
       </div>
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold">Abas e produtos</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Abas e produtos</h2>
+          <ProductsLink />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Para cada aba: em Produtos, cadastre um produto do tipo Evento, na unidade Educação, com o
+          nome da categoria do Omie; escolha a conta da receita e, como conta da despesa, a
+          categoria do evento. Depois ligue a aba a ele aqui.
+        </p>
         <CrudTable
           table="edu_sheet_tabs"
           rows={tabs ?? []}
