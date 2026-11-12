@@ -23,8 +23,6 @@ import {
   useContractTypes,
   useDreLines,
   useEduSheetSettings,
-  useEduSheetTabs,
-  useProducts,
   useParameterDefinitions,
   useRevenueTypes,
   useUnits,
@@ -39,6 +37,7 @@ import { AccountsImport } from "@/components/accounts-import";
 import { OmieSync } from "@/components/omie-sync";
 import { EduSheetSync } from "@/components/edu-sheet-sync";
 import { ProductsLink } from "@/components/products-link";
+import { EduSheetTabs } from "@/components/edu-sheet-tabs";
 import { AppSettingField } from "@/components/app-setting-field";
 import { CrudTable, type FieldDef } from "@/components/crud-table";
 import { Field, OptionSelect } from "@/components/form-fields";
@@ -774,12 +773,9 @@ function ContractTypesTab() {
 
 function EduSheetTab() {
   const { data: settings } = useEduSheetSettings();
-  const { data: tabs } = useEduSheetTabs();
   const { data: units } = useUnits();
   const { data: versions } = useVersions();
   const { data: accounts } = useAccounts();
-  const { data: products } = useProducts();
-  const unitId = settings?.[0]?.unit_id;
   const deductionAccounts = (accounts ?? []).filter(
     (a) => a.kind === "despesa" && a.treatment === "calculada",
   );
@@ -824,29 +820,11 @@ function EduSheetTab() {
           <ProductsLink />
         </div>
         <p className="text-sm text-muted-foreground">
-          Para cada aba: em Produtos, cadastre um produto do tipo Evento, na unidade Educação, com o
-          nome da categoria do Omie; escolha a conta da receita e, como conta da despesa, a
-          categoria do evento. Depois ligue a aba a ele aqui.
+          As abas vêm da leitura da planilha. Para usar uma aba, escolha o produto dela ou clique em
+          Criar produto; depois, clique em Ler a planilha agora. Abas sem produto (como o modelo e
+          as anotações) são ignoradas.
         </p>
-        <CrudTable
-          table="edu_sheet_tabs"
-          rows={tabs ?? []}
-          description="Cada aba é um produto. As abas aparecem aqui na primeira leitura. Ligue a aba ao produto (que precisa ter conta de receita e conta de custo) e marque Ligada: na próxima leitura, os valores entram no plano e substituem o que havia sido lançado à mão nessas contas do produto. Aba não ligada é ignorada."
-          fields={[
-            { key: "tab_name", label: "Aba", type: "text", required: true },
-            { key: "title", label: "Título na aba", type: "text", hideInTable: true },
-            {
-              key: "product_id",
-              label: "Produto",
-              type: "select",
-              options: opts((products ?? []).filter((p) => !unitId || p.unit_id === unitId)),
-            },
-            { key: "active", label: "Ligada", type: "boolean" },
-            { key: "last_error", label: "Problema na última leitura", type: "text" },
-            { key: "warnings", label: "Avisos", type: "tags", hideInTable: true },
-          ]}
-          defaults={{ active: false }}
-        />
+        <EduSheetTabs />
       </div>
     </div>
   );
