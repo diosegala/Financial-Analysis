@@ -3411,6 +3411,7 @@ export type Database = {
           unit_id: string
         }[]
       }
+      plan_lines_reorder: { Args: { _line_ids: string[] }; Returns: undefined }
       plan_split: {
         Args: { _scenario_id: string; _version_id: string }
         Returns: {
