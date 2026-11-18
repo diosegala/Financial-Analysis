@@ -121,6 +121,13 @@ export function CategoryGrid({
   const markDeductible = isCost && !!user?.isFinanceiro;
   const accountNd = (id: string) => !!accounts?.find((a) => a.id === id)?.non_deductible;
   const nonDeductible = (l: PlanLine) => l.non_deductible ?? accountNd(l.account_id);
+  // Crédito de IBS/CBS: segue a conta; fornecedor do Simples é exceção na linha.
+  const accountCredit = (id: string) => !!accounts?.find((a) => a.id === id)?.generates_tax_credit;
+  const hasCredit = (l: PlanLine) => l.tax_credit ?? accountCredit(l.account_id);
+  async function setCredit(ls: PlanLine[], value: boolean) {
+    for (const l of ls.filter((x) => !x.sheet_tab_id))
+      await updateLine(l.id, { tax_credit: value === accountCredit(l.account_id) ? null : value });
+  }
   async function setNonDeductible(ls: PlanLine[], value: boolean) {
     for (const l of ls.filter((x) => !x.sheet_tab_id))
       await updateLine(l.id, { non_deductible: value === accountNd(l.account_id) ? null : value });
@@ -403,6 +410,19 @@ export function CategoryGrid({
                           · da planilha
                         </span>
                       )}
+                      {isCost &&
+                        accountCredit(row.accountId) &&
+                        row.lines.some((l) => !hasCredit(l)) && (
+                          <span
+                            className="ml-1 text-xs font-normal text-muted-foreground"
+                            title="Fornecedor do Simples: não devolve IBS/CBS."
+                          >
+                            ·{" "}
+                            {row.lines.every((l) => !hasCredit(l))
+                              ? "sem crédito"
+                              : "parte sem crédito"}
+                          </span>
+                        )}
                       {isCost && row.lines.some(nonDeductible) && (
                         <span
                           className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400"
@@ -506,6 +526,23 @@ export function CategoryGrid({
                                 : "Marcar como não dedutível no IRPJ/CSLL"}
                             </DropdownMenuItem>
                           )}
+                          {markDeductible &&
+                            canEdit &&
+                            accountCredit(row.accountId) &&
+                            row.lines.some((l) => !l.sheet_tab_id) && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  void setCredit(
+                                    row.lines,
+                                    !row.lines.filter((l) => !l.sheet_tab_id).every(hasCredit),
+                                  )
+                                }
+                              >
+                                {row.lines.filter((l) => !l.sheet_tab_id).every(hasCredit)
+                                  ? "Fornecedor do Simples: sem crédito de IBS/CBS"
+                                  : "Com crédito de IBS/CBS"}
+                              </DropdownMenuItem>
+                            )}
                           {isCost && row.reference && (
                             <DropdownMenuItem onClick={() => setSuppliers(row)}>
                               Ver fornecedores de {baseYear}
@@ -560,6 +597,25 @@ export function CategoryGrid({
                                   void updateLine(l.id, { description: name || null });
                               }}
                             />
+                            {markDeductible &&
+                              canEdit &&
+                              !l.sheet_tab_id &&
+                              accountCredit(l.account_id) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`h-7 shrink-0 whitespace-nowrap px-2 text-xs ${
+                                    hasCredit(l)
+                                      ? "text-muted-foreground"
+                                      : "text-amber-700 dark:text-amber-400"
+                                  }`}
+                                  aria-pressed={!hasCredit(l)}
+                                  title="Clique para trocar. Fornecedor do Simples não devolve IBS/CBS."
+                                  onClick={() => void setCredit([l], !hasCredit(l))}
+                                >
+                                  {hasCredit(l) ? "Com crédito" : "Sem crédito (Simples)"}
+                                </Button>
+                              )}
                             {markDeductible && canEdit && !l.sheet_tab_id && (
                               <Button
                                 variant="ghost"

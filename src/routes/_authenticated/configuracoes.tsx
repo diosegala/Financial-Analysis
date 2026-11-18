@@ -531,9 +531,10 @@ function AccountsTab() {
           },
           {
             key: "generates_tax_credit",
-            label: "Gera crédito de PIS/COFINS",
+            label: "Gera crédito de IBS/CBS e PIS/COFINS",
             type: "boolean",
             hideInTable: true,
+            hint: "As despesas desta conta devolvem os impostos com crédito nas compras. Fornecedor do Simples é exceção na linha.",
           },
           {
             key: "non_deductible",

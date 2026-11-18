@@ -568,6 +568,7 @@ export type Database = {
           base_kind: string
           contract_type_ids: string[] | null
           created_at: string
+          credit_on_purchases: boolean
           exclude_revenue_type_ids: string[] | null
           id: string
           name: string
@@ -586,6 +587,7 @@ export type Database = {
           base_kind: string
           contract_type_ids?: string[] | null
           created_at?: string
+          credit_on_purchases?: boolean
           exclude_revenue_type_ids?: string[] | null
           id?: string
           name: string
@@ -604,6 +606,7 @@ export type Database = {
           base_kind?: string
           contract_type_ids?: string[] | null
           created_at?: string
+          credit_on_purchases?: boolean
           exclude_revenue_type_ids?: string[] | null
           id?: string
           name?: string
@@ -2049,6 +2052,7 @@ export type Database = {
           revenue_type_id: string | null
           sheet_tab_id: string | null
           sort_order: number
+          tax_credit: boolean | null
           unit_id: string
           updated_at: string
           version_id: string
@@ -2073,6 +2077,7 @@ export type Database = {
           revenue_type_id?: string | null
           sheet_tab_id?: string | null
           sort_order?: number
+          tax_credit?: boolean | null
           unit_id: string
           updated_at?: string
           version_id: string
@@ -2097,6 +2102,7 @@ export type Database = {
           revenue_type_id?: string | null
           sheet_tab_id?: string | null
           sort_order?: number
+          tax_credit?: boolean | null
           unit_id?: string
           updated_at?: string
           version_id?: string
