@@ -56,7 +56,9 @@ function useScopeOptions() {
 const fmtValue = (def: ParameterDefinition, v: number) =>
   def.value_type === "percent"
     ? `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 })}%`
-    : fmtBRL(v);
+    : def.value_type === "number"
+      ? v.toLocaleString("pt-BR", { maximumFractionDigits: 4 })
+      : fmtBRL(v);
 
 function ParametrosPage() {
   const { data: user, isLoading: loadingUser } = useCurrentUser();
@@ -251,7 +253,15 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
                 />
               </Field>
             ))}
-            <Field label={def.value_type === "percent" ? "Valor (%)" : "Valor (R$)"}>
+            <Field
+              label={
+                def.value_type === "percent"
+                  ? "Valor (%)"
+                  : def.value_type === "number"
+                    ? "Valor"
+                    : "Valor (R$)"
+              }
+            >
               <Input
                 value={value}
                 onChange={(e) => setValue(e.target.value)}

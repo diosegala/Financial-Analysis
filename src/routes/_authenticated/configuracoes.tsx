@@ -535,6 +535,12 @@ function AccountsTab() {
             type: "boolean",
             hideInTable: true,
           },
+          {
+            key: "non_deductible",
+            label: "Não dedutível no IRPJ/CSLL",
+            type: "boolean",
+            hint: "As despesas desta conta voltam para a base do IRPJ e da CSLL. Uma linha pode ser exceção, nos lançamentos.",
+          },
           { key: "omie_category_code", label: "Código no Omie", type: "text", hideInTable: true },
           active,
           order,

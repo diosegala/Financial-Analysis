@@ -97,6 +97,7 @@ export type Database = {
           id: string
           kind: string
           name: string
+          non_deductible: boolean
           omie_category_code: string | null
           per_person: boolean
           period: string | null
@@ -116,6 +117,7 @@ export type Database = {
           id?: string
           kind: string
           name: string
+          non_deductible?: boolean
           omie_category_code?: string | null
           per_person?: boolean
           period?: string | null
@@ -135,6 +137,7 @@ export type Database = {
           id?: string
           kind?: string
           name?: string
+          non_deductible?: boolean
           omie_category_code?: string | null
           per_person?: boolean
           period?: string | null
@@ -1995,6 +1998,7 @@ export type Database = {
           description: string | null
           event_id: string | null
           id: string
+          non_deductible: boolean | null
           note: string | null
           origin: string
           person_id: string | null
@@ -2018,6 +2022,7 @@ export type Database = {
           description?: string | null
           event_id?: string | null
           id?: string
+          non_deductible?: boolean | null
           note?: string | null
           origin?: string
           person_id?: string | null
@@ -2041,6 +2046,7 @@ export type Database = {
           description?: string | null
           event_id?: string | null
           id?: string
+          non_deductible?: boolean | null
           note?: string | null
           origin?: string
           person_id?: string | null
@@ -2900,6 +2906,7 @@ export type Database = {
           id: string
           kind: string
           name: string
+          non_deductible: boolean
           omie_category_code: string | null
           per_person: boolean
           period: string | null
@@ -3030,6 +3037,19 @@ export type Database = {
           planned: number
         }[]
       }
+      dre_leaf_values: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          amount: number
+          dre_line_id: string
+          month: number
+          unit_id: string
+        }[]
+      }
       dre_report: {
         Args: {
           _scenario_id: string
@@ -3139,6 +3159,35 @@ export type Database = {
       import_people: {
         Args: { _overwrite?: boolean; _rows: Json; _version_id: string }
         Returns: Json
+      }
+      income_tax_by_unit: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          amount: number
+          month: number
+          unit_id: string
+        }[]
+      }
+      income_tax_quarters: {
+        Args: { _scenario_id: string; _version_id: string }
+        Returns: {
+          additions: number
+          base: number
+          csll: number
+          irpj: number
+          loss_balance: number
+          loss_used: number
+          pay_month: number
+          quarter: number
+          result: number
+          shares: Json
+          taxable: number
+          total: number
+        }[]
       }
       inss_empregado: {
         Args: { _gross: number; _ref: string }
@@ -3426,6 +3475,7 @@ export type Database = {
           id: string
           kind: string
           name: string
+          non_deductible: boolean
           omie_category_code: string | null
           per_person: boolean
           period: string | null
