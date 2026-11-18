@@ -7,6 +7,9 @@ import {
   useGuardrailSettings,
   useGuardrails,
   useReferenceSuppliers,
+  useReferenceAdjust,
+  useReferenceAdjustments,
+  useReferenceOmie,
   useUnitReference,
 } from "@/lib/guardrails";
 import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
@@ -19,6 +22,7 @@ import {
   type PlanLine,
 } from "@/lib/plan-data";
 import { usePlanning } from "@/lib/planning";
+import { toast } from "sonner";
 import { useCurrentUser } from "@/lib/auth";
 import { MoneyCell } from "@/components/money-cell";
 import { NumberCell } from "@/components/number-cell";
@@ -56,6 +60,41 @@ const sum = (values: Iterable<number>) => [...values].reduce((a, v) => a + v, 0)
 /** A categoria abre em lançamentos quando tem mais de um ou quando o único tem nome (ex.: um cliente). */
 const opensLines = (row: Row) =>
   row.lines.length > 1 || (row.lines.length === 1 && !!row.lines[0]?.description);
+
+/** Valor do ano base que o financeiro pode corrigir; mostra o do Omie quando ajustado. */
+function BaseYearCell({
+  value,
+  adjusted,
+  omie,
+  label,
+  onSave,
+}: {
+  value: number;
+  adjusted: boolean;
+  omie: number;
+  label: string;
+  onSave: (v: number | null) => void;
+}) {
+  return (
+    <div className="flex flex-col items-end">
+      <NumberCell
+        className="w-32"
+        label={label}
+        value={value || null}
+        placeholder="—"
+        onSave={onSave}
+      />
+      {adjusted && (
+        <span
+          className="font-sans text-[10px] text-amber-700 dark:text-amber-400"
+          title="Apague o valor para voltar ao Omie."
+        >
+          ajustado · Omie {fmtBRL(omie)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /** Situação da categoria contra o limite: o que passou, a folga ou nada, enquanto não houver plano. */
 export function Situation({
@@ -100,6 +139,9 @@ export function CategoryGrid({
   const { data: accounts } = useAccounts();
   const { data: contractTypes } = useContractTypes();
   const { data: reference } = useUnitReference(versionId, unitId);
+  const { data: adjustments } = useReferenceAdjustments(year ? year - 1 : null, unitId);
+  const { data: omieRef } = useReferenceOmie(versionId, unitId);
+  const saveAdjustment = useReferenceAdjust();
   const { data: settings } = useGuardrailSettings(scenarioId);
   const { data: guardrails } = useGuardrails(scenarioId);
   const { setValues, addLine, updateLine, deleteLine } = usePlanMutations();
@@ -192,6 +234,21 @@ export function CategoryGrid({
     .sort((a, b) => b.refTotal - a.refTotal || a.label.localeCompare(b.label));
   const emptyPlan = isCost && (lines ?? []).length === 0 && (reference?.size ?? 0) > 0;
   const colSpan = 3 + (monthly ? 12 : 0) + (baseCol ? 1 : 0) + (costCol ? 2 : 0);
+
+  /** Ano base corrigido pelo financeiro: o total do ano no lugar do Omie; vazio volta ao Omie. */
+  async function adjustBase(row: Row, total: number | null) {
+    if (!year || !unitId) return;
+    const omie = omieRef?.get(row.accountId) ?? 0;
+    const value =
+      total === null || (total === omie && !adjustments?.has(row.accountId)) ? null : total;
+    if (value === null && !adjustments?.has(row.accountId)) return;
+    if (await saveAdjustment(year - 1, unitId, row.accountId, value))
+      toast.success(
+        calculated
+          ? `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}. Para o limite usar o novo valor, clique em Calcular com o realizado de ${year - 1} no Plano CUPOLA.`
+          : `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}.`,
+      );
+  }
 
   /** Grava um mês da categoria: cria o lançamento se ainda não houver. */
   async function commit(row: Row, values: { month: number; amount: number }[]) {
@@ -415,7 +472,22 @@ export function CategoryGrid({
                     </td>
                     {baseCol && (
                       <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
-                        {row.refTotal ? fmtBRL(row.refTotal) : "—"}
+                        {user?.isFinanceiro ? (
+                          <BaseYearCell
+                            value={row.refTotal}
+                            adjusted={adjustments?.has(row.accountId) ?? false}
+                            omie={omieRef?.get(row.accountId) ?? 0}
+                            label={`${row.name} em ${baseYear}`}
+                            onSave={(v) => void adjustBase(row, v)}
+                          />
+                        ) : (
+                          <>
+                            {row.refTotal ? fmtBRL(row.refTotal) : "—"}
+                            {adjustments?.has(row.accountId) && (
+                              <div className="font-sans text-[10px]">ajustado</div>
+                            )}
+                          </>
+                        )}
                       </td>
                     )}
                     {costCol && (
