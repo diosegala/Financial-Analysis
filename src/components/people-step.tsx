@@ -5,6 +5,12 @@ import { byId, useContractTypes, useUnits } from "@/lib/catalog";
 import { usePersonLines, usePeopleMutations, type Person, type PersonLine } from "@/lib/payroll";
 import { usePlanMutations } from "@/lib/plan-data";
 import { useGuardrailSettings, useGuardrails } from "@/lib/guardrails";
+import {
+  useSaveAllocations,
+  usePersonAllocations,
+  useUnitAllocatedPeople,
+  type Allocation,
+} from "@/lib/allocations";
 import { Situation } from "@/components/category-grid";
 import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
 import { parseDate } from "@/lib/people-import";
@@ -99,6 +105,10 @@ export function PeopleStep() {
   const { data: limits } = useGuardrailSettings(scenarioId);
   const guard = guardrails?.find((g) => g.unitId === unitId);
   const { data: items, isLoading } = usePersonLines(versionId, unitId);
+  const { data: allocations } = usePersonAllocations(versionId);
+  const { data: incoming } = useUnitAllocatedPeople(versionId, unitId);
+  const { data: allUnits } = useUnits();
+  const unitName = byId(allUnits);
   const { data: contractTypes } = useContractTypes();
   const { setValues } = usePlanMutations();
   const [dialog, setDialog] = useState<Dialogs>(null);
@@ -250,6 +260,15 @@ export function PeopleStep() {
                                 : null,
                               p.role_title,
                               ctMap.get(p.contract_type_id)?.name,
+                              allocations?.get(p.id)?.length
+                                ? `rateada: ${allocations
+                                    .get(p.id)!
+                                    .map(
+                                      (a) =>
+                                        `${Math.round(a.share * 100)}% ${unitName.get(a.unit_id)?.name ?? ""}`,
+                                    )
+                                    .join(", ")}`
+                                : null,
                             ]
                               .filter(Boolean)
                               .join(" · ")}
@@ -376,6 +395,44 @@ export function PeopleStep() {
           </div>
         )}
 
+        {(incoming?.length ?? 0) > 0 && (
+          <div className="space-y-2">
+            <div>
+              <h2 className="text-lg font-semibold">Pessoas de outras unidades</h2>
+              <p className="text-sm text-muted-foreground">
+                Parte do custo destas pessoas entra nesta unidade: salário, encargos e benefícios na
+                mesma proporção. O financeiro define o percentual.
+              </p>
+            </div>
+            <div className="overflow-x-auto rounded-md border border-border bg-card">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50 text-left">
+                    <th className="px-3 py-2 font-medium">Pessoa</th>
+                    <th className="px-3 py-2 font-medium">Unidade</th>
+                    <th className="px-3 py-2 text-right font-medium">Parte nesta unidade</th>
+                    <th className="px-3 py-2 text-right font-medium">Remuneração no ano (parte)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {incoming!.map((x) => (
+                    <tr key={x.person_id} className="border-b border-border last:border-0">
+                      <td className="px-3 py-1.5">{x.name}</td>
+                      <td className="px-3 py-1.5">{x.home_unit}</td>
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {Math.round(Number(x.share) * 100)}%
+                      </td>
+                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
+                        {fmtBRL(Number(x.salary ?? 0))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         <BenefitsGrid people={rows} canEdit={canEdit} />
 
         <div className="space-y-2">
@@ -427,6 +484,22 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
   const [inss, setInss] = useState(
     person?.inss_override == null ? "" : String(person.inss_override).replace(".", ","),
   );
+  const { data: allAllocations } = usePersonAllocations(versionId);
+  const saveAllocations = useSaveAllocations();
+  const [shares, setShares] = useState<{ unitId: string | null; pct: string }[] | null>(null);
+  const currentShares =
+    shares ??
+    (person ? (allAllocations?.get(person.id) ?? []) : []).map((a) => ({
+      unitId: a.unit_id as string | null,
+      pct: String(Math.round(a.share * 10000) / 100).replace(".", ","),
+    }));
+  const parsedShares: Allocation[] = currentShares
+    .filter((x) => x.unitId && x.pct.trim() !== "")
+    .map((x) => ({ unit_id: x.unitId!, share: (parseNum(x.pct) ?? 0) / 100 }));
+  const sharesOk =
+    parsedShares.every((a) => a.share > 0 && a.share <= 1) &&
+    parsedShares.reduce((a, x) => a + x.share, 0) <= 1 &&
+    new Set(parsedShares.map((a) => a.unit_id)).size === parsedShares.length;
   const [salary, setSalary] = useState("");
   const [start, setStart] = useState<number | null>(null);
   const [end, setEnd] = useState<number | null>(null);
@@ -448,7 +521,8 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
     dependentsValue >= 0 &&
     (irrf.trim() === "" || (irrfValue !== null && irrfValue >= 0)) &&
     (inss.trim() === "" || (inssValue !== null && inssValue >= 0)) &&
-    (!!person || (salaryValue !== null && (!start || !end || start <= end)));
+    (!!person || (salaryValue !== null && (!start || !end || start <= end))) &&
+    sharesOk;
 
   async function save() {
     if (!valid) return;
@@ -472,6 +546,9 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
           start_month: start,
           end_month: end,
         });
+    if (ok && person && isAdmin && shares !== null) {
+      if (!(await saveAllocations(person.id, parsedShares))) return;
+    }
     if (ok) onClose();
   }
 
@@ -571,6 +648,62 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
             </>
           )}
         </div>
+        {person && isAdmin && (
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <div className="text-sm font-medium">Rateio com outras unidades</div>
+            <p className="text-xs text-muted-foreground">
+              Parte do custo (salário, encargos e benefícios) que vai para outra unidade.{" "}
+              {units?.find((u) => u.id === (personUnitId ?? person.unit_id))?.name ??
+                "A unidade da pessoa"}{" "}
+              fica com {Math.round((1 - parsedShares.reduce((a, x) => a + x.share, 0)) * 100)}%.
+            </p>
+            {currentShares.map((x, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <OptionSelect
+                  className="flex-1"
+                  value={x.unitId}
+                  onChange={(v) =>
+                    setShares(currentShares.map((y, j) => (j === i ? { ...y, unitId: v } : y)))
+                  }
+                  options={(units ?? [])
+                    .filter((u) => u.active && u.id !== (personUnitId ?? person.unit_id))
+                    .map((u) => ({ value: u.id, label: u.name }))}
+                />
+                <Input
+                  aria-label="Percentual"
+                  className="w-20 text-right font-mono"
+                  value={x.pct}
+                  onChange={(e) =>
+                    setShares(
+                      currentShares.map((y, j) => (j === i ? { ...y, pct: e.target.value } : y)),
+                    )
+                  }
+                />
+                <span className="text-sm">%</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShares(currentShares.filter((_, j) => j !== i))}
+                >
+                  Tirar
+                </Button>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              onClick={() => setShares([...currentShares, { unitId: null, pct: "" }])}
+            >
+              <Plus className="h-3.5 w-3.5" /> Ratear com outra unidade
+            </Button>
+            {!sharesOk && (
+              <p className="text-xs text-destructive">
+                Use unidades diferentes e percentuais que somem até 100%.
+              </p>
+            )}
+          </div>
+        )}
         {person && (
           <p className="text-xs text-muted-foreground">
             A remuneração de cada mês se edita direto na grade da Folha.

@@ -1944,6 +1944,48 @@ export type Database = {
           },
         ]
       }
+      person_allocations: {
+        Row: {
+          created_at: string
+          id: string
+          person_id: string
+          share: number
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          person_id: string
+          share: number
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          person_id?: string
+          share?: number
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "person_allocations_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "person_allocations_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       person_benefits: {
         Row: {
           account_id: string
@@ -2962,6 +3004,24 @@ export type Database = {
         Args: { _ref?: string; _scenario_id?: string; _version_id?: string }
         Returns: number
       }
+      allocated_payroll_rows: {
+        Args: {
+          _scenario_id: string
+          _unit_ids?: string[]
+          _version_id: string
+        }
+        Returns: {
+          account_id: string
+          amount: number
+          contract_type_id: string
+          dre_line_id: string
+          month: number
+          product_id: string
+          revenue_type_id: string
+          row_kind: string
+          unit_id: string
+        }[]
+      }
       assert_editable: {
         Args: { _month: number; _unit_id: string; _version_id: string }
         Returns: undefined
@@ -3393,6 +3453,13 @@ export type Database = {
         }[]
       }
       payroll_lag: { Args: { _event: string; _part: string }; Returns: number }
+      person_home_shares: {
+        Args: { _version_id: string }
+        Returns: {
+          person_id: string
+          share: number
+        }[]
+      }
       plan_base_rows: {
         Args: {
           _scenario_id: string
@@ -3618,6 +3685,16 @@ export type Database = {
         }[]
       }
       tax_constant: { Args: { _key: string; _ref: string }; Returns: number }
+      unit_allocated_people: {
+        Args: { _unit_id: string; _version_id: string }
+        Returns: {
+          home_unit: string
+          name: string
+          person_id: string
+          salary: number
+          share: number
+        }[]
+      }
       unit_reference: {
         Args: { _unit_id: string; _version_id: string }
         Returns: {
