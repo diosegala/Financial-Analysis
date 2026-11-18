@@ -9,7 +9,6 @@ import {
   useEduSheetSettings,
   useEduSheetTabs,
   useProducts,
-  useUnits,
 } from "@/lib/catalog";
 import { Field, OptionSelect } from "@/components/form-fields";
 import { Button } from "@/components/ui/button";
@@ -34,6 +33,7 @@ const norm = (s: string) =>
 const suggestedName = (tab: string) => tab.replace(/\s*plan\.?\s*$/i, "").trim();
 
 type Tab = NonNullable<ReturnType<typeof useEduSheetTabs>["data"]>[number];
+type Product = NonNullable<ReturnType<typeof useProducts>["data"]>[number];
 
 /**
  * As abas da planilha, como a leitura encontrou. Para cada uma: escolher o produto (ou criar um, já ligado) ou deixar
@@ -44,12 +44,15 @@ export function EduSheetTabs() {
   const { data: tabs } = useEduSheetTabs();
   const { data: settings } = useEduSheetSettings();
   const { data: products } = useProducts();
+  const { data: accounts } = useAccounts();
   const [creating, setCreating] = useState<Tab | null>(null);
+  const [editing, setEditing] = useState<{ tab: Tab; product: Product } | null>(null);
+  const accountName = new Map((accounts ?? []).map((a) => [a.id, a.name]));
   const unitId = settings?.[0]?.unit_id ?? null;
   const unitProducts = (products ?? [])
     .filter((p) => p.active && (!unitId || p.unit_id === unitId))
     .map((p) => ({ value: p.id, label: p.name }));
-  const productName = new Map((products ?? []).map((p) => [p.id, p.name]));
+  const productOf = new Map((products ?? []).map((p) => [p.id, p]));
 
   async function link(tab: Tab, productId: string | null) {
     const { error } = await supabase
@@ -114,9 +117,16 @@ export function EduSheetTabs() {
                 {t.last_error ? (
                   <span className="text-destructive">{t.last_error}</span>
                 ) : t.product_id ? (
-                  <span>Ligada a {productName.get(t.product_id) ?? "—"}</span>
+                  <span>Ligada a {productOf.get(t.product_id)?.name ?? "—"}</span>
                 ) : (
                   <span className="text-muted-foreground">Sem produto: ignorada</span>
+                )}
+                {t.product_id && productOf.get(t.product_id) && (
+                  <ProductAccounts
+                    product={productOf.get(t.product_id)!}
+                    accountName={accountName}
+                    onEdit={() => setEditing({ tab: t, product: productOf.get(t.product_id!)! })}
+                  />
                 )}
                 {t.warnings.map((w) => (
                   <div key={w} className="text-amber-700 dark:text-amber-400">
@@ -131,25 +141,65 @@ export function EduSheetTabs() {
       {creating && (
         <CreateProductDialog tab={creating} unitId={unitId} onClose={() => setCreating(null)} />
       )}
+      {editing && (
+        <CreateProductDialog
+          tab={editing.tab}
+          unitId={unitId}
+          product={editing.product}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }
 
-/** Cria o produto (evento da unidade, com as contas) e já liga à aba. */
+/** As contas que a leitura usa para o produto da aba, com o botão de editar. */
+function ProductAccounts({
+  product,
+  accountName,
+  onEdit,
+}: {
+  product: Product;
+  accountName: Map<string, string>;
+  onEdit: () => void;
+}) {
+  const name = (id: string | null) => (id ? (accountName.get(id) ?? "—") : null);
+  const revenue = name(product.revenue_account_id) ?? "—";
+  const items = [
+    ["Ingressos", revenue],
+    ["Patrocínio", name(product.sponsor_account_id) ?? `mesma dos ingressos`],
+    ["Variável", name(product.extra_account_id) ?? `mesma dos ingressos`],
+    ["Despesa", name(product.cost_account_id) ?? "—"],
+  ];
+  return (
+    <div className="mt-1 space-y-0.5 text-muted-foreground">
+      {items.map(([label, value]) => (
+        <div key={label}>
+          {label}: <span className="text-foreground">{value}</span>
+        </div>
+      ))}
+      <Button size="sm" variant="link" className="h-auto p-0 text-xs" onClick={onEdit}>
+        Editar contas
+      </Button>
+    </div>
+  );
+}
+
+/** Cria o produto (evento da unidade, com as contas) e já liga à aba; com `product`, edita as contas dele. */
 function CreateProductDialog({
   tab,
   unitId,
+  product,
   onClose,
 }: {
   tab: Tab;
   unitId: string | null;
+  product?: Product;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const { data: accounts } = useAccounts();
-  const { data: products } = useProducts();
-  const { data: units } = useUnits();
-  const [name, setName] = useState(suggestedName(tab.tab_name));
+  const [name, setName] = useState(product?.name ?? suggestedName(tab.tab_name));
   const forUnit = (accounts ?? []).filter(
     (a) =>
       a.active &&
@@ -172,29 +222,29 @@ function CreateProductDialog({
           (!word || norm(a.name).includes(word)),
       )
       .sort((a, b) => b.name.localeCompare(a.name, "pt-BR"))[0]?.id ?? null;
-  const unitName = norm(units?.find((u) => u.id === unitId)?.name ?? "");
   const guess = {
     cost:
       forUnit
         .filter((a) => a.kind === "despesa" && norm(a.name).startsWith(norm(name)))
         .sort((a, b) => b.name.localeCompare(a.name, "pt-BR"))[0]?.id ?? null,
-    revenue:
-      named("receita", "ingresso") ??
-      forUnit.find((a) => a.kind === "receita" && unitName && norm(a.name).includes(unitName))
-        ?.id ??
-      (products ?? []).find((p) => p.unit_id === unitId && p.revenue_account_id)
-        ?.revenue_account_id ??
-      null,
+    // Sem categoria de ingressos, a receita com o nome do evento (ex.: "GPL - 2027"). Nunca uma conta genérica da
+    // unidade: a receita do evento ficaria misturada com as receitas variáveis.
+    revenue: named("receita", "ingresso") ?? named("receita"),
     sponsor: named("receita", "patroc"),
     extra: null as string | null,
   };
   type Pick = Record<keyof typeof guess, string | null | undefined>;
-  const [picked, setPicked] = useState<Pick>({
-    cost: undefined,
-    revenue: undefined,
-    sponsor: undefined,
-    extra: undefined,
-  });
+  // Editando, começa com as contas do produto; criando, com as sugestões.
+  const [picked, setPicked] = useState<Pick>(
+    product
+      ? {
+          cost: product.cost_account_id,
+          revenue: product.revenue_account_id,
+          sponsor: product.sponsor_account_id,
+          extra: product.extra_account_id,
+        }
+      : { cost: undefined, revenue: undefined, sponsor: undefined, extra: undefined },
+  );
   const value = (k: keyof Pick) => (picked[k] === undefined ? guess[k] : picked[k]) ?? null;
   const choose = (k: keyof Pick) => (v: string | null) => setPicked((p) => ({ ...p, [k]: v }));
   const costId = value("cost");
@@ -205,6 +255,25 @@ function CreateProductDialog({
   async function save() {
     if (!valid) return;
     setSaving(true);
+    if (product) {
+      const { error } = await supabase
+        .from("products")
+        .update({
+          name: name.trim(),
+          revenue_account_id: revenueId,
+          sponsor_account_id: value("sponsor"),
+          extra_account_id: value("extra"),
+          cost_account_id: costId,
+        })
+        .eq("id", product.id);
+      setSaving(false);
+      if (error) return void toast.error(friendlyError(error.message));
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success(
+        "Contas salvas. Clique em Ler a planilha agora para levar os valores para elas.",
+      );
+      return void onClose();
+    }
     const { data, error } = await supabase
       .from("products")
       .insert({
@@ -244,7 +313,9 @@ function CreateProductDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Criar produto para a aba {tab.tab_name}</DialogTitle>
+          <DialogTitle>
+            {product ? `Contas de ${product.name}` : `Criar produto para a aba ${tab.tab_name}`}
+          </DialogTitle>
           <DialogDescription>
             O produto fica na unidade da planilha, como evento. Escolha as categorias do evento no
             Omie (ingressos, patrocínio e despesa), para o realizado casar com o planejado.
@@ -298,7 +369,7 @@ function CreateProductDialog({
             Cancelar
           </Button>
           <Button onClick={() => void save()} disabled={!valid || saving}>
-            Criar e ligar
+            {product ? "Salvar" : "Criar e ligar"}
           </Button>
         </DialogFooter>
       </DialogContent>
