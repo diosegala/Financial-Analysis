@@ -2460,6 +2460,57 @@ export type Database = {
         }
         Relationships: []
       }
+      reference_adjustments: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          id: string
+          note: string | null
+          unit_id: string
+          updated_at: string
+          updated_by: string | null
+          year: number
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          unit_id: string
+          updated_at?: string
+          updated_by?: string | null
+          year: number
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          unit_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reference_adjustments_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reference_adjustments_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revenue_targets: {
         Row: {
           amount: number
@@ -3484,6 +3535,7 @@ export type Database = {
           unit_id: string
         }[]
       }
+      plan_lines_reorder: { Args: { _line_ids: string[] }; Returns: undefined }
       plan_split: {
         Args: { _scenario_id: string; _version_id: string }
         Returns: {
@@ -3526,6 +3578,16 @@ export type Database = {
         }
       }
       reference_rows: {
+        Args: { _year: number }
+        Returns: {
+          account_id: string
+          amount: number
+          kind: string
+          month: number
+          unit_id: string
+        }[]
+      }
+      reference_rows_omie: {
         Args: { _year: number }
         Returns: {
           account_id: string
@@ -3708,6 +3770,13 @@ export type Database = {
           amount: number
           kind: string
           month: number
+        }[]
+      }
+      unit_reference_omie: {
+        Args: { _unit_id: string; _version_id: string }
+        Returns: {
+          account_id: string
+          amount: number
         }[]
       }
       unit_reference_suppliers: {

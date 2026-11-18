@@ -1,5 +1,13 @@
 import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { useAccounts, useContractTypes } from "@/lib/catalog";
 import {
   plannedCosts,
@@ -7,6 +15,9 @@ import {
   useGuardrailSettings,
   useGuardrails,
   useReferenceSuppliers,
+  useReferenceAdjust,
+  useReferenceAdjustments,
+  useReferenceOmie,
   useUnitReference,
 } from "@/lib/guardrails";
 import { MONTHS, fmtBRL, parseNum } from "@/lib/format";
@@ -19,6 +30,9 @@ import {
   type PlanLine,
 } from "@/lib/plan-data";
 import { usePlanning } from "@/lib/planning";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useCurrentUser } from "@/lib/auth";
 import { MoneyCell } from "@/components/money-cell";
 import { NumberCell } from "@/components/number-cell";
@@ -53,9 +67,47 @@ interface Row {
 
 const sum = (values: Iterable<number>) => [...values].reduce((a, v) => a + v, 0);
 
+/** Posição escolhida na grade; 0 = nunca reordenado (fica depois dos ordenados). */
+const pos = (l: PlanLine) => (l.sort_order > 0 ? l.sort_order : Number.POSITIVE_INFINITY);
+
 /** A categoria abre em lançamentos quando tem mais de um ou quando o único tem nome (ex.: um cliente). */
 const opensLines = (row: Row) =>
   row.lines.length > 1 || (row.lines.length === 1 && !!row.lines[0]?.description);
+
+/** Valor do ano base que o financeiro pode corrigir; mostra o do Omie quando ajustado. */
+function BaseYearCell({
+  value,
+  adjusted,
+  omie,
+  label,
+  onSave,
+}: {
+  value: number;
+  adjusted: boolean;
+  omie: number;
+  label: string;
+  onSave: (v: number | null) => void;
+}) {
+  return (
+    <div className="flex flex-col items-end">
+      <NumberCell
+        className="w-32"
+        label={label}
+        value={value || null}
+        placeholder="—"
+        onSave={onSave}
+      />
+      {adjusted && (
+        <span
+          className="font-sans text-[10px] text-amber-700 dark:text-amber-400"
+          title="Apague o valor para voltar ao Omie."
+        >
+          ajustado · Omie {fmtBRL(omie)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 /** Situação da categoria contra o limite: o que passou, a folga ou nada, enquanto não houver plano. */
 export function Situation({
@@ -100,6 +152,9 @@ export function CategoryGrid({
   const { data: accounts } = useAccounts();
   const { data: contractTypes } = useContractTypes();
   const { data: reference } = useUnitReference(versionId, unitId);
+  const { data: adjustments } = useReferenceAdjustments(year ? year - 1 : null, unitId);
+  const { data: omieRef } = useReferenceOmie(versionId, unitId);
+  const saveAdjustment = useReferenceAdjust();
   const { data: settings } = useGuardrailSettings(scenarioId);
   const { data: guardrails } = useGuardrails(scenarioId);
   const { setValues, addLine, updateLine, deleteLine } = usePlanMutations();
@@ -117,6 +172,9 @@ export function CategoryGrid({
 
   const { data: user } = useCurrentUser();
   const isCost = kind === "despesa";
+  const queryClient = useQueryClient();
+  /** Receitas: categorias e clientes na ordem que o diretor escolher. */
+  const reorderable = kind === "receita";
   // IRPJ/CSLL: a linha segue a conta, salvo exceção. Linhas da planilha seguem sempre a conta (a leitura as recria).
   const markDeductible = isCost && !!user?.isFinanceiro;
   const accountNd = (id: string) => !!accounts?.find((a) => a.id === id)?.non_deductible;
@@ -176,7 +234,16 @@ export function CategoryGrid({
         total: sum(months),
       };
     })
-    .sort((a, b) => Math.max(b.refTotal, b.total) - Math.max(a.refTotal, a.total));
+    .sort((a, b) => Math.max(b.refTotal, b.total) - Math.max(a.refTotal, a.total))
+    // Receitas: a ordem escolhida (pela primeira linha da categoria) vem antes do tamanho.
+    .sort((a, b) =>
+      reorderable
+        ? Math.min(...a.lines.map(pos), Number.POSITIVE_INFINITY) -
+            Math.min(...b.lines.map(pos), Number.POSITIVE_INFINITY) || 0
+        : 0,
+    );
+  if (reorderable)
+    for (const r of allRows) r.lines = [...r.lines].sort((a, b) => pos(a) - pos(b) || 0);
   // Aparece a categoria lançada na unidade, mesmo zerada: o valor pode vir depois. A que só existe no ano anterior fica em
   // "Adicionar categoria", e o ano anterior segue na base do limite.
   const rows = allRows.filter((r) => r.total !== 0 || r.lines.length > 0 || kept.has(r.accountId));
@@ -199,6 +266,43 @@ export function CategoryGrid({
     .sort((a, b) => b.refTotal - a.refTotal || a.label.localeCompare(b.label));
   const emptyPlan = isCost && (lines ?? []).length === 0 && (reference?.size ?? 0) > 0;
   const colSpan = 3 + (monthly ? 12 : 0) + (baseCol ? 1 : 0) + (costCol ? 2 : 0);
+
+  /** Ano base corrigido pelo financeiro: o total do ano no lugar do Omie; vazio volta ao Omie. */
+  async function adjustBase(row: Row, total: number | null) {
+    if (!year || !unitId) return;
+    const omie = omieRef?.get(row.accountId) ?? 0;
+    const value =
+      total === null || (total === omie && !adjustments?.has(row.accountId)) ? null : total;
+    if (value === null && !adjustments?.has(row.accountId)) return;
+    if (await saveAdjustment(year - 1, unitId, row.accountId, value))
+      toast.success(
+        calculated
+          ? `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}. Para o limite usar o novo valor, clique em Calcular com o realizado de ${year - 1} no Plano CUPOLA.`
+          : `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}.`,
+      );
+  }
+
+  /** Grava a ordem da tela inteira, com a troca pedida. */
+  async function saveOrder(ordered: Row[]) {
+    const ids = ordered.flatMap((r) => r.lines.map((l) => l.id));
+    const { error } = await supabase.rpc("plan_lines_reorder", { _line_ids: ids });
+    if (error) return void toast.error(error.message);
+    await queryClient.invalidateQueries({ queryKey: ["plan_lines"] });
+  }
+  function moveRow(index: number, delta: number) {
+    const to = index + delta;
+    if (to < 0 || to >= rows.length) return;
+    const next = [...rows];
+    [next[index], next[to]] = [next[to]!, next[index]!];
+    return saveOrder(next);
+  }
+  function moveLine(row: Row, index: number, delta: number) {
+    const to = index + delta;
+    if (to < 0 || to >= row.lines.length) return;
+    const lines = [...row.lines];
+    [lines[index], lines[to]] = [lines[to]!, lines[index]!];
+    return saveOrder(rows.map((r) => (r.accountId === row.accountId ? { ...r, lines } : r)));
+  }
 
   /** Grava um mês da categoria: cria o lançamento se ainda não houver. */
   async function commit(row: Row, values: { month: number; amount: number }[]) {
@@ -357,7 +461,7 @@ export function CategoryGrid({
                 <td />
               </tr>
             )}
-            {rows.map((row) => {
+            {rows.map((row, rowIndex) => {
               const many = opensLines(row);
               // Lançamentos da planilha de Educação: corrigem-se na planilha.
               const fromSheet = row.lines.some((l) => l.sheet_tab_id);
@@ -435,7 +539,22 @@ export function CategoryGrid({
                     </td>
                     {baseCol && (
                       <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
-                        {row.refTotal ? fmtBRL(row.refTotal) : "—"}
+                        {user?.isFinanceiro ? (
+                          <BaseYearCell
+                            value={row.refTotal}
+                            adjusted={adjustments?.has(row.accountId) ?? false}
+                            omie={omieRef?.get(row.accountId) ?? 0}
+                            label={`${row.name} em ${baseYear}`}
+                            onSave={(v) => void adjustBase(row, v)}
+                          />
+                        ) : (
+                          <>
+                            {row.refTotal ? fmtBRL(row.refTotal) : "—"}
+                            {adjustments?.has(row.accountId) && (
+                              <div className="font-sans text-[10px]">ajustado</div>
+                            )}
+                          </>
+                        )}
                       </td>
                     )}
                     {costCol && (
@@ -497,6 +616,20 @@ export function CategoryGrid({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          {reorderable && canEdit && row.lines.length > 0 && rowIndex > 0 && (
+                            <DropdownMenuItem onClick={() => void moveRow(rowIndex, -1)}>
+                              Subir
+                            </DropdownMenuItem>
+                          )}
+                          {reorderable &&
+                            canEdit &&
+                            row.lines.length > 0 &&
+                            rowIndex < rows.length - 1 &&
+                            (rows[rowIndex + 1]?.lines.length ?? 0) > 0 && (
+                              <DropdownMenuItem onClick={() => void moveRow(rowIndex, 1)}>
+                                Descer
+                              </DropdownMenuItem>
+                            )}
                           {editable && (
                             <DropdownMenuItem onClick={() => setAddingLine(row)}>
                               Adicionar {lineWord}…
@@ -580,10 +713,32 @@ export function CategoryGrid({
                   )}
                   {many &&
                     isOpen &&
-                    row.lines.map((l) => (
+                    row.lines.map((l, lineIndex) => (
                       <tr key={l.id} className="border-b border-border/50 bg-muted/20 text-xs">
                         <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-7 pr-2">
                           <div className="flex items-center gap-1">
+                            {reorderable && canEdit && row.lines.length > 1 && (
+                              <div className="flex shrink-0 flex-col">
+                                <button
+                                  type="button"
+                                  className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                                  aria-label={`Subir ${l.description ?? lineWord}`}
+                                  disabled={lineIndex === 0}
+                                  onClick={() => void moveLine(row, lineIndex, -1)}
+                                >
+                                  <ArrowUp className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+                                  aria-label={`Descer ${l.description ?? lineWord}`}
+                                  disabled={lineIndex === row.lines.length - 1}
+                                  onClick={() => void moveLine(row, lineIndex, 1)}
+                                >
+                                  <ArrowDown className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )}
                             <Input
                               key={l.description ?? ""}
                               aria-label={`Nome do ${lineWord}`}
