@@ -5,6 +5,7 @@ import { pageHead } from "@/lib/head";
 import { BulkAdjustDialog } from "@/components/bulk-adjust";
 import { OmieSync } from "@/components/omie-sync";
 import { usePlanning } from "@/lib/planning";
+import { IncomeTaxPanel } from "@/components/income-tax-panel";
 import { useCurrentUser } from "@/lib/auth";
 import { byId, useUnits } from "@/lib/catalog";
 import {
@@ -485,6 +486,7 @@ function PlanoPage() {
           {showDre ? "Esconder a DRE da empresa" : "Ver a DRE da empresa"}
         </Button>
         {showDre && <DreTable unitIds={activeIds} title="CUPOLA" />}
+        {showDre && isFin && <IncomeTaxPanel />}
       </div>
 
       {bulkAdjust && versionId && (

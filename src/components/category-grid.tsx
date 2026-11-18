@@ -19,6 +19,7 @@ import {
   type PlanLine,
 } from "@/lib/plan-data";
 import { usePlanning } from "@/lib/planning";
+import { useCurrentUser } from "@/lib/auth";
 import { MoneyCell } from "@/components/money-cell";
 import { NumberCell } from "@/components/number-cell";
 import { Field, MonthSelect, OptionSelect } from "@/components/form-fields";
@@ -114,7 +115,16 @@ export function CategoryGrid({
   const [kept, setKept] = useState<Set<string>>(new Set());
   const keep = (accountId: string) => setKept((k) => new Set(k).add(accountId));
 
+  const { data: user } = useCurrentUser();
   const isCost = kind === "despesa";
+  // IRPJ/CSLL: a linha segue a conta, salvo exceção. Linhas da planilha seguem sempre a conta (a leitura as recria).
+  const markDeductible = isCost && !!user?.isFinanceiro;
+  const accountNd = (id: string) => !!accounts?.find((a) => a.id === id)?.non_deductible;
+  const nonDeductible = (l: PlanLine) => l.non_deductible ?? accountNd(l.account_id);
+  async function setNonDeductible(ls: PlanLine[], value: boolean) {
+    for (const l of ls.filter((x) => !x.sheet_tab_id))
+      await updateLine(l.id, { non_deductible: value === accountNd(l.account_id) ? null : value });
+  }
   const lineWord = kind === "receita" ? "cliente" : "item";
   const showBase = kind !== "folha";
   const baseCol = showBase && !monthly;
@@ -393,6 +403,15 @@ export function CategoryGrid({
                           · da planilha
                         </span>
                       )}
+                      {isCost && row.lines.some(nonDeductible) && (
+                        <span
+                          className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400"
+                          title="Volta para a base do IRPJ e da CSLL."
+                        >
+                          ·{" "}
+                          {row.lines.every(nonDeductible) ? "não dedutível" : "parte não dedutível"}
+                        </span>
+                      )}
                     </td>
                     {baseCol && (
                       <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
@@ -473,6 +492,20 @@ export function CategoryGrid({
                               Cortar em %…
                             </DropdownMenuItem>
                           )}
+                          {markDeductible && canEdit && row.lines.some((l) => !l.sheet_tab_id) && (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                void setNonDeductible(
+                                  row.lines,
+                                  !row.lines.filter((l) => !l.sheet_tab_id).every(nonDeductible),
+                                )
+                              }
+                            >
+                              {row.lines.filter((l) => !l.sheet_tab_id).every(nonDeductible)
+                                ? "Marcar como dedutível no IRPJ/CSLL"
+                                : "Marcar como não dedutível no IRPJ/CSLL"}
+                            </DropdownMenuItem>
+                          )}
                           {isCost && row.reference && (
                             <DropdownMenuItem onClick={() => setSuppliers(row)}>
                               Ver fornecedores de {baseYear}
@@ -527,6 +560,22 @@ export function CategoryGrid({
                                   void updateLine(l.id, { description: name || null });
                               }}
                             />
+                            {markDeductible && canEdit && !l.sheet_tab_id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={`h-7 shrink-0 whitespace-nowrap px-2 text-xs ${
+                                  nonDeductible(l)
+                                    ? "text-amber-700 dark:text-amber-400"
+                                    : "text-muted-foreground"
+                                }`}
+                                aria-pressed={nonDeductible(l)}
+                                title="Clique para trocar. Não dedutível: volta para a base do IRPJ e da CSLL."
+                                onClick={() => void setNonDeductible([l], !nonDeductible(l))}
+                              >
+                                {nonDeductible(l) ? "Não dedutível" : "Dedutível"}
+                              </Button>
+                            )}
                             {canEdit && !l.sheet_tab_id && (
                               <Button
                                 variant="ghost"
