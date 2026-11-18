@@ -288,3 +288,68 @@ export function useGuardrailMutations(scenarioId: string | null) {
     },
   };
 }
+
+/** Ajustes do ano base da unidade (total do ano por conta, no lugar do Omie). */
+export function useReferenceAdjustments(year: number | null, unitId: string | null) {
+  return useQuery({
+    queryKey: ["reference_adjustments", year, unitId],
+    enabled: !!year && !!unitId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("reference_adjustments")
+        .select("*")
+        .eq("year", year!)
+        .eq("unit_id", unitId!);
+      if (error) throw error;
+      return new Map((data ?? []).map((r) => [r.account_id, r]));
+    },
+  });
+}
+
+/** Total do ano base por conta como veio do Omie, para mostrar ao lado do ajuste. */
+export function useReferenceOmie(versionId: string | null, unitId: string | null) {
+  return useQuery({
+    queryKey: ["unit_reference_omie", versionId, unitId],
+    enabled: !!versionId && !!unitId,
+    staleTime: 300_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("unit_reference_omie", {
+        _version_id: versionId!,
+        _unit_id: unitId!,
+      });
+      if (error) throw error;
+      return new Map((data ?? []).map((r) => [r.account_id, Number(r.amount)]));
+    },
+  });
+}
+
+/** Grava (ou apaga, com null) o total ajustado do ano base de uma conta na unidade. */
+export function useReferenceAdjust() {
+  const queryClient = useQueryClient();
+  return async (year: number, unitId: string, accountId: string, amount: number | null) => {
+    const { error } =
+      amount === null
+        ? await supabase
+            .from("reference_adjustments")
+            .delete()
+            .eq("year", year)
+            .eq("unit_id", unitId)
+            .eq("account_id", accountId)
+        : await supabase
+            .from("reference_adjustments")
+            .upsert(
+              { year, unit_id: unitId, account_id: accountId, amount },
+              { onConflict: "year,unit_id,account_id" },
+            );
+    if (error) {
+      toast.error(friendlyError(error.message));
+      return false;
+    }
+    await Promise.all(
+      ["reference_adjustments", "unit_reference", "unit_reference_omie"].map((k) =>
+        queryClient.invalidateQueries({ queryKey: [k] }),
+      ),
+    );
+    return true;
+  };
+}
