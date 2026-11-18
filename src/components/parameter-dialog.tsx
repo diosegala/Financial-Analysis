@@ -131,6 +131,7 @@ export function ParameterDialog({
     rule?.contract_type_ids ?? NO_FILTER,
   );
   const [onlyAccounts, setOnlyAccounts] = useState<string[]>(rule?.account_ids ?? NO_FILTER);
+  const [creditOnPurchases, setCreditOnPurchases] = useState(rule?.credit_on_purchases ?? false);
   const [saving, setSaving] = useState(false);
 
   const pct = valueType === "percent";
@@ -218,6 +219,7 @@ export function ParameterDialog({
               : null,
           account_ids:
             (base === "receita" || base === "despesa") && onlyAccounts.length ? onlyAccounts : null,
+          credit_on_purchases: base === "receita" && creditOnPurchases,
         };
         if (rule) {
           const { error } = await supabase
@@ -374,6 +376,17 @@ export function ParameterDialog({
                 </div>
                 {base === "receita" && (
                   <>
+                    <label className="flex items-start gap-2 text-sm">
+                      <Switch checked={creditOnPurchases} onCheckedChange={setCreditOnPurchases} />
+                      <span>
+                        Gera crédito nas compras
+                        <span className="block text-xs text-muted-foreground">
+                          IBS/CBS (e PIS/COFINS no lucro real): a mesma alíquota volta sobre as
+                          despesas das contas que geram crédito, no prazo de &quot;Meses até o
+                          crédito&quot;. Fornecedor do Simples se marca na linha da despesa.
+                        </span>
+                      </span>
+                    </label>
                     <Field label="Só estes tipos de receita" hint="Em branco: todos os tipos.">
                       <CheckGrid
                         options={typeOptions}
