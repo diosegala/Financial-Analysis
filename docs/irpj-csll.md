@@ -36,6 +36,7 @@ na DRE.
   - valor do 4º trimestre do ano anterior.
 
   Sem valor, o imposto fica zero.
+
 - **Plano de contas:** "Não dedutível no IRPJ/CSLL" vale para todas as despesas da conta, inclusive as já lançadas.
 - **Lançamentos (só o financeiro):**
   - no menu da categoria, marcar todas as linhas;
