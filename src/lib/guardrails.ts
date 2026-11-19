@@ -16,6 +16,8 @@ export interface Guardrail {
   floorNet: number | null;
   baseExpense: number;
   basePayroll: number;
+  /** Folha do ano base pela foto do cálculo; basePayroll é o valor digitado, quando houver. */
+  basePayrollAuto: number;
   expenseLimitAuto: number;
   payrollLimitAuto: number;
   expenseLimit: number;
@@ -78,6 +80,7 @@ export function useGuardrails(scenarioId: string | null) {
         floorNet: num(r.floor_net),
         baseExpense: Number(r.base_expense ?? 0),
         basePayroll: Number(r.base_payroll ?? 0),
+        basePayrollAuto: Number(r.base_payroll_auto ?? 0),
         expenseLimitAuto: Number(r.expense_limit_auto ?? 0),
         payrollLimitAuto: Number(r.payroll_limit_auto ?? 0),
         expenseLimit: Number(r.expense_limit ?? 0),

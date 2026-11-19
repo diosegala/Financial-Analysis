@@ -74,22 +74,26 @@ const pos = (l: PlanLine) => (l.sort_order > 0 ? l.sort_order : Number.POSITIVE_
 const opensLines = (row: Row) =>
   row.lines.length > 1 || (row.lines.length === 1 && !!row.lines[0]?.description);
 
-/** Valor do ano base que o financeiro pode corrigir; mostra o do Omie quando ajustado. */
+/** Valor do ano base que o financeiro pode corrigir. O valor de origem fica só no texto de ajuda. */
 function BaseYearCell({
   value,
   adjusted,
-  omie,
+  original,
   label,
   onSave,
 }: {
   value: number;
   adjusted: boolean;
-  omie: number;
+  /** De onde veio o valor, para o texto de ajuda: "Omie R$ 1.000". */
+  original: string;
   label: string;
   onSave: (v: number | null) => void;
 }) {
   return (
-    <div className="flex flex-col items-end">
+    <div
+      className="flex justify-end"
+      title={adjusted ? `Corrigido. Antes: ${original}. Apague o valor para voltar.` : original}
+    >
       <NumberCell
         className="w-32"
         label={label}
@@ -97,14 +101,6 @@ function BaseYearCell({
         placeholder="—"
         onSave={onSave}
       />
-      {adjusted && (
-        <span
-          className="font-sans text-[10px] text-amber-700 dark:text-amber-400"
-          title="Apague o valor para voltar ao Omie."
-        >
-          ajustado · Omie {fmtBRL(omie)}
-        </span>
-      )}
     </div>
   );
 }
@@ -158,7 +154,8 @@ export function CategoryGrid({
   const { data: settings } = useGuardrailSettings(scenarioId);
   const { data: guardrails } = useGuardrails(scenarioId);
   const { setValues, addLine, updateLine, deleteLine } = usePlanMutations();
-  const { loadReference } = useGuardrailMutations(scenarioId);
+  const { loadReference, saveUnit } = useGuardrailMutations(scenarioId);
+  const [hiddenOpen, setHiddenOpen] = useState(false);
   const [monthly, setMonthly] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
@@ -266,6 +263,31 @@ export function CategoryGrid({
     .sort((a, b) => b.refTotal - a.refTotal || a.label.localeCompare(b.label));
   const emptyPlan = isCost && (lines ?? []).length === 0 && (reference?.size ?? 0) > 0;
   const colSpan = 3 + (monthly ? 12 : 0) + (baseCol ? 1 : 0) + (costCol ? 2 : 0);
+
+  /** Célula do ano base de uma categoria: editável para o financeiro. */
+  function baseCell(row: Row) {
+    if (!user?.isFinanceiro) return row.refTotal ? fmtBRL(row.refTotal) : "—";
+    return (
+      <BaseYearCell
+        value={row.refTotal}
+        adjusted={adjustments?.has(row.accountId) ?? false}
+        original={`Omie ${fmtBRL(omieRef?.get(row.accountId) ?? 0)}`}
+        label={`${row.name} em ${baseYear}`}
+        onSave={(v) => void adjustBase(row, v)}
+      />
+    );
+  }
+
+  /** Folha do ano base corrigida pelo financeiro; vazio volta à foto do cálculo. Vale no limite na hora. */
+  async function adjustPayrollBase(total: number | null) {
+    if (!guard || !unitId) return;
+    const typed = total === null || total === guard.basePayrollAuto ? null : total;
+    if (typed === null && guard.basePayroll === guard.basePayrollAuto) return;
+    if (await saveUnit(unitId, { base_payroll_typed: typed }))
+      toast.success(
+        `Folha de ${baseYear} ${typed === null ? "voltou ao valor calculado" : "corrigida"}. O limite da folha já usa o novo valor.`,
+      );
+  }
 
   /** Ano base corrigido pelo financeiro: o total do ano no lugar do Omie; vazio volta ao Omie. */
   async function adjustBase(row: Row, total: number | null) {
@@ -432,12 +454,27 @@ export function CategoryGrid({
                 <td className="sticky left-0 z-10 bg-muted px-3 py-1.5 font-medium">
                   Pessoas e benefícios
                   <div className="text-xs font-normal text-muted-foreground">
-                    Base: folha atual. Edite no passo Pessoas
+                    Base: a folha calculada. As pessoas se editam no passo Pessoas
                   </div>
                 </td>
                 {baseCol && (
-                  <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                    {calculated ? fmtBRL(guard.basePayroll) : "—"}
+                  <td
+                    className="px-2 py-1.5 text-right font-mono tabular-nums"
+                    onClick={(e) => user?.isFinanceiro && calculated && e.stopPropagation()}
+                  >
+                    {!calculated ? (
+                      "—"
+                    ) : user?.isFinanceiro ? (
+                      <BaseYearCell
+                        value={guard.basePayroll}
+                        adjusted={guard.basePayroll !== guard.basePayrollAuto}
+                        original={`calculado ${fmtBRL(guard.basePayrollAuto)}`}
+                        label={`Pessoas e benefícios em ${baseYear}`}
+                        onSave={(v) => void adjustPayrollBase(v)}
+                      />
+                    ) : (
+                      fmtBRL(guard.basePayroll)
+                    )}
                   </td>
                 )}
                 {costCol && (
@@ -539,22 +576,7 @@ export function CategoryGrid({
                     </td>
                     {baseCol && (
                       <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
-                        {user?.isFinanceiro ? (
-                          <BaseYearCell
-                            value={row.refTotal}
-                            adjusted={adjustments?.has(row.accountId) ?? false}
-                            omie={omieRef?.get(row.accountId) ?? 0}
-                            label={`${row.name} em ${baseYear}`}
-                            onSave={(v) => void adjustBase(row, v)}
-                          />
-                        ) : (
-                          <>
-                            {row.refTotal ? fmtBRL(row.refTotal) : "—"}
-                            {adjustments?.has(row.accountId) && (
-                              <div className="font-sans text-[10px]">ajustado</div>
-                            )}
-                          </>
-                        )}
+                        {baseCell(row)}
                       </td>
                     )}
                     {costCol && (
@@ -836,7 +858,81 @@ export function CategoryGrid({
                 </Fragment>
               );
             })}
-            {rows.length === 0 && !payrollRow ? (
+            {baseCol && hidden.length > 0 && (
+              <tr className="border-b border-border">
+                <td className="sticky left-0 z-10 bg-card px-3 py-1 font-medium">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-left"
+                    aria-expanded={hiddenOpen}
+                    onClick={() => setHiddenOpen((o) => !o)}
+                  >
+                    {hiddenOpen ? (
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    Categorias só de {baseYear}
+                    <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">
+                      ({hidden.length})
+                    </span>
+                  </button>
+                  <div className="text-xs font-normal text-muted-foreground">
+                    Sem valor em {year ?? ""}.{isCost && " Entram na base do limite."}
+                  </div>
+                </td>
+                <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
+                  {fmtBRL(sum(hidden.map((r) => r.refTotal)))}
+                </td>
+                {costCol && (
+                  <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
+                    {fmtBRL(limitOf(sum(hidden.map((r) => r.refTotal))))}
+                  </td>
+                )}
+                <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
+                  —
+                </td>
+                {costCol && <td />}
+                <td />
+              </tr>
+            )}
+            {baseCol &&
+              hiddenOpen &&
+              hidden.map((row) => (
+                <tr key={row.accountId} className="border-b border-border/50 bg-muted/20 text-xs">
+                  <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-7 pr-2">{row.name}</td>
+                  <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
+                    {baseCell(row)}
+                  </td>
+                  {costCol && (
+                    <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
+                      {fmtBRL(limitOf(row.refTotal))}
+                    </td>
+                  )}
+                  <td className="px-2 py-1 text-right">
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          keep(row.accountId);
+                          void addLine({
+                            version_id: versionId!,
+                            unit_id: unitId!,
+                            account_id: row.accountId,
+                          });
+                        }}
+                      >
+                        Lançar em {year ?? ""}
+                      </Button>
+                    )}
+                  </td>
+                  {costCol && <td />}
+                  <td />
+                </tr>
+              ))}
+            {rows.length === 0 && !payrollRow && hidden.length === 0 ? (
               <tr>
                 <td colSpan={colSpan} className="px-3 py-8 text-center text-muted-foreground">
                   Nenhuma categoria ainda. Use "Adicionar categoria".
@@ -881,15 +977,6 @@ export function CategoryGrid({
           </tbody>
         </table>
       </div>
-      {hidden.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {hidden.length === 1
-            ? `1 categoria de ${baseYear} sem valor em ${year ?? ""} não aparece`
-            : `${hidden.length} categorias de ${baseYear} sem valor em ${year ?? ""} não aparecem`}{" "}
-          ({fmtBRL(sum(hidden.map((r) => r.refTotal)))} em {baseYear}, somados no total acima). Para
-          lançar, use Adicionar categoria.
-        </p>
-      )}
 
       {adding && (
         <AddCategoryDialog
