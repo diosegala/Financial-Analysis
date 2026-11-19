@@ -66,14 +66,22 @@ interface OpenState {
 /** Os dados da folha calculada da unidade: as linhas de cada pessoa e os totais do ano por grupo. */
 function usePayrollBreakdown(mode: BreakdownMode) {
   const { versionId, scenarioId, unitId } = usePlanning();
-  const { data, isLoading } = usePayrollDetail(versionId, scenarioId, unitId);
+  const { data, isLoading, isError } = usePayrollDetail(versionId, scenarioId, unitId);
   const breakdown = useMemo(() => groupBreakdown(data ?? [], mode), [data, mode]);
-  const yearTotals = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const r of data ?? []) m.set(r.grupo, (m.get(r.grupo) ?? 0) + r.amount);
-    return m;
+  const { yearTotals, bruto } = useMemo(() => {
+    const yearTotals = new Map<string, number>();
+    // Salário bruto de cada pessoa por mês: a linha das pessoas de outras unidades, na parte desta.
+    const bruto = new Map<string, number[]>();
+    for (const r of data ?? []) {
+      yearTotals.set(r.grupo, (yearTotals.get(r.grupo) ?? 0) + r.amount);
+      if (r.grupo !== "bruto") continue;
+      const months = bruto.get(r.person_id) ?? (Array(12).fill(0) as number[]);
+      months[r.month - 1] = (months[r.month - 1] ?? 0) + r.amount;
+      bruto.set(r.person_id, months);
+    }
+    return { yearTotals, bruto };
   }, [data]);
-  return { ...breakdown, yearTotals, isLoading };
+  return { ...breakdown, yearTotals, bruto, isLoading, isError };
 }
 
 /** Pessoas abertas e o modo das linhas de custo, lembrados neste navegador. */
@@ -116,16 +124,74 @@ export function PeopleStep() {
   const breakdown = usePayrollBreakdown(opened.mode);
   const ctMap = byId(contractTypes);
   const rows = items ?? [];
+  const others = incoming ?? [];
+  const allIds = [...rows.map((r) => r.person.id), ...others.map((x) => x.person_id)];
   const monthTotals = MONTHS.map((_, i) =>
     rows.reduce((a, r) => a + (r.line.values.get(i + 1) ?? 0), 0),
   );
   const openSet = new Set(opened.open);
-  const allOpen = rows.length > 0 && rows.every((r) => openSet.has(r.person.id));
+  const allOpen = allIds.length > 0 && allIds.every((id) => openSet.has(id));
   const toggle = (id: string) =>
     opened.save({
       ...opened,
       open: openSet.has(id) ? opened.open.filter((o) => o !== id) : [...opened.open, id],
     });
+
+  /** As linhas de custo abaixo da pessoa aberta: na parte desta unidade. */
+  function detailRows(personId: string) {
+    const lines = breakdown.byPerson.get(personId) ?? [];
+    if (lines.length === 0)
+      return (
+        <tr className="border-b border-border/50 bg-muted/20 text-xs text-muted-foreground">
+          <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-9 pr-3" colSpan={15}>
+            {breakdown.isLoading
+              ? "Calculando a folha…"
+              : breakdown.isError
+                ? "Não foi possível calcular a folha. Recarregue a página."
+                : "Sem custo no ano."}
+          </td>
+        </tr>
+      );
+    return lines.map((b) => (
+      <tr
+        key={b.label}
+        className={`border-b border-border/50 bg-muted/20 text-xs ${
+          b.grupo === "custo_total" ? "font-semibold" : "text-muted-foreground"
+        }`}
+      >
+        <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-9 pr-3">{b.label}</td>
+        {b.months.map((v, i) => (
+          <td key={i} className="px-2 py-1 text-right font-mono tabular-nums">
+            {v ? fmtBRL(v) : "—"}
+          </td>
+        ))}
+        <td className="px-3 py-1 text-right font-mono tabular-nums">
+          {fmtBRL(b.months.reduce((a, v) => a + v, 0))}
+        </td>
+        <td />
+      </tr>
+    ));
+  }
+
+  /** Seta de abrir e fechar as linhas de custo de uma pessoa. */
+  function openButton(id: string, name: string) {
+    const isOpen = openSet.has(id);
+    return (
+      <button
+        type="button"
+        className="-ml-1 rounded p-0.5 text-muted-foreground hover:bg-muted"
+        aria-label={isOpen ? `Fechar ${name}` : `Abrir ${name}`}
+        aria-expanded={isOpen}
+        onClick={() => toggle(id)}
+      >
+        {isOpen ? (
+          <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5" />
+        )}
+      </button>
+    );
+  }
 
   function pasteBlock(rowIndex: number, month: number, block: string[][]) {
     block.forEach((cells, r) => {
@@ -188,21 +254,21 @@ export function PeopleStep() {
           />
         </section>
       )}
-      {rows.length > 0 && (
+      {allIds.length > 0 && (
         <p className="text-sm text-muted-foreground">
           A grade é o salário de cada mês. O custo, abaixo de cada pessoa e nos totais, aparece no
           mês em que é pago: o salário no mês seguinte, e em janeiro o que ficou do ano anterior.
+          {rows.some((r) => allocations?.get(r.person.id)?.length) &&
+            " Pessoa rateada: a grade mostra o salário cheio; o custo aberto e os totais, a parte desta unidade."}
         </p>
       )}
-      {rows.length > 0 && <PayrollSummary yearTotals={breakdown.yearTotals} />}
-      {rows.length > 0 && (
+      {allIds.length > 0 && <PayrollSummary yearTotals={breakdown.yearTotals} />}
+      {allIds.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           <Button
             size="sm"
             variant="outline"
-            onClick={() =>
-              opened.save({ ...opened, open: allOpen ? [] : rows.map((r) => r.person.id) })
-            }
+            onClick={() => opened.save({ ...opened, open: allOpen ? [] : allIds })}
           >
             {allOpen ? "Fechar todos" : "Abrir todos"}
           </Button>
@@ -238,19 +304,7 @@ export function PeopleStep() {
                       <tr className="border-b border-border">
                         <td className="sticky left-0 z-10 bg-card px-3 py-1">
                           <div className="flex items-center gap-1 font-medium">
-                            <button
-                              type="button"
-                              className="-ml-1 rounded p-0.5 text-muted-foreground hover:bg-muted"
-                              aria-label={isOpen ? `Fechar ${p.name}` : `Abrir ${p.name}`}
-                              aria-expanded={isOpen}
-                              onClick={() => toggle(p.id)}
-                            >
-                              {isOpen ? (
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              ) : (
-                                <ChevronRight className="h-3.5 w-3.5" />
-                              )}
-                            </button>
+                            {openButton(p.id, p.name)}
                             {p.name}
                           </div>
                           <div className="text-xs text-muted-foreground">
@@ -267,7 +321,10 @@ export function PeopleStep() {
                                       (a) =>
                                         `${Math.round(a.share * 100)}% ${unitName.get(a.unit_id)?.name ?? ""}`,
                                     )
-                                    .join(", ")}`
+                                    .join(", ")} · ${Math.round(
+                                    (1 - allocations.get(p.id)!.reduce((a, x) => a + x.share, 0)) *
+                                      100,
+                                  )}% fica aqui`
                                 : null,
                             ]
                               .filter(Boolean)
@@ -327,32 +384,53 @@ export function PeopleStep() {
                           )}
                         </td>
                       </tr>
-                      {isOpen &&
-                        (breakdown.byPerson.get(p.id) ?? []).map((b) => (
-                          <tr
-                            key={b.label}
-                            className={`border-b border-border/50 bg-muted/20 text-xs ${
-                              b.grupo === "custo_total" ? "font-semibold" : "text-muted-foreground"
-                            }`}
-                          >
-                            <td className="sticky left-0 z-10 bg-muted/40 py-1 pl-9 pr-3">
-                              {b.label}
-                            </td>
-                            {b.months.map((v, i) => (
-                              <td key={i} className="px-2 py-1 text-right font-mono tabular-nums">
-                                {v ? fmtBRL(v) : "—"}
-                              </td>
-                            ))}
-                            <td className="px-3 py-1 text-right font-mono tabular-nums">
-                              {fmtBRL(b.months.reduce((a, v) => a + v, 0))}
-                            </td>
-                            <td />
-                          </tr>
-                        ))}
+                      {isOpen && detailRows(p.id)}
                     </Fragment>
                   );
                 })}
-                {rows.length === 0 ? (
+                {others.length > 0 && (
+                  <tr className="border-b border-border bg-muted/30">
+                    <td
+                      colSpan={15}
+                      className="sticky left-0 z-10 bg-muted px-3 py-1.5 text-xs font-medium"
+                    >
+                      Pessoas de outras unidades: a parte do custo que entra aqui (salário, encargos
+                      e benefícios na mesma proporção). O financeiro define o percentual.
+                    </td>
+                  </tr>
+                )}
+                {others.map((x) => {
+                  const months = breakdown.bruto.get(x.person_id) ?? [];
+                  return (
+                    <Fragment key={`outra-${x.person_id}`}>
+                      <tr className="border-b border-border">
+                        <td className="sticky left-0 z-10 bg-card px-3 py-1">
+                          <div className="flex items-center gap-1 font-medium">
+                            {openButton(x.person_id, x.name)}
+                            {x.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            de {x.home_unit} · {Math.round(Number(x.share) * 100)}% nesta unidade
+                          </div>
+                        </td>
+                        {MONTHS.map((_, i) => (
+                          <td
+                            key={i}
+                            className="border-l border-border/50 px-2 py-1 text-right font-mono tabular-nums text-muted-foreground"
+                          >
+                            {months[i] ? fmtBRL(months[i]!) : "—"}
+                          </td>
+                        ))}
+                        <td className="px-3 py-1 text-right font-mono text-sm tabular-nums">
+                          {fmtBRL(months.reduce((a, v) => a + v, 0))}
+                        </td>
+                        <td />
+                      </tr>
+                      {openSet.has(x.person_id) && detailRows(x.person_id)}
+                    </Fragment>
+                  );
+                })}
+                {rows.length === 0 && others.length === 0 ? (
                   <tr>
                     <td colSpan={15} className="px-3 py-8 text-center text-muted-foreground">
                       Nenhuma pessoa cadastrada nesta unidade.
@@ -374,7 +452,7 @@ export function PeopleStep() {
                     <td />
                   </tr>
                 )}
-                {rows.length > 0 && (
+                {rows.length + others.length > 0 && (
                   <tr className="bg-muted/30 font-semibold">
                     <td className="sticky left-0 z-10 bg-muted px-3 py-1.5">
                       Custo total para a empresa
@@ -392,44 +470,6 @@ export function PeopleStep() {
                 )}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {(incoming?.length ?? 0) > 0 && (
-          <div className="space-y-2">
-            <div>
-              <h2 className="text-lg font-semibold">Pessoas de outras unidades</h2>
-              <p className="text-sm text-muted-foreground">
-                Parte do custo destas pessoas entra nesta unidade: salário, encargos e benefícios na
-                mesma proporção. O financeiro define o percentual.
-              </p>
-            </div>
-            <div className="overflow-x-auto rounded-md border border-border bg-card">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50 text-left">
-                    <th className="px-3 py-2 font-medium">Pessoa</th>
-                    <th className="px-3 py-2 font-medium">Unidade</th>
-                    <th className="px-3 py-2 text-right font-medium">Parte nesta unidade</th>
-                    <th className="px-3 py-2 text-right font-medium">Remuneração no ano (parte)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {incoming!.map((x) => (
-                    <tr key={x.person_id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-1.5">{x.name}</td>
-                      <td className="px-3 py-1.5">{x.home_unit}</td>
-                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                        {Math.round(Number(x.share) * 100)}%
-                      </td>
-                      <td className="px-3 py-1.5 text-right font-mono tabular-nums">
-                        {fmtBRL(Number(x.salary ?? 0))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
         )}
 
@@ -546,7 +586,7 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
           start_month: start,
           end_month: end,
         });
-    if (ok && person && isAdmin && shares !== null) {
+    if (ok && person && isAdmin && allAllocations && shares !== null) {
       if (!(await saveAllocations(person.id, parsedShares))) return;
     }
     if (ok) onClose();
@@ -648,7 +688,10 @@ function PersonDialog({ person, onClose }: { person: Person | null; onClose: () 
             </>
           )}
         </div>
-        {person && isAdmin && (
+        {person && isAdmin && !allAllocations && (
+          <p className="text-xs text-muted-foreground">Carregando o rateio…</p>
+        )}
+        {person && isAdmin && allAllocations && (
           <div className="space-y-2 rounded-md border border-border p-3">
             <div className="text-sm font-medium">Rateio com outras unidades</div>
             <p className="text-xs text-muted-foreground">
