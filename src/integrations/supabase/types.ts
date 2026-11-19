@@ -2514,6 +2514,54 @@ export type Database = {
           },
         ]
       }
+      reference_cache_state: {
+        Row: {
+          changed_at: string
+          computed_at: string | null
+          stale: boolean
+          year: number
+        }
+        Insert: {
+          changed_at?: string
+          computed_at?: string | null
+          stale?: boolean
+          year: number
+        }
+        Update: {
+          changed_at?: string
+          computed_at?: string | null
+          stale?: boolean
+          year?: number
+        }
+        Relationships: []
+      }
+      reference_omie_cache: {
+        Row: {
+          account_id: string
+          amount: number
+          kind: string
+          month: number
+          unit_id: string
+          year: number
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          kind: string
+          month: number
+          unit_id: string
+          year: number
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          kind?: string
+          month?: number
+          unit_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       revenue_targets: {
         Row: {
           amount: number
@@ -3581,6 +3629,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reference_cache_refresh: { Args: never; Returns: undefined }
+      reference_cache_refresh_year: {
+        Args: { _year: number }
+        Returns: undefined
+      }
       reference_rows: {
         Args: { _year: number }
         Returns: {
@@ -3592,6 +3645,16 @@ export type Database = {
         }[]
       }
       reference_rows_omie: {
+        Args: { _year: number }
+        Returns: {
+          account_id: string
+          amount: number
+          kind: string
+          month: number
+          unit_id: string
+        }[]
+      }
+      reference_rows_omie_live: {
         Args: { _year: number }
         Returns: {
           account_id: string
