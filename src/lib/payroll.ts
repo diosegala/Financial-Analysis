@@ -135,7 +135,10 @@ export interface PayrollDetailRow {
   amount: number;
 }
 
-/** Bruto, retenções, líquido, encargos, provisões, benefícios e custo total por pessoa e mês. */
+/**
+ * Bruto, retenções, líquido, encargos, provisões, benefícios e custo total por pessoa e mês, na parte da unidade: a pessoa
+ * rateada fica com a parte desta unidade, e a de outra unidade entra com a parte rateada para cá.
+ */
 export function usePayrollDetail(
   versionId: string | null,
   scenarioId: string | null,
@@ -145,31 +148,24 @@ export function usePayrollDetail(
     queryKey: ["payroll_detail", versionId, scenarioId, unitId],
     enabled: !!versionId && !!unitId,
     queryFn: async (): Promise<PayrollDetailRow[]> => {
-      // Uma linha por pessoa, mês e item: uma unidade com 20 pessoas passa de 3 mil linhas, e o Supabase entrega no
-      // máximo 1.000 por consulta. Lê em páginas, em ordem fixa.
-      const data = [];
-      for (let from = 0; ; from += 1000) {
-        const { data: page, error } = await supabase
-          .rpc("payroll_detail", {
-            _version_id: versionId!,
-            ...(scenarioId ? { _scenario_id: scenarioId } : {}),
-            _unit_ids: [unitId!],
-          })
-          .order("person_id")
-          .order("month")
-          .order("item")
-          .range(from, from + 999);
-        if (error) throw error;
-        data.push(...(page ?? []));
-        if (!page || page.length < 1000) break;
-      }
-      return data.map((r) => ({
-        person_id: r.person_id,
-        month: r.month,
-        grupo: r.grupo as PayrollGroup,
-        item: r.item,
-        amount: Number(r.amount),
-      }));
+      // Uma linha por pessoa e item, com os 12 meses: cabe numa consulta só.
+      const { data, error } = await supabase.rpc("unit_payroll_detail", {
+        _version_id: versionId!,
+        _scenario_id: scenarioId!,
+        _unit_id: unitId!,
+      });
+      if (error) throw error;
+      return (data ?? [])
+        .flatMap((r) =>
+          r.months.map((amount, i) => ({
+            person_id: r.person_id,
+            month: i + 1,
+            grupo: r.grupo as PayrollGroup,
+            item: r.item,
+            amount: Number(amount),
+          })),
+        )
+        .filter((r) => r.amount !== 0);
     },
   });
 }

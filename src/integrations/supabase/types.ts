@@ -3767,6 +3767,17 @@ export type Database = {
           share: number
         }[]
       }
+      unit_payroll_detail: {
+        Args: { _scenario_id: string; _unit_id: string; _version_id: string }
+        Returns: {
+          grupo: string
+          home_unit_id: string
+          item: string
+          months: number[]
+          person_id: string
+          share: number
+        }[]
+      }
       unit_reference: {
         Args: { _unit_id: string; _version_id: string }
         Returns: {
