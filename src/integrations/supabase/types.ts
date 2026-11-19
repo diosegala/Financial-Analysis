@@ -1140,6 +1140,7 @@ export type Database = {
         Row: {
           base_expense: number | null
           base_payroll: number | null
+          base_payroll_typed: number | null
           ceiling_amount: number | null
           expense_limit: number | null
           floor_actual: number | null
@@ -1156,6 +1157,7 @@ export type Database = {
         Insert: {
           base_expense?: number | null
           base_payroll?: number | null
+          base_payroll_typed?: number | null
           ceiling_amount?: number | null
           expense_limit?: number | null
           floor_actual?: number | null
@@ -1172,6 +1174,7 @@ export type Database = {
         Update: {
           base_expense?: number | null
           base_payroll?: number | null
+          base_payroll_typed?: number | null
           ceiling_amount?: number | null
           expense_limit?: number | null
           floor_actual?: number | null
@@ -3235,6 +3238,7 @@ export type Database = {
         Returns: {
           base_expense: number
           base_payroll: number
+          base_payroll_auto: number
           ceiling: number
           expense_limit: number
           expense_limit_auto: number
