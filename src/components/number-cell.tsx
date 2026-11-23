@@ -33,6 +33,8 @@ export function NumberCell({
       placeholder={placeholder}
       onChange={(e) => setText(e.target.value)}
       onBlur={() => {
+        // Sem mudar o texto, não grava: o valor com centavos aparece arredondado e não pode virar o arredondado.
+        if (text === show(value)) return;
         if (text.trim() === "") return value !== null && onSave(null);
         const n = parseNum(text);
         if (n === null) return setText(show(value));
