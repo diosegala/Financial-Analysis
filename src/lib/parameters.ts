@@ -1,13 +1,14 @@
 import type { CalcRule, ParameterValue } from "./catalog";
 import { norm } from "./products-import";
 
-export type Scope = "unit" | "product" | "contract_type" | "revenue_type";
+export type Scope = "unit" | "product" | "contract_type" | "revenue_type" | "account";
 
 export const SCOPE_LABELS: Record<Scope, string> = {
   unit: "Unidade",
   product: "Produto",
   contract_type: "Vínculo",
   revenue_type: "Tipo de receita",
+  account: "Categoria de receita",
 };
 
 export const SCOPE_COLUMN = {
@@ -15,6 +16,7 @@ export const SCOPE_COLUMN = {
   product: "product_id",
   contract_type: "contract_type_id",
   revenue_type: "revenue_type_id",
+  account: "account_id",
 } as const;
 
 export type BaseKind = "receita" | "despesa" | "salario" | "headcount";
@@ -51,7 +53,10 @@ export function uniqueName(label: string, existing: string[]): string {
 
 /** Escopos que os valores já cadastrados usam: não podem ser retirados do parâmetro. */
 export function usedScopes(
-  values: Pick<ParameterValue, "unit_id" | "product_id" | "contract_type_id" | "revenue_type_id">[],
+  values: Pick<
+    ParameterValue,
+    "unit_id" | "product_id" | "contract_type_id" | "revenue_type_id" | "account_id"
+  >[],
 ): Set<Scope> {
   const used = new Set<Scope>();
   for (const v of values) {

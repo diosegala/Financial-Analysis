@@ -26,14 +26,21 @@ describe("uniqueName", () => {
 
 describe("usedScopes", () => {
   it("lista os escopos que os valores usam", () => {
-    const base = { unit_id: null, product_id: null, contract_type_id: null, revenue_type_id: null };
+    const base = {
+      unit_id: null,
+      product_id: null,
+      contract_type_id: null,
+      revenue_type_id: null,
+      account_id: null,
+    };
     expect(usedScopes([base])).toEqual(new Set());
     expect(
       usedScopes([
         { ...base, unit_id: "u" },
         { ...base, contract_type_id: "c" },
+        { ...base, account_id: "a" },
       ]),
-    ).toEqual(new Set(["unit", "contract_type"]));
+    ).toEqual(new Set(["unit", "contract_type", "account"]));
   });
 });
 
