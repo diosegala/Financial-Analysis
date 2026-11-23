@@ -299,7 +299,7 @@ export function CategoryGrid({
     if (await saveAdjustment(year - 1, unitId, row.accountId, value))
       toast.success(
         calculated
-          ? `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}. Para o limite usar o novo valor, clique em Calcular com o realizado de ${year - 1} no Plano CUPOLA.`
+          ? `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}. O limite já usa o novo valor.`
           : `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}.`,
       );
   }

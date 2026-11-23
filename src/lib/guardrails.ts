@@ -348,9 +348,10 @@ export function useReferenceAdjust() {
       toast.error(friendlyError(error.message));
       return false;
     }
+    // O limite de despesas segue o ano base: o placar (target_vs_plan) também se atualiza.
     await Promise.all(
-      ["reference_adjustments", "unit_reference", "unit_reference_omie"].map((k) =>
-        queryClient.invalidateQueries({ queryKey: [k] }),
+      ["reference_adjustments", "unit_reference", "unit_reference_omie", "target_vs_plan"].map(
+        (k) => queryClient.invalidateQueries({ queryKey: [k] }),
       ),
     );
     return true;

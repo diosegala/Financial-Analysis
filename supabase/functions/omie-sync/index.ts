@@ -174,7 +174,9 @@ function steps(admin: Admin, runId: string, creds: Creds, years: number[]) {
       .toLowerCase()
       .replace(/(^|[^\p{L}])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
     if (!name) throw new Error("O Omie não informou o nome da empresa.");
-    return { rows: [{ name }], last: true };
+    // O CNPJ é o que identifica a empresa: o nome fantasia pode mudar no Omie.
+    const cnpj = String(cad.cnpj ?? "").replace(/\D/g, "") || null;
+    return { rows: [{ name, cnpj }], last: true };
   };
   return [
     { key: "company", read: company },
@@ -380,8 +382,10 @@ async function run(runId: string, index: number, step: number, page: number) {
     }
     // A gravação também roda sozinha.
     if (done > 0) return await chain({ run_id: runId, index, step, page: 1 });
+    const company = (await cached(admin, runId, "company"))[0];
     const stored = await admin.rpc("omie_store_company", {
-      _name: (await cached(admin, runId, "company"))[0]?.name,
+      _name: company?.name,
+      _cnpj: company?.cnpj ?? undefined,
       _years: years,
       _departments: await cached(admin, runId, "departments"),
       _categories: await cached(admin, runId, "categories"),

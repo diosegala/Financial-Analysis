@@ -1328,6 +1328,7 @@ export type Database = {
       omie_companies: {
         Row: {
           active: boolean
+          cnpj: string | null
           created_at: string
           id: string
           last_synced_at: string | null
@@ -1336,6 +1337,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          cnpj?: string | null
           created_at?: string
           id?: string
           last_synced_at?: string | null
@@ -1344,6 +1346,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          cnpj?: string | null
           created_at?: string
           id?: string
           last_synced_at?: string | null
@@ -3461,6 +3464,7 @@ export type Database = {
         Args: {
           _actuals: Json
           _categories: Json
+          _cnpj?: string
           _departments: Json
           _name: string
           _receipts: Json
