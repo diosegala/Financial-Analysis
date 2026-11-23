@@ -542,6 +542,12 @@ function AccountsTab() {
             type: "boolean",
             hint: "As despesas desta conta voltam para a base do IRPJ e da CSLL. Uma linha pode ser exceção, nos lançamentos.",
           },
+          {
+            key: "variable_cost",
+            label: "Comissão ou repasse",
+            type: "boolean",
+            hint: "Contas de Despesas: o financeiro lança mês a mês na tela de Receitas da unidade (comissão de venda, parte do parceiro). Entra no custo variável, fora do limite de custos.",
+          },
           { key: "omie_category_code", label: "Código no Omie", type: "text", hideInTable: true },
           active,
           order,
@@ -553,6 +559,7 @@ function AccountsTab() {
           sort_order: 0,
           generates_tax_credit: false,
           per_person: false,
+          variable_cost: false,
         }}
       />
     </div>

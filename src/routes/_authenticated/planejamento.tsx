@@ -185,7 +185,20 @@ function PlanejamentoPage() {
       {(step === 2 || step === 3) && <EduSheetSync unitId={unitId} />}
       {step === 1 && <PeopleStep />}
       {step === 2 && <CategoryGrid kind="despesa" onOpenPeople={() => setStep(1)} />}
-      {step === 3 && <CategoryGrid kind="receita" />}
+      {step === 3 && (
+        <>
+          <CategoryGrid kind="receita" />
+          <section className="space-y-2 pt-4">
+            <h2 className="text-lg font-semibold">Comissões e repasses</h2>
+            <p className="text-sm text-muted-foreground">
+              Comissão de venda e a parte do parceiro nas receitas da parceria, mês a mês. O
+              financeiro lança; entram no custo variável da unidade, como os impostos, e não no
+              limite de custos.
+            </p>
+            <CategoryGrid kind="despesa" variable />
+          </section>
+        </>
+      )}
       {step === 4 && <ReviewStep />}
       {step < 4 && (
         <div className="flex justify-end">

@@ -105,6 +105,7 @@ export type Database = {
           treatment: string
           unit_ids: string[] | null
           updated_at: string
+          variable_cost: boolean
         }
         Insert: {
           active?: boolean
@@ -125,6 +126,7 @@ export type Database = {
           treatment?: string
           unit_ids?: string[] | null
           updated_at?: string
+          variable_cost?: boolean
         }
         Update: {
           active?: boolean
@@ -145,6 +147,7 @@ export type Database = {
           treatment?: string
           unit_ids?: string[] | null
           updated_at?: string
+          variable_cost?: boolean
         }
         Relationships: [
           {
@@ -3077,6 +3080,7 @@ export type Database = {
           treatment: string
           unit_ids: string[] | null
           updated_at: string
+          variable_cost: boolean
         }
         SetofOptions: {
           from: "*"
@@ -3700,6 +3704,7 @@ export type Database = {
           treatment: string
           unit_ids: string[] | null
           updated_at: string
+          variable_cost: boolean
         }
         SetofOptions: {
           from: "*"
