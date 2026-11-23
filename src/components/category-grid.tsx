@@ -136,16 +136,22 @@ export function Situation({
 export function CategoryGrid({
   kind,
   onOpenPeople,
+  variable = false,
 }: {
   kind: AccountKind;
   /** Despesas: a primeira linha é a folha, que abre o passo Pessoas. */
   onOpenPeople?: () => void;
+  /** Comissões e repasses (contas de custo variável): só o financeiro lança, sem limite. */
+  variable?: boolean;
 }) {
-  const { versionId, unitId, scenarioId, canEdit, year } = usePlanning();
+  const { versionId, unitId, scenarioId, canEdit: planCanEdit, year } = usePlanning();
   const { data: allLines, isLoading } = usePlanLines(versionId, unitId, kind);
-  // Taxas e impostos da planilha de Educação ficam na DRE, não nas grades.
-  const lines = allLines?.filter((l) => l.origin !== "planilha_deducao");
   const { data: accounts } = useAccounts();
+  // Despesas e comissões dividem as contas de despesa: cada grade fica com as suas.
+  const variableIds = new Set((accounts ?? []).filter((a) => a.variable_cost).map((a) => a.id));
+  const mine = (accountId: string) => kind !== "despesa" || variableIds.has(accountId) === variable;
+  // Taxas e impostos da planilha de Educação ficam na DRE, não nas grades.
+  const lines = allLines?.filter((l) => l.origin !== "planilha_deducao" && mine(l.account_id));
   const { data: contractTypes } = useContractTypes();
   const { data: reference } = useUnitReference(versionId, unitId);
   const { data: adjustments } = useReferenceAdjustments(year ? year - 1 : null, unitId);
@@ -168,7 +174,8 @@ export function CategoryGrid({
   const keep = (accountId: string) => setKept((k) => new Set(k).add(accountId));
 
   const { data: user } = useCurrentUser();
-  const isCost = kind === "despesa";
+  const canEdit = planCanEdit && (!variable || !!user?.isFinanceiro);
+  const isCost = kind === "despesa" && !variable;
   const queryClient = useQueryClient();
   /** Receitas: categorias e clientes na ordem que o diretor escolher. */
   const reorderable = kind === "receita";
@@ -202,6 +209,7 @@ export function CategoryGrid({
     (a) =>
       a.active &&
       a.kind === kind &&
+      mine(a.id) &&
       a.treatment === "lancavel" &&
       !a.per_person &&
       !salaryAccounts.has(a.id) &&
@@ -211,7 +219,9 @@ export function CategoryGrid({
   const byAccount = new Map<string, PlanLine[]>();
   for (const l of lines ?? [])
     byAccount.set(l.account_id, [...(byAccount.get(l.account_id) ?? []), l]);
-  const refKinds = new Set((accounts ?? []).filter((a) => a.kind === kind).map((a) => a.id));
+  const refKinds = new Set(
+    (accounts ?? []).filter((a) => a.kind === kind && mine(a.id)).map((a) => a.id),
+  );
   const ids = new Set([
     ...byAccount.keys(),
     ...(showBase ? [...(reference?.keys() ?? [])].filter((id) => refKinds.has(id)) : []),
@@ -298,7 +308,7 @@ export function CategoryGrid({
     if (value === null && !adjustments?.has(row.accountId)) return;
     if (await saveAdjustment(year - 1, unitId, row.accountId, value))
       toast.success(
-        calculated
+        calculated && isCost
           ? `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}. O limite já usa o novo valor.`
           : `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}.`,
       );
