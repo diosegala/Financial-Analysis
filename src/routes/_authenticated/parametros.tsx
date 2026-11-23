@@ -43,13 +43,19 @@ function useScopeOptions() {
   const { data: products } = useProducts();
   const { data: contractTypes } = useContractTypes();
   const { data: revenueTypes } = useRevenueTypes();
+  const { data: accounts } = useAccounts();
   const opts = (rows: { id: string; name: string }[] | undefined) =>
     (rows ?? []).map((r) => ({ value: r.id, label: r.name }));
+  // Categorias de receita lançáveis (ex.: receita fixa e variável de uma unidade sem produtos).
+  const revenueAccounts = (accounts ?? [])
+    .filter((a) => a.kind === "receita" && a.treatment === "lancavel" && a.active)
+    .sort((a, b) => a.name.localeCompare(b.name));
   return {
     unit: opts(units),
     product: opts(products),
     contract_type: opts(contractTypes),
     revenue_type: opts(revenueTypes),
+    account: opts(revenueAccounts),
   } satisfies Record<Scope, { value: string; label: string }[]>;
 }
 
@@ -182,6 +188,7 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
       product_id: scopeIds.product ?? null,
       contract_type_id: scopeIds.contract_type ?? null,
       revenue_type_id: scopeIds.revenue_type ?? null,
+      account_id: scopeIds.account ?? null,
       note: note.trim() || null,
     };
     const ok = editingValue
@@ -245,7 +252,7 @@ function ParameterSection({ def, values }: { def: ParameterDefinition; values: P
             {scopes.map((s) => (
               <Field key={s} label={SCOPE_LABELS[s]}>
                 <OptionSelect
-                  className="w-44"
+                  className={s === "account" ? "w-64" : "w-44"}
                   value={scopeIds[s] ?? null}
                   onChange={(v) => setScopeIds((prev) => ({ ...prev, [s]: v }))}
                   noneLabel="Todos"

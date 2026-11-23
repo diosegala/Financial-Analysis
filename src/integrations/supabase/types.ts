@@ -1657,6 +1657,7 @@ export type Database = {
       }
       parameter_values: {
         Row: {
+          account_id: string | null
           contract_type_id: string | null
           created_at: string
           created_by: string | null
@@ -1670,6 +1671,7 @@ export type Database = {
           value: number
         }
         Insert: {
+          account_id?: string | null
           contract_type_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1683,6 +1685,7 @@ export type Database = {
           value: number
         }
         Update: {
+          account_id?: string | null
           contract_type_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1696,6 +1699,13 @@ export type Database = {
           value?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "parameter_values_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "parameter_values_contract_type_id_fkey"
             columns: ["contract_type_id"]
@@ -3491,6 +3501,7 @@ export type Database = {
       }
       param_value: {
         Args: {
+          _account_id?: string
           _contract_type_id: string
           _definition_id: string
           _product_id: string
