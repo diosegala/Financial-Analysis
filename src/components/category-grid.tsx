@@ -8,7 +8,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useAccounts, useContractTypes } from "@/lib/catalog";
+import { useAccounts, useContractTypes, useProducts } from "@/lib/catalog";
 import {
   plannedCosts,
   useGuardrailMutations,
@@ -56,7 +56,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface Row {
+  /** Conta da linha; na linha de um produto da planilha, a conta dos ingressos. */
   accountId: string;
+  /** Produto da planilha de Educação com mais de uma conta (ingressos, patrocínio): as contas juntas numa linha. */
+  accounts?: string[];
   name: string;
   lines: PlanLine[];
   reference: Map<number, number> | undefined;
@@ -153,6 +156,7 @@ export function CategoryGrid({
   // Taxas e impostos da planilha de Educação ficam na DRE, não nas grades.
   const lines = allLines?.filter((l) => l.origin !== "planilha_deducao" && mine(l.account_id));
   const { data: contractTypes } = useContractTypes();
+  const { data: products } = useProducts();
   const { data: reference } = useUnitReference(versionId, unitId);
   const { data: adjustments } = useReferenceAdjustments(year ? year - 1 : null, unitId);
   const { data: omieRef } = useReferenceOmie(versionId, unitId);
@@ -226,21 +230,21 @@ export function CategoryGrid({
     ...byAccount.keys(),
     ...(showBase ? [...(reference?.keys() ?? [])].filter((id) => refKinds.has(id)) : []),
   ]);
-  const allRows: Row[] = [...ids]
-    .map((accountId) => {
-      const ls = byAccount.get(accountId) ?? [];
-      const ref = reference?.get(accountId);
-      const months = MONTHS.map((_, i) => sum(ls.map((l) => l.values.get(i + 1) ?? 0)));
-      return {
-        accountId,
-        name: names.get(accountId) ?? "—",
-        lines: ls,
-        reference: ref,
-        refTotal: ref ? sum(ref.values()) : 0,
-        months,
-        total: sum(months),
-      };
-    })
+  const accountRows: Row[] = [...ids].map((accountId) => {
+    const ls = byAccount.get(accountId) ?? [];
+    const ref = reference?.get(accountId);
+    const months = MONTHS.map((_, i) => sum(ls.map((l) => l.values.get(i + 1) ?? 0)));
+    return {
+      accountId,
+      name: names.get(accountId) ?? "—",
+      lines: ls,
+      reference: ref,
+      refTotal: ref ? sum(ref.values()) : 0,
+      months,
+      total: sum(months),
+    };
+  });
+  const allRows: Row[] = groupSheetProducts(accountRows, lines ?? [], products ?? [])
     .sort((a, b) => Math.max(b.refTotal, b.total) - Math.max(a.refTotal, a.total))
     // Receitas: a ordem escolhida (pela primeira linha da categoria) vem antes do tamanho.
     .sort((a, b) =>
@@ -254,7 +258,7 @@ export function CategoryGrid({
   // Aparece a categoria lançada na unidade, mesmo zerada: o valor pode vir depois. A que só existe no ano anterior fica em
   // "Adicionar categoria", e o ano anterior segue na base do limite.
   const rows = allRows.filter((r) => r.total !== 0 || r.lines.length > 0 || kept.has(r.accountId));
-  const shown = new Set(rows.map((r) => r.accountId));
+  const shown = new Set(rows.flatMap((r) => r.accounts ?? [r.accountId]));
   const hidden = allRows.filter((r) => !shown.has(r.accountId) && r.refTotal !== 0);
   const availableIds = new Set(available.map((a) => a.id));
   const addable = (accounts ?? [])
@@ -274,18 +278,30 @@ export function CategoryGrid({
   const emptyPlan = isCost && (lines ?? []).length === 0 && (reference?.size ?? 0) > 0;
   const colSpan = 3 + (monthly ? 12 : 0) + (baseCol ? 1 : 0) + (costCol ? 2 : 0);
 
-  /** Célula do ano base de uma categoria: editável para o financeiro. */
+  /** Célula do ano base de uma categoria: editável para o financeiro. Produto com várias contas: a soma, que se
+   * corrige conta a conta nos lançamentos. */
   function baseCell(row: Row) {
-    if (!user?.isFinanceiro) return row.refTotal ? fmtBRL(row.refTotal) : "—";
+    if (row.accounts) return row.refTotal ? fmtBRL(row.refTotal) : "—";
+    return accountBaseCell(row.accountId, row.refTotal, row.name);
+  }
+  function accountBaseCell(accountId: string, refTotal: number, name: string) {
+    if (!user?.isFinanceiro) return refTotal ? fmtBRL(refTotal) : "—";
     return (
       <BaseYearCell
-        value={row.refTotal}
-        adjusted={adjustments?.has(row.accountId) ?? false}
-        original={`Omie ${fmtBRL(omieRef?.get(row.accountId) ?? 0)}`}
-        label={`${row.name} em ${baseYear}`}
-        onSave={(v) => void adjustBase(row, v)}
+        value={refTotal}
+        adjusted={adjustments?.has(accountId) ?? false}
+        original={`Omie ${fmtBRL(omieRef?.get(accountId) ?? 0)}`}
+        label={`${name} em ${baseYear}`}
+        onSave={(v) => void adjustBase(accountId, v)}
       />
     );
+  }
+  /** Lançamento de um produto com várias contas: o ano base da sua conta, quando só ele usa a conta. */
+  function lineBaseCell(row: Row, l: PlanLine) {
+    if (!row.accounts || row.lines.filter((x) => x.account_id === l.account_id).length > 1)
+      return null;
+    const ref = reference?.get(l.account_id);
+    return accountBaseCell(l.account_id, ref ? sum(ref.values()) : 0, l.description ?? row.name);
   }
 
   /** Folha do ano base corrigida pelo financeiro; vazio volta à foto do cálculo. Vale no limite na hora. */
@@ -300,13 +316,12 @@ export function CategoryGrid({
   }
 
   /** Ano base corrigido pelo financeiro: o total do ano no lugar do Omie; vazio volta ao Omie. */
-  async function adjustBase(row: Row, total: number | null) {
+  async function adjustBase(accountId: string, total: number | null) {
     if (!year || !unitId) return;
-    const omie = omieRef?.get(row.accountId) ?? 0;
-    const value =
-      total === null || (total === omie && !adjustments?.has(row.accountId)) ? null : total;
-    if (value === null && !adjustments?.has(row.accountId)) return;
-    if (await saveAdjustment(year - 1, unitId, row.accountId, value))
+    const omie = omieRef?.get(accountId) ?? 0;
+    const value = total === null || (total === omie && !adjustments?.has(accountId)) ? null : total;
+    if (value === null && !adjustments?.has(accountId)) return;
+    if (await saveAdjustment(year - 1, unitId, accountId, value))
       toast.success(
         calculated && isCost
           ? `Valor de ${year - 1} ${value === null ? "voltou ao Omie" : "ajustado"}. O limite já usa o novo valor.`
@@ -542,11 +557,15 @@ export function CategoryGrid({
                           {row.name}
                           <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">
                             ({row.lines.length}{" "}
-                            {row.lines.length === 1
-                              ? lineWord
-                              : lineWord === "item"
-                                ? "itens"
-                                : `${lineWord}s`}
+                            {fromSheet
+                              ? row.lines.length === 1
+                                ? "lançamento"
+                                : "lançamentos"
+                              : row.lines.length === 1
+                                ? lineWord
+                                : lineWord === "item"
+                                  ? "itens"
+                                  : `${lineWord}s`}
                             )
                           </span>
                         </button>
@@ -832,7 +851,11 @@ export function CategoryGrid({
                             )}
                           </div>
                         </td>
-                        {baseCol && <td />}
+                        {baseCol && (
+                          <td className="px-2 py-1 text-right font-mono tabular-nums text-muted-foreground">
+                            {lineBaseCell(row, l)}
+                          </td>
+                        )}
                         {costCol && <td />}
                         <td className="px-2 py-1 text-right">
                           {monthly ? (
@@ -1268,4 +1291,58 @@ function SuppliersDialog({ row, onClose }: { row: Row; onClose: () => void }) {
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Receitas da planilha de Educação: cada produto aparece numa linha só, com o nome do produto e os lançamentos dentro,
+ * mesmo com ingressos e patrocínio em contas separadas (como no Omie). As contas continuam separadas no DRE.
+ */
+function groupSheetProducts(
+  rows: Row[],
+  lines: PlanLine[],
+  products: {
+    id: string;
+    name: string;
+    revenue_account_id: string | null;
+    sponsor_account_id: string | null;
+    extra_account_id: string | null;
+  }[],
+): Row[] {
+  const used = new Set(
+    lines.filter((l) => l.sheet_tab_id && l.product_id).map((l) => l.product_id),
+  );
+  const byId = new Map(rows.map((r) => [r.accountId, r]));
+  const taken = new Set<string>();
+  const merged: Row[] = [];
+  for (const p of products) {
+    if (!used.has(p.id)) continue;
+    const accounts = [
+      ...new Set([p.revenue_account_id, p.sponsor_account_id, p.extra_account_id]),
+    ].filter((id): id is string => !!id && byId.has(id) && !taken.has(id));
+    const name = p.name.replace(/\s+/g, " ").trim();
+    if (accounts.length === 0) continue;
+    if (accounts.length === 1) {
+      // Uma conta só (patrocínio na mesma dos ingressos): a linha já é do produto, só leva o nome dele.
+      taken.add(accounts[0]!);
+      merged.push({ ...byId.get(accounts[0]!)!, name });
+      continue;
+    }
+    const parts = accounts.map((id) => byId.get(id)!);
+    const reference = new Map<number, number>();
+    for (const r of parts)
+      for (const [m, v] of r.reference ?? []) reference.set(m, (reference.get(m) ?? 0) + v);
+    const months = MONTHS.map((_, i) => sum(parts.map((r) => r.months[i] ?? 0)));
+    accounts.forEach((id) => taken.add(id));
+    merged.push({
+      accountId: accounts[0]!,
+      accounts,
+      name,
+      lines: parts.flatMap((r) => r.lines),
+      reference: reference.size ? reference : undefined,
+      refTotal: sum(parts.map((r) => r.refTotal)),
+      months,
+      total: sum(months),
+    });
+  }
+  return [...rows.filter((r) => !taken.has(r.accountId)), ...merged];
 }
