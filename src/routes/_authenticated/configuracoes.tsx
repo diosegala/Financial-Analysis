@@ -22,6 +22,7 @@ import {
   useClients,
   useContractTypes,
   useDreLines,
+  useLucroReal,
   useEduSheetSettings,
   useParameterDefinitions,
   useRevenueTypes,
@@ -410,6 +411,7 @@ function DreLinesTab() {
 function AccountsTab() {
   const { data: accounts } = useAccounts();
   const { data: lines } = useDreLines();
+  const lucroReal = useLucroReal();
   const { data: units } = useUnits();
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
@@ -536,12 +538,17 @@ function AccountsTab() {
             hideInTable: true,
             hint: "As despesas desta conta devolvem os impostos com crédito nas compras. Fornecedor do Simples é exceção na linha.",
           },
-          {
-            key: "non_deductible",
-            label: "Não dedutível no IRPJ/CSLL",
-            type: "boolean",
-            hint: "As despesas desta conta voltam para a base do IRPJ e da CSLL. Uma linha pode ser exceção, nos lançamentos.",
-          },
+          // Só com o IRPJ/CSLL pelo lucro real; com a carga tributária sobre a receita, não muda nada.
+          ...(lucroReal
+            ? [
+                {
+                  key: "non_deductible",
+                  label: "Não dedutível no IRPJ/CSLL",
+                  type: "boolean",
+                  hint: "As despesas desta conta voltam para a base do IRPJ e da CSLL. Uma linha pode ser exceção, nos lançamentos.",
+                } as const,
+              ]
+            : []),
           {
             key: "variable_cost",
             label: "Comissão ou repasse",
