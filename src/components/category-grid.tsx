@@ -8,7 +8,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useAccounts, useContractTypes, useProducts } from "@/lib/catalog";
+import { useAccounts, useContractTypes, useLucroReal, useProducts } from "@/lib/catalog";
 import {
   plannedCosts,
   useGuardrailMutations,
@@ -185,6 +185,8 @@ export function CategoryGrid({
   const reorderable = kind === "receita";
   // IRPJ/CSLL: a linha segue a conta, salvo exceção. Linhas da planilha seguem sempre a conta (a leitura as recria).
   const markDeductible = isCost && !!user?.isFinanceiro;
+  // Dedutível ou não só importa com o IRPJ/CSLL pelo lucro real; com a carga tributária sobre a receita, some.
+  const lucroReal = useLucroReal();
   const accountNd = (id: string) => !!accounts?.find((a) => a.id === id)?.non_deductible;
   const nonDeductible = (l: PlanLine) => l.non_deductible ?? accountNd(l.account_id);
   // Crédito de IBS/CBS: segue a conta; fornecedor do Simples é exceção na linha.
@@ -593,7 +595,7 @@ export function CategoryGrid({
                               : "parte sem crédito"}
                           </span>
                         )}
-                      {isCost && row.lines.some(nonDeductible) && (
+                      {isCost && lucroReal && row.lines.some(nonDeductible) && (
                         <span
                           className="ml-1 text-xs font-normal text-amber-700 dark:text-amber-400"
                           title="Volta para a base do IRPJ e da CSLL."
@@ -696,20 +698,23 @@ export function CategoryGrid({
                               Cortar em %…
                             </DropdownMenuItem>
                           )}
-                          {markDeductible && canEdit && row.lines.some((l) => !l.sheet_tab_id) && (
-                            <DropdownMenuItem
-                              onClick={() =>
-                                void setNonDeductible(
-                                  row.lines,
-                                  !row.lines.filter((l) => !l.sheet_tab_id).every(nonDeductible),
-                                )
-                              }
-                            >
-                              {row.lines.filter((l) => !l.sheet_tab_id).every(nonDeductible)
-                                ? "Marcar como dedutível no IRPJ/CSLL"
-                                : "Marcar como não dedutível no IRPJ/CSLL"}
-                            </DropdownMenuItem>
-                          )}
+                          {markDeductible &&
+                            lucroReal &&
+                            canEdit &&
+                            row.lines.some((l) => !l.sheet_tab_id) && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  void setNonDeductible(
+                                    row.lines,
+                                    !row.lines.filter((l) => !l.sheet_tab_id).every(nonDeductible),
+                                  )
+                                }
+                              >
+                                {row.lines.filter((l) => !l.sheet_tab_id).every(nonDeductible)
+                                  ? "Marcar como dedutível no IRPJ/CSLL"
+                                  : "Marcar como não dedutível no IRPJ/CSLL"}
+                              </DropdownMenuItem>
+                            )}
                           {markDeductible &&
                             canEdit &&
                             accountCredit(row.accountId) &&
@@ -822,7 +827,7 @@ export function CategoryGrid({
                                   {hasCredit(l) ? "Com crédito" : "Sem crédito (Simples)"}
                                 </Button>
                               )}
-                            {markDeductible && canEdit && !l.sheet_tab_id && (
+                            {markDeductible && lucroReal && canEdit && !l.sheet_tab_id && (
                               <Button
                                 variant="ghost"
                                 size="sm"

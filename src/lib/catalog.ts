@@ -44,6 +44,11 @@ export const useUnits = () => useTable("units", ["sort_order", "name"]);
 export const useVersions = () => useTable("budget_versions", ["year", "name"]);
 export const useAllScenarios = () => useTable("scenarios", ["sort_order", "name"]);
 export const useDreLines = () => useTable("dre_lines", ["sort_order"]);
+/** IRPJ/CSLL pelo lucro real ligado (linha "IRPJ e CSLL" ativa no DRE): só então a dedutibilidade das despesas importa. */
+export function useLucroReal() {
+  const { data } = useDreLines();
+  return !!data?.some((l) => l.code === "irpj_csll" && l.active);
+}
 export const useAccounts = () => useTable("accounts", ["sort_order", "name"]);
 export const useRevenueTypes = () => useTable("revenue_types", ["sort_order", "name"]);
 export const useContractTypes = () => useTable("contract_types", ["sort_order", "name"]);
